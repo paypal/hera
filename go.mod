@@ -1,4 +1,4 @@
-module github.com/paypal/hera.git
+module github.com/paypal/hera
 
 go 1.12
 
