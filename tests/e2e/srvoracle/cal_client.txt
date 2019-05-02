@@ -1,0 +1,7 @@
+enable_cal=true
+cal_handler=file
+#cal_handler=socket
+cal_pool_name=stage_occ
+cal_log_file=./cal.log
+cal_pool_stack_enable=true
+#cal_socket_machine_name=127.0.0.1

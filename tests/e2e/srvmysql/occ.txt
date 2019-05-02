@@ -1,0 +1,14 @@
+bind_ip=127.0.0.1
+bind_port=10101
+
+opscfg.occ.server.max_connections=2
+
+log_level=5
+rac_sql_interval=0
+
+cert_chain_file=srvChain.crt
+# key_file=srv.key
+# key_file=srv2.key
+# export TLS_KEY_PASSWD=35-Out
+
+database_type=mysql
