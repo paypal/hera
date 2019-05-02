@@ -57,9 +57,19 @@ The following sections explain the process for manually building mux without Doc
     cd $WORKSPACE
     export GOPATH=$WORKSPACE
     ```
-2.  Clone the source code from [github](https://github.com/paypal/hera)
+2. Option 1 
+
+    Clone the source code from [github](https://github.com/paypal/hera)
     ```
     git clone git@github.com:paypal/hera github.com/paypal/hera
+    ```
+    Option 2
+    
+    (a) GO 1.12 is prerequisite 
+    
+    (b) export GO111MODULE=on ( to enable the go mod feature)
+    ```
+    go get github.com/paypal/hera
     ```
 3.  Install the dependencies: MySQL and Oracle driver
     ```
