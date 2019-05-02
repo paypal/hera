@@ -1,0 +1,18 @@
+{
+	"LogLevel": 5,
+	"Tests": [
+		{
+			"Name": "basic",
+			"Repeat": 0,
+			"Queries": [
+				{
+					"Type": 0,
+					"Sql": "select 'abc',5 from dual",
+					"BindInNames": [],
+					"BindInValues": [],		
+					"Print": true
+				}
+			]
+		}
+	]
+}
