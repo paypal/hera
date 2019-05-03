@@ -37,6 +37,7 @@ export TWO_TASK="tcp(127.0.0.1:3306)/clocschema"
 #export TWO_TASK_READ_1=tcp(127.0.0.1:3306)/clocschema
 #export TWO_TASK_STANDBY0_1=tcp(127.0.0.1:3306)/clocschema
 
+export username=root
 # docker command should pass in db password
 #export password=SomethingHere
 export TLS_KEY_PASSWD=35-Out
