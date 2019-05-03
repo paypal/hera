@@ -15,15 +15,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.10
+FROM golang:1.12
 
-# Before doing a docker build, copy-link over the repo into this directory
-# tests/devdocker$ rm -rf mux ; mkdir mux ; cp -rl `d=../../ ; ls $d | sed -e "s,^,$d," | grep -v /tests$` mux
+# Before doing a docker build, copy over the repo into this directory
+# tests/devdocker$ mkdir -p src/github.com/paypal/hera
+# tests/devdocker$ rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
 
-ADD mux /go/src/go.mux/mux
+ADD src /go/src
 ADD srv /srv
 
-RUN go install go.mux/mux/mux go.mux/mux/worker/mysqlworker
+RUN go get github.com/go-sql-driver/mysql
+RUN go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker
 
 CMD ["/srv/start.sh"]
 
