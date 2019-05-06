@@ -4,7 +4,6 @@ Hera multiplexes connections for MySQL and
 Oracle databases.  It supports sharding the databases for horizontal scaling.
 
   * [Overview](docs/overview.md)
-  * [Getting started](docs/gettingstarted.md)
   * [Configuration](docs/configuration.md)
   * [Sharding](docs/sharding.md)
   * [Transparent failover](docs/taf.md)
@@ -28,17 +27,20 @@ You can build mux using either [Docker](#docker-build) or [manual](#manual-build
 ## Docker Build
 
 For development, the following docker commands can help get started
+
     docker run --network host --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
+    docker exec -it mysql-11 bash -c 'echo "create database clocschema;" | mysql -u root -h 127.0.0.1 -p62-AntHill'
+    cd hera/tests/devdocker
+    rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
+    docker build -t occ-oss .
+    docker run -it --rm --name testRunOccOss --network host -e password=62-AntHill occ-oss
 
-    cd src/go.mux/mux/tests/devdocker
-    cp -rl `d=../../ ; ls $d | sed -e "s,^,$d," | grep -v /tests$` mux
+To test it, in a separate terminal:
 
-    cd ../../..
-    docker build -t occ-oss mux/tests/devdocker/ 
-    docker run -it --rm --name testRunOccOss --network host -e password=62-AntHill occ-oss &
     docker exec -it testRunOccOss /bin/bash
     cd /go/src
-    go run go.mux/mux/gomuxdriver/muxtls/example/sample_main.go
+    go run github.com/paypal/hera/gomuxdriver/muxtls/example/sample_main.go
+
 ## Manual Build
 
 The following sections explain the process for manually building mux without Docker. We only tested on RedHat and Ubuntu.
