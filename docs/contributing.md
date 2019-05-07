@@ -32,13 +32,11 @@ You can also improve our documentation
 * Create an issue branch using the master branch.
 * Make modifications to the code.
 * Ensure code coverage by added test cases.
-* All commits must have the issue ID & summary. Say "[ISSUE-10] Update readme.md for MySQL".
+* All commits must have the issue ID & summary. Say "[#10] Update readme.md for MySQL".
 * Ensure all your commits are squashed.
-* Make a Pull Request to dev branch.
+* Make a Pull Request.
 * If there are code review related changes - ensure those commits are also squashed.
 * DO NOT include changes that are not directly related to the issue you are trying to resolve.
-* Once PR is approved, code will be merged to Development branch.
-* Once all regression test cases have passed - changes will be merged to master branch.
 
 --------------------------------------------------------------------------------------------------------------------
 
