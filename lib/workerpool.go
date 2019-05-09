@@ -681,7 +681,7 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 	cnt := 0
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
-		if (pool.workers[i] != nil) && (pool.workers[i].racID == racReq.instID) && (pool.workers[i].startTime < int64(racReq.tm)) {
+		if (pool.workers[i] != nil) && (racReq.instID == 0 || pool.workers[i].racID == racReq.instID) && (pool.workers[i].startTime < int64(racReq.tm)) {
 			statusTime := now
 			// requested time is in the past, restart starts from now
 			// requested time is in the future, set restart time starting from it

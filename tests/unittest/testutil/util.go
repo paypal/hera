@@ -1,12 +1,17 @@
 package testutil
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"time"
+
+	"github.com/paypal/hera/utility/logger"
 )
 
 var (
@@ -73,4 +78,37 @@ func RunDML(dml string) error {
 	}
 
 	return nil
+}
+
+func RegexCount(regex string) int {
+	time.Sleep(10 * time.Millisecond)
+	fa, err := regexp.Compile(regex)
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, regex+"=regex err compile "+err.Error())
+		return -2
+	}
+	fh, err := os.Open("occ.log")
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "could not open occ.log "+err.Error())
+		return -1
+	}
+	defer fh.Close()
+	scanner := bufio.NewScanner(fh)
+	count := 0
+	lineNum := 0
+	//fmt.Println("BEGIN searching "+regex)
+	for scanner.Scan() {
+		lineNum++
+		ln := scanner.Text()
+		loc := fa.FindStringIndex(ln)
+		if loc != nil { // found
+			//fmt.Printf("FOUND %d\n", lineNum)
+			count++
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		logger.GetLogger().Log(logger.Debug, "err scanning occ.log "+err.Error())
+	}
+	//fmt.Println("DONE searching "+regex)
+	return count
 }
