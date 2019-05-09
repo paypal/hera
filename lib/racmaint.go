@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
+	"os"
 	"strings"
 	"time"
 )
@@ -44,18 +45,18 @@ type racAct struct {
 const MaxRacID = 16
 
 // InitRacMaint initializes RAC maintenance, if enabled, by starting one goroutine racMaintMain per shard
-func InitRacMaint() {
+func InitRacMaint(cmdLineModuleName string) {
 	interval := GetConfig().RacMaintReloadInterval
 	if interval > 0 {
 		for i := 0; i < GetConfig().NumOfShards; i++ {
-			go racMaintMain(i, interval)
+			go racMaintMain(i, interval, cmdLineModuleName)
 		}
 	}
 }
 
 // racMaintMain wakes up every n seconds (configured in "rac_sql_interval") and reads the table
 //	[ManagementTablePrefix]occ_maint table to see if maintenance is requested
-func racMaintMain(shard int, interval int) {
+func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "Rac maint for shard =", shard, ", interval =", interval)
 	}
@@ -75,11 +76,15 @@ func racMaintMain(shard int, interval int) {
 	}
 	racSQL := fmt.Sprintf("/*shard=%d*/ SELECT inst_id, UPPER(status), status_time, UPPER(module) "+
 		"FROM %socc_maint "+
-		"WHERE UPPER(machine) = UPPER(sys_context('USERENV', 'HOST')) and "+
-		"UPPER(module) IN ( UPPER(sys_context('USERENV', 'MODULE')), UPPER(sys_context('USERENV', 'MODULE') || '_TAF' ) ) "+
+		"WHERE UPPER(machine) = ? and "+
+		"UPPER(module) in ( ?, ? ) " + //IN ( UPPER(sys_context('USERENV', 'MODULE')), UPPER(sys_context('USERENV', 'MODULE') || '_TAF' ) ) "+
 		"ORDER BY inst_id", shard, GetConfig().ManagementTablePrefix)
+	/* binds := make([]string, 2)
+	binds[0], err = os.Hostname()
+	binds[0] = strings.ToUpper(binds[0])
+	binds[1] = strings.ToUpper(cmdLineModuleName) // */
 	for {
-		racMaint(ctx, shard, db, racSQL, prev)
+		racMaint(ctx, shard, db, racSQL, cmdLineModuleName, prev)
 		time.Sleep(time.Second * time.Duration(interval))
 	}
 }
@@ -88,7 +93,7 @@ func racMaintMain(shard int, interval int) {
 	racMaint is the main function for RAC maintenance processing, being called regularly.
 	When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
 */
-func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, prev []racCfg) {
+func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev []racCfg) {
 	//
 	// print this log for unittesting
 	//
@@ -110,7 +115,11 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, prev []
 		}
 		return
 	}
-	rows, err := stmt.QueryContext(ctx)
+
+	hostname, _ := os.Hostname()
+	module := strings.ToUpper(cmdLineModuleName)
+	module_taf := fmt.Sprintf("%s_TAF", module)
+	rows, err := stmt.QueryContext(ctx, hostname, module_taf, module)
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "Error (query) rac maint for shard =", shard, ",err :", err)
@@ -140,7 +149,8 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, prev []
 				logger.GetLogger().Log(logger.Debug, "Rac maint: more than ", err)
 			}
 		} else {
-			if (row.tm != prev[row.inst].tm) || (row.status != prev[row.inst].status) {
+			tmChange := row.tm != prev[row.inst].tm
+			if tmChange || (row.status != prev[row.inst].status) {
 				racReq := racAct{instID: row.inst, tm: row.tm, delay: true}
 				if row.status == "R" {
 					racReq.delay = true
