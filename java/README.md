@@ -96,18 +96,4 @@ Tests run: 57, Failures: 0, Errors: 0, Skipped: 13
 [INFO] ------------------------------------------------------------------------
 ````
 
-## Contact
 
-TODO
-
-## Contributing
-
-See [CONTRIBUTING](CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
-
-## Reporting bugs
-
-See [reporting bugs](doc/reporting_bugs.md) for details about reporting any issues.
-
-## License
-
-Unless otherwise noted the hera-jdbc source files are distributed under the Apache 2.0 license. See the [LICENSE](LICENSE.txt) file for details.
