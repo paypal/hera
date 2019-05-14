@@ -1,0 +1,4 @@
+language: go
+script: 
+ - go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/worker/oracleworker
+ - mvn install -f java/jdbc/pom.xml -Dmaven.test.skip=true
