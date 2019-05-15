@@ -158,7 +158,7 @@ func Run() {
 			os.Exit(13)
 		}
 	}
-	InitRacMaint()
+	InitRacMaint(*namePtr)
 
 	srv := NewServer(lsn, HandleConnection)
 
