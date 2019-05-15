@@ -20,17 +20,18 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
-	"strconv"
-	"strings"
 )
 
 /*
  There are three APIs to deal with sharding:
- - OCC_SET_SHARD_ID / OCC_GET_NUM_SHARDS: used by AMQ framework (subscriber)
+ - OCC_SET_SHARD_ID / OCC_GET_NUM_SHARDS: for use cases where there is no shard key
  - ShardKey: data is <key>=<val1>;<val2>...
  - autodiscovery
 */

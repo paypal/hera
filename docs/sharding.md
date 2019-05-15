@@ -15,10 +15,10 @@ OCC uses shard key column bind name and value to determine how to direct the que
 
 # Scenario: Migrating existing application
 1. OCC turns on whitelist with 3 shards.  DBAs create shard map table. This turns on CAL sharding events when there are transactions across shards or queries with missing shard key.
-1. Application fixes commit across shards, AMQ, and queries with missing shard key
-1.DBAs and Application write SQL scripts to migrate data
-1. Employee logical whitelist.  Moving the data to a logical shard DB helps identify if there are issues.  A small number of employees are used to reduce impact of any bug that might occur with application data access pattern.
-1. Employee physical whitelist.  Moving the data to a physical shard DB helps ensure that the tables and data movement scripts are functioning properly.
+1. Application fixes commit across shards and queries with missing shard key
+1. DBAs and Application write SQL scripts to migrate data
+1. Test user logical whitelist.  Moving the data to a logical shard DB helps identify if there are issues.  A small number of test users are used to reduce impact of any bug that might occur with application data access pattern.
+1. Test user physical whitelist.  Moving the data to a physical shard DB helps ensure that the tables and data movement scripts are functioning properly.
 1. Logical whitelist.  A larger group can help identify more infrequent code paths.
 1. Physical whitelist. Infrequently accessed data can be identified with a larger group.
 1. Logical 1 scuttle.  The 1/1024 scuttle can have over a million customers.  This is still a small fraction of live traffic.
