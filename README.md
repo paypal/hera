@@ -125,13 +125,13 @@ The main configuration file is occ.txt, which must contain the TCP port where th
     # start
     ./mux --name main
 ```    
-For details about the parameters see [configuration](configuration.md)
+For details about the parameters see [configuration](docs/configuration.md)
 
 ## Running the client
 
 There is a Java client implemented as JDBC driver. Please see the [documentation](https://github.com/paypal/hera/tree/master/java) for how to install and use it.
 
-There is also a Go client implemented as [SQL driver](mux/gomuxdriver). Please see the [example](tests/e2e/client).
+There is also a Go client implemented as [SQL driver](gomuxdriver). Please see the [example](tests/e2e/client).
 
 ## License
 

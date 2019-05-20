@@ -20,9 +20,10 @@ package cal
 import (
 	"bytes"
 	"fmt"
-	"github.com/paypal/hera/config"
 	"os"
 	"time"
+
+	"github.com/paypal/hera/config"
 )
 
 type calConfig struct {
@@ -84,11 +85,11 @@ type calConfig struct {
 
 const (
 	loopbackIP = "127.0.0.1"
-	unknown = "unknown"
+	unknown    = "unknown"
 )
 
 /**
- * @TODO get values from cal_client.cdb.
+ * @TODO get values from cal_client.txt.
  */
 func (c *calConfig) initialize(cfg config.Config, vcfg config.Config, _labelAffix string) error {
 	c.labelAffix = _labelAffix // still needs it?
@@ -98,7 +99,7 @@ func (c *calConfig) initialize(cfg config.Config, vcfg config.Config, _labelAffi
 	// instance, any calmessage operations become no-op
 	//
 	c.enabled = cfg.GetOrDefaultBool("enable_cal", true)
-	c.poolName = cfg.GetOrDefaultString("cal_pool_name", "stage2md003_abc")
+	c.poolName = cfg.GetOrDefaultString("cal_pool_name", "play_abc")
 	c.environment = cfg.GetOrDefaultString("cal_environment", "")
 	c.host = cfg.GetOrDefaultString("cal_socket_machine_name", loopbackIP)
 	c.port = cfg.GetOrDefaultString("cal_socket_machine_port", "1118")
