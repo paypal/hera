@@ -9,6 +9,7 @@ Oracle databases.  It supports sharding the databases for horizontal scaling.
   * [Configuration](docs/configuration.md)
   * [Sharding](docs/sharding.md)
   * [Transparent failover](docs/taf.md)
+  * [History](docs/history.md)
   * [Contributing](docs/contributing.md)
 
 # What is Hera
