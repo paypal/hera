@@ -15,5 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cal implements application logger for monitoring
+/* Package cal implements application logger for monitoring.
+
+As of May 2019, we are slowly looking to evolve cal.  There's more background on
+https://github.com/paypal/hera/issues/25
+*/
 package cal
