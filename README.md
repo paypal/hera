@@ -33,6 +33,7 @@ For development, the following docker commands can help get started
     docker run --network host --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
     docker exec -it mysql-11 bash -c 'echo "create database clocschema;" | mysql -u root -h 127.0.0.1 -p62-AntHill'
     cd hera/tests/devdocker
+    mkdir -p src/github.com/paypal/hera
     rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
     docker build -t hera-oss .
     docker run -it --rm --name testRunHeraOss --network host -e password=62-AntHill hera-oss
