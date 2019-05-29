@@ -2,7 +2,7 @@
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
 # Hera - High Efficiency Reliable Access to data stores
 
-Hera multiplexes connections for MySQL and 
+Hera multiplexes connections for MySQL and
 Oracle databases.  It supports sharding the databases for horizontal scaling.
 
   * [Overview](docs/overview.md)
@@ -12,8 +12,8 @@ Oracle databases.  It supports sharding the databases for horizontal scaling.
   * [Contributing](docs/contributing.md)
 
 # What is Hera
-  
-     Hera is Data Access Gateway for  databases and is a key enabler for scaling and improving availability databases. 
+
+     Hera is Data Access Gateway for  databases and is a key enabler for scaling and improving availability databases.
     - It Protects the database from resource exhaustion by evicting poorly performing queries,
     - Intelligently routes read/write traffic appropriately for better load balancing,
     - Improves tolerance to database outages,
@@ -42,7 +42,7 @@ To test it, in a separate terminal:
 
     docker exec -it testRunHeraOss /bin/bash
     cd /go/src
-    go run github.com/paypal/hera/client/gosqldriver/muxtls/example/sample_main.go
+    go run github.com/paypal/hera/client/gosqldriver/tls/example/sample_main.go
 
 ## Manual Build
 
@@ -54,7 +54,7 @@ The following sections explain the process for manually building mux without Doc
 2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or Oracle(https://www.oracle.com/index.html).
 3.  Install the [MySQL driver](github.com/go-sql-driver/mysql) and the [Oracle driver](https://github.com/go-goracle/goracle)
 3.  Install Oracle instant client     
-    
+
 ### Build Binaries
 
 1.  Navigate to the working directory.
@@ -62,16 +62,16 @@ The following sections explain the process for manually building mux without Doc
     cd $WORKSPACE
     export GOPATH=$WORKSPACE
     ```
-2. Option 1 
+2. Option 1
 
     Clone the source code from [github](https://github.com/paypal/hera)
     ```
     git clone git@github.com:paypal/hera src/github.com/paypal/hera
     ```
     Option 2
-    
-    (a) GO 1.12 is prerequisite 
-    
+
+    (a) GO 1.12 is prerequisite
+
     (b) export GO111MODULE=on ( to enable the go mod feature)
     ```
     go get github.com/paypal/hera
@@ -90,7 +90,7 @@ The following sections explain the process for manually building mux without Doc
     go install github.com/paypal/hera/tests/e2e/client
     ```
 6.  Build Java test client under the client/java directory
-    
+
 ### Running the server
 
 To run mux there is minimal configuration required. Please see examples for running with [MySQL](https://github.com/paypal/hera/tree/master/tests/e2e/srvmysql) or [Oracle](https://github.com/paypal/hera/tree/master/tests/e2e/srvoracle).
@@ -100,7 +100,7 @@ The main configuration file is hera.txt, which must contain the TCP port where t
     ln -s $GOPATH/bin/mux .
     # the MySQL worker
     ln -s $GOPATH/bin/mysqlworker mysqlworker
-    # to use the Oracle worker use oracleworker instead of mysqlworker 
+    # to use the Oracle worker use oracleworker instead of mysqlworker
 
     # create the configuration file with the required configuration
     echo 'bind_ip=127.0.0.1' > hera.txt
@@ -111,7 +111,7 @@ The main configuration file is hera.txt, which must contain the TCP port where t
 
     # create minimal CAL configuration, needed by ops config
     echo 'cal_pool_name=stage_hera' > cal_client.txt
-    
+
     # the database user name
     export username='user'
     # the database password
@@ -119,10 +119,10 @@ The main configuration file is hera.txt, which must contain the TCP port where t
     # the data source
     export TWO_TASK='tcp(127.0.0.1:3306)/myschema'
     # for Oracle the datasource can be like '(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)
-    #    (PORT=12345)))(CONNECT_DATA=(SERVICE_NAME=sn)))'. 
-    # for Oracle only add to LD_LIBRARY_PATH environment variable the path to the shared libraries of the 
-    #    Oracle instant client 
-	
+    #    (PORT=12345)))(CONNECT_DATA=(SERVICE_NAME=sn)))'.
+    # for Oracle only add to LD_LIBRARY_PATH environment variable the path to the shared libraries of the
+    #    Oracle instant client
+
     # start
     ./mux --name hera-test
 ```    
@@ -137,4 +137,3 @@ There is also a Go client implemented as [SQL driver](client/gosqldriver). Pleas
 ## License
 
 Hera is licensed under Apache 2.0.
-
