@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/paypal/hera/gosqldriver/tls"
+	"github.com/paypal/hera/client/gosqldriver/tls"
 	// _ "github.com/paypal/hera/gosqldriver/tls" // if you don't need to poke into tls
 )
 
