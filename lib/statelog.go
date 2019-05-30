@@ -51,8 +51,9 @@ const (
 var StateNames = [MaxWorkerState + MaxConnState]string{
 	"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd", "cls"}
 
+// These get a prefix added to them in init
 var typeTitlePrefix = [wtypeTotalCount]string{
-	"hera.w", "hera.r", "hera.taf"}
+	".w", ".r", ".taf"}
 
 // WorkerStateInfo is a container holding worker state information
 type WorkerStateInfo struct {
@@ -477,8 +478,11 @@ func (sl *StateLog) init() error {
 	}
 	sl.mStateHeader = buf.String()
 
+	for idx, val := range typeTitlePrefix {
+		typeTitlePrefix[idx] = GetConfig().StateLogPrefix + val
+	}
 	if GetConfig().ReadonlyPct == 0 {
-		typeTitlePrefix[wtypeRW] = "hera"
+		typeTitlePrefix[wtypeRW] = GetConfig().StateLogPrefix
 	}
 	for s := 0; s < sl.maxShardSize; s++ {
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
