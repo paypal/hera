@@ -118,6 +118,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	}
 
 	hostname, _ := os.Hostname()
+	hostname = strings.ToUpper(hostname)
 	module := strings.ToUpper(cmdLineModuleName)
 	module_taf := fmt.Sprintf("%s_TAF", module)
 	rows, err := stmt.QueryContext(ctx, hostname, module_taf, module)

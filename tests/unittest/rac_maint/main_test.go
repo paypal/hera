@@ -74,7 +74,7 @@ func TestRacMaint(t *testing.T) {
 	stmt, _ = tx.PrepareContext(ctx, "/*cmd*/insert into "+tableName+" (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
 	hostname, _ := os.Hostname()
 	// how to do inst_id
-	_, err = stmt.Exec(15 /*max instid*/, "F", time.Now().Unix()+2, "hera", hostname)
+	_, err = stmt.Exec(15 /*max instid*/, "F", time.Now().Unix()+2, "hera-test", hostname)
 	if err != nil {
 		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
 	}
@@ -102,7 +102,7 @@ func TestRacMaint(t *testing.T) {
 		t.Fatalf("Error prep ins %s\n", err.Error())
 	}
 	// mysql uses instId 0 since there isn't instid's
-	insS.Exec(0, "F", time.Now().Unix()+1, "hera", hostname)
+	insS.Exec(0, "F", time.Now().Unix()+1, "hera-test", hostname)
 	err = tx.Commit()
 	if err != nil {
 		t.Fatalf("Error 2commit %s\n", err.Error())
