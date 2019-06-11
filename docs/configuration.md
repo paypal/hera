@@ -16,7 +16,12 @@ This is the database password
 
 This is the data source information for the MySQL or Oracle database. 
 For Oracle the format can be in the form of '(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))'. Or it can be a name of an entry in tnsnames.ora. Please see the Oracle documentation for more details.
+
 We use the same environment name for MySQL. For example, the value can be tcp(127.0.0.1:3306)/myschema.
+Failover uses two pipes to separate entries,
+tcp(127.0.0.1:3306)/myschema?timeout=9s||tcp(127.0.0.2:3306)/myschema .
+Set environment variable certdir to load all the pem files that you can
+specify as certificate authorities for the mysql worker to accept.
 
 For sharding case, we need to define multiple datasources, one for each shard. The convention is to define the datasource for the first shard in TWO_TASK_0 environment variable, for the second shard in TWO_TASK_1, etc.
 

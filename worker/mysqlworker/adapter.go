@@ -18,10 +18,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
+	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/paypal/hera/utility/logger"
@@ -37,6 +41,17 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	pass := os.Getenv("password")
 	ds := os.Getenv("mysql_datasource")
 
+	user02 := os.Getenv("username2")
+	pass02 := os.Getenv("password2")
+
+	if user02 != "" && rand.Float32() < 0.5 {
+		user = user02
+		pass = pass02
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "selecting username2")
+		}
+	}
+
 	if user == "" {
 		return nil, errors.New("Can't get 'username' from env")
 	}
@@ -47,10 +62,65 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		return nil, errors.New("Can't get 'mysql_datasource' from env")
 	}
 
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "connect string:", fmt.Sprintf("%s:%s@%s", user, pass, ds))
+	var db *sql.DB
+	var err error
+	for idx, curDs := range strings.Split(ds, "||") {
+		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
+			}
+			continue
+		}
+		ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
+			}
+			continue
+		}
+		if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
+			stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
+			//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
+				}
+			}
+			rows, err := stmt.Query()
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
+				}
+			}
+			writable := false
+			countRows := 0
+			if rows.Next() {
+				countRows++
+				var readOnly int
+				/*var nom string
+				  rows.Scan(&nom, &readOnly) // */
+				rows.Scan(&readOnly)
+				if readOnly == 0 {
+					writable = true
+				}
+			}
+			rows.Close()
+			stmt.Close()
+			conn.Close()
+			if !writable {
+				// read only connection
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn "+curDs)
+				}
+				db.Close()
+				continue
+			}
+		}
+		return db, err
 	}
-	return sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, ds))
+	return db, err
 }
 
 // UseBindNames return false because the SQL string uses ? for bind parameters

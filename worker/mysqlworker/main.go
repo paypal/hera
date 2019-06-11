@@ -19,9 +19,48 @@
 package main
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
+	"log"
+	"os"
+	"strings"
+
+	"github.com/go-sql-driver/mysql"
 	workerservice "github.com/paypal/hera/worker/shared"
 )
 
 func main() {
+	certdir := os.Getenv("certdir")
+	finfos, err := ioutil.ReadDir(certdir)
+	if err != nil {
+		log.Print("could not read dir " + certdir)
+	}
+	for _, finfo := range finfos {
+		if !strings.HasSuffix(finfo.Name(), ".pem") {
+			continue
+		}
+		certfile := certdir + "/" + finfo.Name()
+		data, err := ioutil.ReadFile(certfile)
+		if err != nil {
+			log.Print("could not read " + certfile)
+			continue
+		}
+		block, _ := pem.Decode(data)
+		if block == nil || block.Type != "PUBLIC KEY" {
+			log.Print("not public key " + certfile)
+			continue
+		}
+		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			log.Print(err.Error() + " while loading pubCert " + certfile)
+			continue
+		}
+		if rsaPubKey, ok := pub.(*rsa.PublicKey); ok {
+			shortName := finfo.Name()[:len(finfo.Name())-4]
+			mysql.RegisterServerPubKey(shortName, rsaPubKey)
+		}
+	}
 	workerservice.Start(&mysqlAdapter{})
 }
