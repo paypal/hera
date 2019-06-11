@@ -63,14 +63,23 @@ func (crd *Coordinator) copyShardInfo(dest *shardInfo, src *shardInfo) {
 
 // Determines shard info from the shard key value. If sharding_algo is "hash" it calculates first a murmur3 hash of the key.
 // Then it determines the bucket via a mod op, and after that it looks into the shard map to determine the physical shard
-func (crd *Coordinator) getShardRec(key uint64) *ShardMapRecord {
+func (crd *Coordinator) getShardRec(key0 interface{}) *ShardMapRecord {
+	var key uint64
 	if GetConfig().ShardingAlgoHash {
-		bytes := make([]byte, 8)
-		for i := 0; i < 8; i++ {
-			bytes[i] = byte(key & 0xFF)
-			key >>= 8
+		if GetConfig().ShardKeyValueTypeIsString {
+			keyStr := key0.(string)
+			//keyStr, ok := key0.(string)
+			key = uint64(Murmur3([]byte(keyStr)))
+		} else {
+			bytes := make([]byte, 8)
+			keyNum := key0.(uint64)
+			//keyNum, ok := key0.(uint64)
+			for i := 0; i < 8; i++ {
+				bytes[i] = byte(keyNum & 0xFF)
+				key >>= 8
+			}
+			key = uint64(Murmur3(bytes))
 		}
-		key = uint64(Murmur3(bytes))
 	}
 	bucket := key % uint64(GetConfig().MaxScuttleBuckets)
 	shardRec := GetShardingCfg().records[bucket]
@@ -187,7 +196,12 @@ func (crd *Coordinator) computeLogicalShards() {
 			break
 		}
 		// filter only the numeric part of the ShardValue
-		key, _ := atoui(rec)
+		var key interface{}
+		if GetConfig().ShardKeyValueTypeIsString {
+			key = rec
+		} else {
+			key, _ = atoui(rec)
+		}
 		var wlcfg *WLCfg
 		if GetConfig().EnableWhitelistTest || !GetConfig().UseShardMap {
 			if len(crd.shard.shardRecs) == 1 {
