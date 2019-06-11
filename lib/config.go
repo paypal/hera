@@ -86,6 +86,7 @@ type Config struct {
 	MaxScuttleBuckets int
 	ScuttleColName    string
 	ShardingAlgoHash  bool
+	ShardKeyValueTypeIsString bool
 
 	EnableWhitelistTest       bool
 	NumWhitelistChildren      int
@@ -287,6 +288,7 @@ func InitConfig() error {
 		}
 		gAppConfig.ShardingCfgReloadInterval = cdb.GetOrDefaultInt("sharding_cfg_reload_interval", 2)
 		gAppConfig.ShardingCrossKeysErr = cdb.GetOrDefaultBool("sharding_cross_keys_err", false)
+		gAppConfig.ShardKeyValueTypeIsString = cdb.GetOrDefaultBool("shard_key_value_type_is_string", false)
 	}
 
 	gAppConfig.HostnamePrefix = parseMapStrStr(cdb.GetOrDefaultString("hostname_prefix", ""))
