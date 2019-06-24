@@ -12,6 +12,20 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
+/*
+To run the test
+export DB_USER=x
+export DB_PASSWORD=x
+export DB_DATASOURCE=x
+export username=realU
+export password=realU-pwd
+export TWO_TASK='tcp(mysql.example.com:3306)/someSchema?timeout=60s&tls=preferred||tcp(failover.example.com:3306)/someSchema'
+export TWO_TASK_READ='tcp(mysqlr.example.com:3306)/someSchema?timeout=6s&tls=preferred||tcp(failover.example.com:3306)/someSchema'
+$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
+ln -s $GOPATH/bin/{mysql,oracle}worker .
+$GOROOT/bin/go test -c .../tests/unittest/coordinator_basic && ./coordinator_basic.test
+*/
+
 var mx testutil.Mux
 var tableName string
 

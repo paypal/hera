@@ -201,6 +201,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		return errors.New("Invalid module name, must be like hera-<name> ")
 	}
 
+	var twoTask string
 	switch worker.Type {
 	case wtypeStdBy:
 		if GetConfig().EnableSharding {
@@ -223,7 +224,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, fmt.Sprintf("%s_taf", worker.moduleName))
 
 		twoTaskEnv := fmt.Sprintf("TWO_TASK_STANDBY0_%d", worker.shardID)
-		twoTask := os.Getenv(twoTaskEnv)
+		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
 			if worker.shardID != 0 {
 				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
@@ -260,7 +261,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
 		twoTaskEnv := fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
-		twoTask := os.Getenv(twoTaskEnv)
+		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
 			if worker.shardID != 0 {
 				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
@@ -299,7 +300,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
 		twoTaskEnv := fmt.Sprintf("TWO_TASK_%d", worker.shardID)
-		twoTask := os.Getenv(twoTaskEnv)
+		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
 			if worker.shardID != 0 {
 				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
@@ -322,7 +323,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			return errors.New("TWO_TASK is not defined")
 		}
 	}
-	envUpsert(&attr, "mysql_datasource", os.Getenv(envTwoTask))
+	envUpsert(&attr, "mysql_datasource", twoTask)
 
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
