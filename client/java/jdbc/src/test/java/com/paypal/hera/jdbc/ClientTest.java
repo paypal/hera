@@ -525,18 +525,25 @@ public class ClientTest {
 	
 	@Test
 	public void test_dates_as_strings() throws IOException, SQLException{
-		// is using to_date() which is Oracle specific
-		if (isMySQL) 
-			return;
 		long now = System.currentTimeMillis();
+		int dateStrId = iID_START; //555666;
+		if (isMySQL) {
+			now = now/1000*1000; // slice off milliseconds
+		}
 		Statement st = dbConn.createStatement();
 		cleanTable(st, sID_START, 20, false);
 		dbConn.commit();
 		
-		PreparedStatement pst2 = dbConn.prepareStatement("insert into " + table + " (id, date_val, time_val, timestamp_val) " + 
+		PreparedStatement pst2;
+		if (!isMySQL) {
+			pst2 = dbConn.prepareStatement("insert into " + table + " (id, date_val, time_val, timestamp_val) " + 
 		"values (?,to_date(?, 'yyyy-mm-dd'), to_date(?, 'hh24:mi:ss'), to_timestamp(?, 'yyyy-mm-dd hh24:mi:ss.FF3'))");
+		} else {
+			pst2 = dbConn.prepareStatement("insert into " + table + " (id, date_val, time_val, timestamp_val) " + 
+		"values (?, str_to_date(?,'%Y-%m-%d'), cast(? as time), str_to_date(?,'%Y-%m-%d %H:%i:%s.%f'))");
+		}
 		
-		pst2.setInt(1, iID_START);
+		pst2.setInt(1, dateStrId);
 		Date date = new Date(now - (now % 1000));
 		Time time = new Time(now - (now % 1000));
 		Timestamp tmst = new Timestamp(now);
@@ -551,14 +558,26 @@ public class ClientTest {
 			Assert.fail("Update fine");
 		}
 		
-		PreparedStatement pst1 = dbConn.prepareStatement("select id, to_char(date_val, 'YYYY-MM-DD'), to_char(time_val, 'HH24:MI:SS'), " +
+		PreparedStatement pst1;
+		if (!isMySQL) {
+			pst1 = dbConn.prepareStatement("select id, to_char(date_val, 'YYYY-MM-DD'), to_char(time_val, 'HH24:MI:SS'), " +
 				"to_char(timestamp_val, 'yyyy-mm-dd hh24:mi:ss.FF3') from " + table + " where id=?");
-		pst1.setInt(1, iID_START);
+		} else {
+			pst1 = dbConn.prepareStatement("select id, DATE_FORMAT(date_val, '%Y-%m-%d'), DATE_FORMAT(time_val, '%H:%i:%s'), " +
+				"DATE_FORMAT(timestamp_val, '%Y-%m-%d %H:%i:%s.%f') from " + table + " where id=?");
+		}
+		pst1.setInt(1, dateStrId);
 		ResultSet rs = pst1.executeQuery();
 		rs.next();
 		Assert.assertTrue("Check date", rs.getString(2).equals(date.toString()));
 		Assert.assertTrue("Check time", rs.getString(3).equals(time.toString()));
+		//System.out.println("orig ts "+tmst.toString());
+		//System.out.println("db ts "+rs.getString(4));
+		//System.out.flush();
+		//mysql orig ts 2019-06-21 16:15:02.0
+		//mysql   db ts 2019-06-21 16:15:02.000000
 		Assert.assertTrue("Check timestamp", rs.getString(4).equals(tmst.toString()) || 
+				rs.getString(4).equals(tmst.toString() + "00000")||
 				rs.getString(4).equals(tmst.toString() + "00") /*this is for if millisecs is 0*/);
 		
 		cleanTable(st, sID_START, 20, true);
