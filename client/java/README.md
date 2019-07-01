@@ -14,6 +14,12 @@ Java 8 or above is required.
 ## Download
 
 ### Maven
+
+First build the Hera JDBC driver:
+```sh
+mvn install -f client/java/jdbc/pom.xml -Dmaven.test.skip=true
+```
+Add this to your pom:
 ```xml
 <dependency>
   <groupId>com.paypal</groupId>
@@ -21,9 +27,6 @@ Java 8 or above is required.
   <version>${hera-jdbc-version}</version>
 </dependency>
 ```
-
-Development snapshots are available in [Sonatypes's snapshot repository](https://oss.sonatype.org/content/repositories/snapshots/paypal/hera).
-
 ### Usage
 
 ```java
