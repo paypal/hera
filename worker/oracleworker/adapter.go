@@ -55,7 +55,7 @@ func (adapter *oracleAdapter) UseBindNames() bool {
 /**
  * @TODO
  */
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
+func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (bool) {
 	return true
 }
 /**
