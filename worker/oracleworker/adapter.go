@@ -53,6 +53,12 @@ func (adapter *oracleAdapter) UseBindNames() bool {
 }
 
 /**
+ * @TODO
+ */
+func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (bool) {
+	return true
+}
+/**
  * @TODO infra.hera.jdbc.HeraResultSetMetaData mysql type to java type map.
  */
 var colTypeMap = map[string]int{

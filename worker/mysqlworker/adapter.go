@@ -52,6 +52,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 
 	var db *sql.DB
 	var err error
+	is_writable:= false
 	for idx, curDs := range strings.Split(ds, "||") {
 		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
 		if err != nil {
@@ -60,56 +61,68 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			}
 			continue
 		}
-		ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
-		conn, err := db.Conn(ctx)
-		if err != nil {
+		is_writable = adapter.Heartbeat(db);
+		if (is_writable) {
+			break
+		} else {
+			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn "/*+curDs*/)
 			}
-			continue
+			db.Close()
 		}
-		if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
-			stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
-			//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
-				}
-			}
-			rows, err := stmt.Query()
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
-				}
-			}
-			writable := false
-			countRows := 0
-			if rows.Next() {
-				countRows++
-				var readOnly int
-				/*var nom string
-				  rows.Scan(&nom, &readOnly) // */
-				rows.Scan(&readOnly)
-				if readOnly == 0 {
-					writable = true
-				}
-			}
-			rows.Close()
-			stmt.Close()
-			conn.Close()
-			if !writable {
-				// read only connection
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn "+curDs)
-				}
-				db.Close()
-				continue
-			}
-		}
-		return db, err
-	}
+	}	
 	return db, err
 }
+
+// Checking master status
+func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
+	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+	writable := false
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
+		}
+		return writable
+	}
+		
+	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
+		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
+		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
+			}
+		}
+		rows, err := stmt.Query()
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
+			}
+		}
+		countRows := 0
+		if rows.Next() {
+			countRows++
+			var readOnly int
+			/*var nom string
+			rows.Scan(&nom, &readOnly) // */
+			rows.Scan(&readOnly)
+			if readOnly == 0 {
+				writable = true
+			}
+		}
+		rows.Close()
+		stmt.Close()
+		conn.Close()
+		// read only connection
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "writable:", writable)
+		}
+	}
+	return writable
+}
+
 
 // UseBindNames return false because the SQL string uses ? for bind parameters
 func (adapter *mysqlAdapter) UseBindNames() bool {

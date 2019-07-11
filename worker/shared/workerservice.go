@@ -52,6 +52,7 @@ type workerConfig struct {
 	clientSession    string
 	dbHostName       string
 	module           string
+	hbInterval       time.Duration // 0 will set to default 
 }
 
 // Start is the initial method, performing the initializations and starting runworker() to wait for requests
@@ -93,7 +94,14 @@ func Start(adapter CmdProcessorAdapter) {
 	wconfig.clientSession = os.Getenv(envCalClientSession)
 	wconfig.dbHostName = os.Getenv(envDBHostName)
 	wconfig.module = os.Getenv(envModule)
+	
+	wconfig.hbInterval = (time.Duration(cfg.GetOrDefaultInt("db_heartbeat_interval", 120))*time.Second)
+	if (wconfig.hbInterval == 0) {
+		wconfig.hbInterval = 120*time.Second
+	}
 
+	logger.GetLogger().Log(logger.Info, "DB heartbeat interval:", wconfig.hbInterval)
+	
 	evt := cal.NewCalEvent(cal.EventTypeServerInfo, "worker-go-start", cal.TransOK, "")
 	evt.Completed()
 	//
@@ -119,11 +127,11 @@ func Start(adapter CmdProcessorAdapter) {
 	//
 	// start worker mainloop.
 	//
-	runworker(sockMux, cmdprocessor)
+	runworker(sockMux, cmdprocessor, wconfig)
 }
 
 // runworker is the infinite loop, serving requests
-func runworker(sockMux *os.File, cmdprocessor *CmdProcessor) {
+func runworker(sockMux *os.File, cmdprocessor *CmdProcessor, cfg *workerConfig) {
 	var ns *netstring.Netstring
 	var ok = true
 	var sig int
@@ -135,29 +143,47 @@ func runworker(sockMux *os.File, cmdprocessor *CmdProcessor) {
 outerloop:
 	for {
 		select {
-		case sig, ok = <-sigchannel:
-			if sig == signalRecover {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker recover")
-				}
-				evt := cal.NewCalEvent("WORKER", "recoverworker", cal.TransOK, "")
-				evt.Completed()
-				//
-				// if recover fails, stop worker.
-				//
-				err = recoverworker(cmdprocessor, nschannel)
-				if err != nil {
+			case <-time.After(cfg.hbInterval):
+
+			case sig, ok = <-sigchannel:
+				if sig == signalRecover {
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker recover")
+					}
+					evt := cal.NewCalEvent("WORKER", "recoverworker", cal.TransOK, "")
+					evt.Completed()
+					//
+					// if recover fails, stop worker.
+					//
+					err = recoverworker(cmdprocessor, nschannel)
+					if err != nil {
+						break outerloop
+					} else {
+						continue
+					}
+				} else if sig == signalExit {
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker exiting")
+					}
 					break outerloop
-				} else {
-					continue
 				}
-			} else if sig == signalExit {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker exiting")
+			case ns, ok = <-nschannel:
+		}
+		
+		// heartbeat to DB only when the worker is free.
+		if (ns == nil && ok && cmdprocessor.heartbeat) {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "sending heartbeat to DB")
+			}
+
+			ok := cmdprocessor.SendDbHeartbeat()
+			if (!ok) {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning , "master db is unavailable, worker exiting")
 				}
 				break outerloop
 			}
-		case ns, ok = <-nschannel:
+			continue
 		}
 		//
 		// @TODO let !ok go.
@@ -282,3 +308,4 @@ func drainIncomingChannel(nschannel <-chan *netstring.Netstring) {
 		}
 	}
 }
+
