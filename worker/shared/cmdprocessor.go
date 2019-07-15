@@ -41,6 +41,7 @@ import (
 // For example there is an adapter for MySQL, another for Oracle
 type CmdProcessorAdapter interface {
 	InitDB() (*sql.DB, error)
+	Heartbeat(*sql.DB) (bool) 
 	UseBindNames() bool
 	GetColTypeMap() map[string]int
 	// this is used for date related types to translate between the database format to the mux format
@@ -151,6 +152,7 @@ type CmdProcessor struct {
 	sqlHash uint32
 	// the name of the cal TXN
 	calSessionTxnName string
+	heartbeat bool
 }
 
 // NewCmdProcessor creates the processor using th egiven adapter
@@ -160,7 +162,7 @@ func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcesso
 		cs = "CLIENT_SESSION"
 	}
 
-	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs}
+	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true}
 }
 
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
@@ -185,6 +187,7 @@ outloop:
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
 		cp.lastErr = nil
 		cp.sqlHash = 0
+		cp.heartbeat= false // for hb
 		//
 		// need to turn "select * from table where ca=:a and cb=:b"
 		// to "select * from table where ca=? and cb=?"
@@ -677,6 +680,12 @@ outloop:
 	return err
 }
 
+func (cp *CmdProcessor) SendDbHeartbeat() (bool) {
+	var masterIsUp bool
+	masterIsUp = cp.adapter.Heartbeat(cp.db)
+	return masterIsUp
+}
+
 // InitDB performs various initializations at start time
 func (cp *CmdProcessor) InitDB() error {
 	if logger.GetLogger().V(logger.Info) {
@@ -736,6 +745,7 @@ func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
 	} else {
 		payload = []byte{byte('0' + code)}
 	}
+	cp.heartbeat = true
 	return WriteAll(cp.SocketOut, netstring.NewNetstringFrom(common.CmdEOR, payload).Serialized)
 }
 
