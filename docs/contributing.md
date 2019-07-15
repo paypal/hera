@@ -3,8 +3,10 @@
 
 ## Discussions
 
-Our recommendation is to start a slack discussion as soon as you have an idea for contributing to Mux.
+Our recommendation is to start a discussion as soon as you have an idea for contributing to Mux.
 This will help you, other interested contributors & the committers get to common grounds early in time.
+
+We are on Google groups heradatalink
 
 --------------------------------------------------------------------------------------------------------------------
 
