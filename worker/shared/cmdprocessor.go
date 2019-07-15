@@ -41,7 +41,7 @@ import (
 // For example there is an adapter for MySQL, another for Oracle
 type CmdProcessorAdapter interface {
 	InitDB() (*sql.DB, error)
-	Heartbeat(*sql.DB) (bool) 
+	Heartbeat(*sql.DB) bool
 	UseBindNames() bool
 	GetColTypeMap() map[string]int
 	// this is used for date related types to translate between the database format to the mux format
@@ -88,10 +88,6 @@ type CmdProcessor struct {
 	// db instance.
 	//
 	db *sql.DB
-	//
-	// the connection
-	//
-	conn *sql.Conn
 	//
 	// open txn if having dml.
 	//
@@ -152,7 +148,7 @@ type CmdProcessor struct {
 	sqlHash uint32
 	// the name of the cal TXN
 	calSessionTxnName string
-	heartbeat bool
+	heartbeat         bool
 }
 
 // NewCmdProcessor creates the processor using th egiven adapter
@@ -187,7 +183,7 @@ outloop:
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
 		cp.lastErr = nil
 		cp.sqlHash = 0
-		cp.heartbeat= false // for hb
+		cp.heartbeat = false // for hb
 		//
 		// need to turn "select * from table where ca=:a and cb=:b"
 		// to "select * from table where ca=? and cb=?"
@@ -680,7 +676,7 @@ outloop:
 	return err
 }
 
-func (cp *CmdProcessor) SendDbHeartbeat() (bool) {
+func (cp *CmdProcessor) SendDbHeartbeat() bool {
 	var masterIsUp bool
 	masterIsUp = cp.adapter.Heartbeat(cp.db)
 	return masterIsUp
@@ -702,15 +698,6 @@ func (cp *CmdProcessor) InitDB() error {
 	cp.ctx = context.Background()
 	cp.db.SetMaxIdleConns(1)
 	cp.db.SetMaxOpenConns(1)
-	ctx, cancel := context.WithTimeout(cp.ctx, time.Second*60)
-	defer cancel()
-	cp.conn, err = cp.db.Conn(ctx)
-	if err != nil {
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "db connection error", err.Error())
-		}
-		return err
-	}
 
 	//
 	cp.sqlParser, err = common.NewRegexSQLParser()
