@@ -692,6 +692,7 @@ func (cp *CmdProcessor) InitDB() error {
 	}
 	cp.ctx = context.Background()
 	cp.db.SetMaxIdleConns(1)
+	cp.db.SetMaxOpenConns(1)
 	ctx, cancel := context.WithTimeout(cp.ctx, time.Second*60)
 	defer cancel()
 	cp.conn, err = cp.db.Conn(ctx)
