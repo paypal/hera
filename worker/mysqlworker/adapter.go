@@ -27,10 +27,15 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
 )
 
 type mysqlAdapter struct {
+}
+
+func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser ,error) {
+	return common.NewAutoCommitParser()
 }
 
 // InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
