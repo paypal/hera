@@ -153,6 +153,35 @@ func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
+/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
+func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *map[string]string, queryScope *map[string]string) {
+	errStr := errToProcess.Error()
+	idx := strings.Index(errStr, ":")
+	var errno int
+	fmt.Sscanf(errStr[6:idx],"%d",&errno)
+
+	if logger.GetLogger().V(logger.Warning) {
+		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errToProcess.Error() + " sqlHash:"+ (*queryScope)["sqlHash"] +" Cmd:"+(*queryScope)["ns.Cmd"]+fmt.Sprintf(" errno:%d",errno))
+	}
+
+	switch (errno) {
+	case 1153: fallthrough // pkt too large
+	case 1154: fallthrough // read err fr pipe
+	case 1155: fallthrough // err fnctl
+	case 1156: fallthrough // pkt order
+	case 1157: fallthrough // err uncompress
+	case 1158: fallthrough // err read
+	case 1159: fallthrough // read timeout
+	case 1160: fallthrough // err write
+	case 1161: fallthrough // write timeout
+	case 1317: fallthrough // query interupt
+	case 1836: fallthrough // read-only mode
+	case 1874: fallthrough // innodb read-only
+	case 1878: // temp file write fail
+		(*workerScope)["child_shutdown_flag"] = "1"
+	}
+}
+
 func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {
 	switch colType {
 	case "DATE":
