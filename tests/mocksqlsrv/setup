@@ -1,0 +1,27 @@
+#!/bin/bash
+
+## This script sets up dummy server running on port localhost:3333.
+
+# Clear terminal
+clear
+
+# Set PATH so binary can be executed from go/bin
+PATH=$PATH:$(go env GOPATH)/bin
+
+echo ""
+echo "go build github.com/paypal/hera/tests/mocksqlsrv/dummy"
+echo "go install github.com/paypal/hera/tests/mocksqlsrv/runserver"
+echo ""
+go build github.com/paypal/hera/tests/mocksqlsrv/dummy
+go install github.com/paypal/hera/tests/mocksqlsrv/runserver
+
+# cd to bin and run the server executable to start it up
+echo "cd $GOPATH/bin"
+echo ""
+echo "./runserver $1 $2"
+
+sleep 2
+
+clear
+cd $GOPATH/bin && ./runserver $1 $2
+
