@@ -22,8 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "gopkg.in/goracle.v2"
+	"github.com/paypal/hera/utility/logger"
 )
 
 type oracleAdapter struct {
@@ -75,6 +77,16 @@ var colTypeMap = map[string]int{
 
 func (adapter *oracleAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
+}
+
+/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
+func (adapter *oracleAdapter) ProcessError(errToProcess error, workerScope *map[string]string, queryScope *map[string]string) {
+        if logger.GetLogger().V(logger.Warning) {
+                logger.GetLogger().Log(logger.Warning, "oracle ProcessError "+ errToProcess.Error() + " "+ (*queryScope)["sqlHash"] +" "+(*queryScope)["ns.Cmd"])
+        }
+        if strings.Contains(errToProcess.Error(), "ORA-03113") {
+                (*workerScope)["child_shutdown_flag"] = "1"
+        }
 }
 
 func (adapter *oracleAdapter) ProcessResult(colType string, res string) string {

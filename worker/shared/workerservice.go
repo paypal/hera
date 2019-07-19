@@ -209,6 +209,10 @@ outerloop:
 
 			break outerloop
 		}
+		_, ok := cmdprocessor.GetWorkerScope("child_shutdown_flag")
+		if ok {
+			break
+		}
 	}
 
 	if logger.GetLogger().V(logger.Info) {
