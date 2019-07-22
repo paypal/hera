@@ -54,8 +54,9 @@ func GetShardingCfg() *ShardingCfg {
 }
 
 // WLCfg keeps the whitelist configuration
+// keys should be int64 or string
 type WLCfg struct {
-	records map[uint64]*ShardMapRecord
+	records map[interface{}]*ShardMapRecord
 }
 
 var gWLCfg atomic.Value
@@ -201,10 +202,15 @@ func loadMap(ctx context.Context, db *sql.DB) error {
 get the SQL used to read the whitelist configuration
 */
 func getWLSQL() string {
-	if len(GetConfig().ShardingPostfix) != 0 {
-		return fmt.Sprintf("SELECT shard_key, shard_id, read_status, write_status FROM %s_whitelist_%s WHERE enable = 'Y'", GetConfig().ManagementTablePrefix, GetConfig().ShardingPostfix)
+	skCol := "shard_key"
+
+	if GetConfig().ShardKeyValueTypeIsString {
+		skCol = "shard_key_string"
 	}
-	return fmt.Sprintf("SELECT shard_key, shard_id, read_status, write_status FROM %s_whitelist WHERE enable = 'Y'", GetConfig().ManagementTablePrefix)
+	if len(GetConfig().ShardingPostfix) != 0 {
+		return fmt.Sprintf("SELECT %s, shard_id, read_status, write_status FROM %s_whitelist_%s WHERE enable = 'Y'", skCol, GetConfig().ManagementTablePrefix, GetConfig().ShardingPostfix)
+	}
+	return fmt.Sprintf("SELECT %s, shard_id, read_status, write_status FROM %s_whitelist WHERE enable = 'Y'", skCol, GetConfig().ManagementTablePrefix)
 }
 
 /*
@@ -238,12 +244,17 @@ func loadWhitelist(ctx context.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	cfg := WLCfg{records: make(map[uint64]*ShardMapRecord)}
+	cfg := WLCfg{records: make(map[interface{}]*ShardMapRecord)}
 	for rows.Next() {
 		var shardKey uint64
+		var shardKeyStr string
 		var rstatus, wstatus sql.NullString
 		var rec ShardMapRecord
-		err = rows.Scan(&shardKey, &(rec.logical), &rstatus, &wstatus)
+		if GetConfig().ShardKeyValueTypeIsString {
+			err = rows.Scan(&shardKeyStr, &(rec.logical), &rstatus, &wstatus)
+		} else {
+			err = rows.Scan(&shardKey, &(rec.logical), &rstatus, &wstatus)
+		}
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Error (rows) loading whitelist:", err)
 			return
@@ -254,7 +265,11 @@ func loadWhitelist(ctx context.Context, db *sql.DB) {
 		if wstatus.Valid && wstatus.String[0] == 'N' {
 			rec.flags |= 0x0002
 		}
-		cfg.records[shardKey] = &rec
+		if GetConfig().ShardKeyValueTypeIsString {
+			cfg.records[shardKeyStr] = &rec
+		} else {
+			cfg.records[shardKey] = &rec
+		}
 	}
 	gWLCfg.Store(&cfg)
 }
@@ -339,7 +354,7 @@ func InitShardingCfg() error {
 		}
 		gShardingCfg.Store(&cfg)
 		if GetConfig().EnableWhitelistTest {
-			cfg := WLCfg{records: make(map[uint64]*ShardMapRecord)}
+			cfg := WLCfg{records: make(map[interface{}]*ShardMapRecord)}
 			gWLCfg.Store(&cfg)
 		}
 	}
