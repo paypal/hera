@@ -63,15 +63,20 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		}
 		is_writable = adapter.Heartbeat(db);
 		if (is_writable) {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
+			}
+			err = nil
 			break
 		} else {
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn "/*+curDs*/)
 			}
+			err = errors.New("cannot use read-only conn "+curDs)
 			db.Close()
 		}
-	}	
+	}
 	return db, err
 }
 
@@ -86,7 +91,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
 		}
 		return writable
 	}
-		
+
 	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
 		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
 		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
