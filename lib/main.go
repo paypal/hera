@@ -43,7 +43,7 @@ func Run() {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "missing --name parameter")
 		}
-		os.Exit(1)
+		FullShutdown()
 	}
 
 	rand.Seed(time.Now().Unix())
@@ -53,14 +53,14 @@ func Run() {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
 		}
-		os.Exit(1)
+		FullShutdown()
 	}
 	pidfile, err := os.Create(GetConfig().MuxPidFile)
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "Can't open", GetConfig().MuxPidFile, err.Error())
 		}
-		os.Exit(1)
+		FullShutdown()
 	} else {
 		pidfile.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
 	}
@@ -94,7 +94,7 @@ func Run() {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
 		}
-		os.Exit(11)
+		FullShutdown()
 	}
 
 	caltxn = cal.NewCalTransaction(cal.TransTypeAPI, "mux-go-start", cal.TransOK, "", cal.DefaultTGName)
@@ -125,7 +125,7 @@ func Run() {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
 		}
-		os.Exit(12)
+		FullShutdown()
 	}
 
 	for {
@@ -155,7 +155,7 @@ func Run() {
 			if logger.GetLogger().V(logger.Alert) {
 				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err)
 			}
-			os.Exit(13)
+			FullShutdown()
 		}
 	}
 	InitRacMaint(*namePtr)
