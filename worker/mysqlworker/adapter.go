@@ -52,7 +52,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 
 	var db *sql.DB
 	var err error
-	is_writable:= false
+	is_writable := false
 	for idx, curDs := range strings.Split(ds, "||") {
 		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
 		if err != nil {
@@ -62,7 +62,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			continue
 		}
 		is_writable = adapter.Heartbeat(db);
-		if (is_writable) {
+		if is_writable {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
 			}
@@ -71,7 +71,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		} else {
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn "/*+curDs*/)
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/)
 			}
 			err = errors.New("cannot use read-only conn "+curDs)
 			db.Close()
@@ -81,7 +81,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 }
 
 // Checking master status
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
+func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	writable := false
 	conn, err := db.Conn(ctx)
@@ -91,6 +91,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
 		}
 		return writable
 	}
+	defer conn.Close()
 
 	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
 		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
@@ -99,13 +100,18 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
 			}
+			return false
 		}
+		defer stmt.Close()
+
 		rows, err := stmt.Query()
 		if err != nil {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
 			}
+			return false
 		}
+		defer rows.Close()
 		countRows := 0
 		if rows.Next() {
 			countRows++
@@ -117,9 +123,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
 				writable = true
 			}
 		}
-		rows.Close()
-		stmt.Close()
-		conn.Close()
+
 		// read only connection
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "writable:", writable)
@@ -127,7 +131,6 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool) {
 	}
 	return writable
 }
-
 
 // UseBindNames return false because the SQL string uses ? for bind parameters
 func (adapter *mysqlAdapter) UseBindNames() bool {
