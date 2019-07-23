@@ -772,3 +772,7 @@ func (cp *CmdProcessor) preprocess(query string) string {
 	}
 	return query
 }
+
+func (cp *CmdProcessor) isIdle() bool {
+	return !(cp.inCursor) && !(cp.inTrans)
+}

@@ -144,6 +144,21 @@ outerloop:
 	for {
 		select {
 		case <-time.After(cfg.hbInterval):
+			// heartbeat to DB only when the worker is free.
+			if cmdprocessor.heartbeat && cmdprocessor.isIdle() {
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, "sending heartbeat to DB")
+				}
+
+				ok := cmdprocessor.SendDbHeartbeat()
+				if !ok {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, "master db is unavailable, worker exiting")
+					}
+					break outerloop
+				}
+			}
+			continue
 
 		case sig, ok = <-sigchannel:
 			if sig == signalRecover {
@@ -170,21 +185,6 @@ outerloop:
 		case ns, ok = <-nschannel:
 		}
 
-		// heartbeat to DB only when the worker is free.
-		if ns == nil && ok && cmdprocessor.heartbeat {
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "sending heartbeat to DB")
-			}
-
-			ok := cmdprocessor.SendDbHeartbeat()
-			if !ok {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "master db is unavailable, worker exiting")
-				}
-				break outerloop
-			}
-			continue
-		}
 		//
 		// @TODO let !ok go.
 		//
@@ -302,7 +302,7 @@ func drainIncomingChannel(nschannel <-chan *netstring.Netstring) {
 			time.Sleep(time.Microsecond * 10)
 		default:
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "draining: nschannel empty")
+				logger.GetLogger().Log(logger.Debug, "draining: lnschannel empty")
 			}
 			return
 		}

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Runs golang dlv for coordinator_basic 
+clear 
+
+# set environment variables 
+export DB_USER=x
+export DB_PASSWORD=x
+export DB_DATASOURCE=x
+export username=realU
+export password=realU-pwd
+export TWO_TASK='tcp(localhost:3333)/'
+export TWO_TASK_READ='tcp(localhost:3333)/'
+
+# symlink mysqlworker to directory
+ln -s $GOPATH/bin/mysqlworker .
+
+n=coordinator_basic
+adr=$GOPATH/src/github.com/paypal/hera/tests/unittest/$n 
+
+cd $adr ; dlv test $adr

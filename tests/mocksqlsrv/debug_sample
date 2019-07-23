@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Runs golang dlv on samplequeries.go 
+
+cd $GOPATH/bin
+./dlv debug ../src/github.com/paypal/hera/tests/mocksqlsrv/samplequeries.go
