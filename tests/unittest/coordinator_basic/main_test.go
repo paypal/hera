@@ -43,7 +43,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	return appcfg, opscfg, testutil.OracleWorker
+	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func before() error {
@@ -77,7 +77,7 @@ func TestCoordinatorBasic(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/delete "+tableName)
+	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/delete from "+tableName)
 	_, err = stmt.Exec()
 	if err != nil {
 		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())

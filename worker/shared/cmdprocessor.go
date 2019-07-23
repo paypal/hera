@@ -42,6 +42,7 @@ import (
 type CmdProcessorAdapter interface {
 	InitDB() (*sql.DB, error)
 	Heartbeat(*sql.DB) bool
+	MakeSqlParser() (common.SQLParser, error)
 	UseBindNames() bool
 	GetColTypeMap() map[string]int
 	// this is used for date related types to translate between the database format to the mux format
@@ -208,7 +209,14 @@ outloop:
 		if (cp.tx == nil) && (startTrans) {
 			cp.tx, err = cp.db.Begin()
 		}
-		if cp.tx != nil {
+		if cp.sqlParser.MustExecInsteadOfPrepare(sqlQuery) {
+			_, err = cp.tx.Exec(sqlQuery)
+			cp.calExecTxn.AddDataStr("directExec","t")
+			cp.calExecTxn.Completed()
+			cp.calExecTxn = nil
+			// keep cp.stmt nil so we don't exec
+			cp.stmt = nil
+		} else if cp.tx != nil {
 			cp.stmt, err = cp.tx.Prepare(sqlQuery)
 		} else {
 			cp.stmt, err = cp.db.Prepare(sqlQuery)
@@ -472,7 +480,16 @@ outloop:
 				}
 			}
 		} else {
-			if cp.inTrans {
+			if cp.calExecTxn == nil {
+				// for mysql begin/start transaction
+				// exec already done instead of prepare
+				nss := make([]*netstring.Netstring, 2)
+				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
+				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows
+				// no bind outs
+				resns := netstring.NewNetstringEmbedded(nss)
+				cp.eor(common.EORInTransaction, resns)
+			} else if cp.inTrans {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
 				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
@@ -700,7 +717,8 @@ func (cp *CmdProcessor) InitDB() error {
 	cp.db.SetMaxOpenConns(1)
 
 	//
-	cp.sqlParser, err = common.NewRegexSQLParser()
+	// cp.sqlParser, err = common.NewRegexSQLParser()
+	cp.sqlParser, err = cp.adapter.MakeSqlParser()
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, "bindname regex complie:", err.Error())
