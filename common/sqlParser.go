@@ -28,7 +28,6 @@ import (
 type SQLParser interface {
 	IsRead(string) bool
 	Parse(sql string) (isSelect bool, transaction bool)
-	MustExecInsteadOfPrepare(sql string) (bool)
 }
 
 type regexSQLParser struct {
@@ -52,10 +51,6 @@ func NewRegexSQLParser() (SQLParser, error) {
 		return nil, err
 	}
 	return parser, nil
-}
-
-func (parser *regexSQLParser) MustExecInsteadOfPrepare(sql string) bool {
-	return false
 }
 
 // IsRead tells is the SQL is doing a read, basically a SELECT but not a SELECT ... FOR UPDATE or nextval
@@ -90,10 +85,6 @@ func NewDummyParser() SQLParser {
 	return &dummyParser{}
 }
 
-func (parser *dummyParser) MustExecInsteadOfPrepare(sql string) bool {
-	return false
-}
-
 func (parser *dummyParser) IsRead(sql string) bool {
 	return false
 }
@@ -101,47 +92,3 @@ func (parser *dummyParser) IsRead(sql string) bool {
 func (parser *dummyParser) Parse(sql string) (bool, bool) {
 	return false, false
 }
-
-type autoCommitParser struct {
-	matcher *regexp.Regexp
-	matcherBeginOrStartTransaction *regexp.Regexp
-}
-// NewDummyParser crestes a parser that always returns false
-func NewAutoCommitParser() (SQLParser, error) {
-	parser := &autoCommitParser{}
-	var err error
-	parser.matcherBeginOrStartTransaction, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*(start \\s*transaction|begin)")
-	if err != nil {
-		return nil, err
-	}
-	parser.matcher, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*select\\s+")
-	if err != nil {
-		return nil, err
-	}
-	return parser, nil
-}
-
-func (parser *autoCommitParser) MustExecInsteadOfPrepare(sql string) bool {
-	return parser.matcherBeginOrStartTransaction.MatchString(sql)
-}
-
-func (parser *autoCommitParser) IsRead(sql string) bool {
-	if parser.matcherBeginOrStartTransaction.MatchString(sql) {
-		return false
-	}
-	return true
-}
-
-// - first return code tells if the query is a SELECT
-// - second returns code tells the query starts a transaction
-// mysql-autocommit select..for update doesn't start a transaction
-func (parser *autoCommitParser) Parse(sql string) (bool, bool) {
-	isSelect := parser.matcher.MatchString(sql)
-	if parser.matcherBeginOrStartTransaction.MatchString(sql) {
-		return isSelect, true
-	}
-	return isSelect, false
-}
-
-
-
