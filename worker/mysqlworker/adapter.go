@@ -28,6 +28,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/paypal/hera/utility/logger"
+	"github.com/paypal/hera/worker/shared"
 )
 
 type mysqlAdapter struct {
@@ -161,15 +162,17 @@ func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
-func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *map[string]string, queryScope *map[string]string) {
+func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
 	errStr := errToProcess.Error()
 	idx := strings.Index(errStr, ":")
+	if idx < 0 || idx >= len(errStr) {
+            return
+        }
 	var errno int
 	fmt.Sscanf(errStr[6:idx],"%d",&errno)
 
 	if logger.GetLogger().V(logger.Warning) {
-		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errToProcess.Error() + " sqlHash:"+ (*queryScope)["sqlHash"] +" Cmd:"+(*queryScope)["ns.Cmd"]+fmt.Sprintf(" errno:%d",errno))
+		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errToProcess.Error() + " sqlHash:"+ (*queryScope).SqlHash +" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d",errno))
 	}
 
 	switch (errno) {
@@ -186,7 +189,7 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *map[s
 	case 1836: fallthrough // read-only mode
 	case 1874: fallthrough // innodb read-only
 	case 1878: // temp file write fail
-		(*workerScope)["child_shutdown_flag"] = "1"
+		(*workerScope).Child_shutdown_flag = true
 	}
 }
 
