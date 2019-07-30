@@ -44,7 +44,7 @@ type CmdProcessorAdapter interface {
 	Heartbeat(*sql.DB) bool
 	InitDB() (*sql.DB, error)
 	/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
-	ProcessError(errToProcess error, workerScope *map[string]string, queryScope *map[string]string)
+	ProcessError(errToProcess error, workerScope *WorkerScopeType, queryScope *QueryScopeType)
 	// ProcessResult is used for date related types to translate between the database format to the mux format
 	ProcessResult(colType string, res string) string
 	UseBindNames() bool
@@ -151,8 +151,16 @@ type CmdProcessor struct {
 	// the name of the cal TXN
 	calSessionTxnName string
 	heartbeat         bool
-	queryScope        map[string]string
-        workerScope       map[string]string
+	queryScope        QueryScopeType
+        WorkerScope       WorkerScopeType
+}
+
+type QueryScopeType struct {
+	NsCmd	string
+	SqlHash	string
+}
+type WorkerScopeType struct {
+	Child_shutdown_flag bool
 }
 
 // NewCmdProcessor creates the processor using th egiven adapter
@@ -162,13 +170,9 @@ func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcesso
 		cs = "CLIENT_SESSION"
 	}
 
-	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true, workerScope: map[string]string{}, queryScope: map[string]string{} }
+	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true}
 }
 
-func (cp *CmdProcessor) GetWorkerScope(key string) (string, bool) {
-	val,ok := cp.workerScope[key]
-	return val,ok
-}
 
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
 func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
@@ -180,7 +184,7 @@ func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
 	}
 	var err error
 
-	cp.queryScope["ns.Cmd"] = fmt.Sprintf("%d",ns.Cmd)
+	cp.queryScope.NsCmd = fmt.Sprintf("%d",ns.Cmd)
 outloop:
 	switch ns.Cmd {
 	case common.CmdClientCalCorrelationID:
@@ -191,7 +195,7 @@ outloop:
 			cp.calSessionTxn.SetCorrelationID("@todo")
 		}
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
-		cp.queryScope = map[string]string{}
+		cp.queryScope = QueryScopeType{}
 		cp.lastErr = nil
 		cp.sqlHash = 0
 		cp.heartbeat = false // for hb
@@ -215,7 +219,7 @@ outloop:
 			cp.calSessionTxn = cal.NewCalTransaction(cal.TransTypeAPI, cp.calSessionTxnName, cal.TransOK, "", cal.DefaultTGName)
 		}
 		cp.sqlHash = utility.GetSQLHash(string(ns.Payload))
-		cp.queryScope["sqlHash"] = fmt.Sprintf("%d",cp.sqlHash)
+		cp.queryScope.SqlHash = fmt.Sprintf("%d",cp.sqlHash)
 		cp.calExecTxn = cal.NewCalTransaction(cal.TransTypeExec, fmt.Sprintf("%d", cp.sqlHash), cal.TransOK, "", cal.DefaultTGName)
 		if (cp.tx == nil) && (startTrans) {
 			cp.tx, err = cp.db.Begin()
@@ -226,7 +230,7 @@ outloop:
 			cp.stmt, err = cp.db.Prepare(sqlQuery)
 		}
 		if err != nil {
-			cp.adapter.ProcessError(err, &cp.workerScope, &cp.queryScope)
+			cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 			cp.calExecErr("Prepare", err.Error())
 			cp.lastErr = err
 			err = nil
@@ -387,7 +391,7 @@ outloop:
 				}
 			}
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.workerScope, &cp.queryScope)
+				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				cp.calExecErr("RC", err.Error())
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Execute error:", err.Error())
@@ -517,7 +521,7 @@ outloop:
 			for cp.rows.Next() {
 				err = cp.rows.Scan(readCols...)
 				if err != nil {
-					cp.adapter.ProcessError(err, &cp.workerScope, &cp.queryScope)
+					cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 					if logger.GetLogger().V(logger.Warning) {
 						logger.GetLogger().Log(logger.Warning, "fetch:", err.Error())
 					}
@@ -639,7 +643,7 @@ outloop:
 			calevt := cal.NewCalEvent("COMMIT", "Local", cal.TransOK, "")
 			err = cp.tx.Commit()
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.workerScope, &cp.queryScope)
+				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Commit error:", err.Error())
 				}
@@ -666,7 +670,7 @@ outloop:
 			calevt := cal.NewCalEvent("ROLLBACK", "Local", cal.TransOK, "")
 			err = cp.tx.Rollback()
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.workerScope, &cp.queryScope)
+				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Rollback error:", err.Error())
 				}

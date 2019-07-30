@@ -1,6 +1,8 @@
 package dummy
 
-import "fmt"
+import (
+     "fmt"
+)
 
 type Handler struct {
 }

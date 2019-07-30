@@ -26,6 +26,7 @@ import (
 
 	_ "gopkg.in/goracle.v2"
 	"github.com/paypal/hera/utility/logger"
+	"github.com/paypal/hera/worker/shared"
 )
 
 type oracleAdapter struct {
@@ -79,13 +80,12 @@ func (adapter *oracleAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
-func (adapter *oracleAdapter) ProcessError(errToProcess error, workerScope *map[string]string, queryScope *map[string]string) {
+func (adapter *oracleAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
         if logger.GetLogger().V(logger.Warning) {
-                logger.GetLogger().Log(logger.Warning, "oracle ProcessError "+ errToProcess.Error() + " "+ (*queryScope)["sqlHash"] +" "+(*queryScope)["ns.Cmd"])
+                logger.GetLogger().Log(logger.Warning, "oracle ProcessError "+ errToProcess.Error() + " "+ (*queryScope).SqlHash +" "+(*queryScope).NsCmd)
         }
         if strings.Contains(errToProcess.Error(), "ORA-03113") {
-                (*workerScope)["child_shutdown_flag"] = "1"
+                (*workerScope).Child_shutdown_flag = true
         }
 }
 
