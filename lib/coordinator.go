@@ -51,8 +51,6 @@ type Coordinator struct {
 	preppendCorrID bool
 	// tells if the current request is SELECT
 	isRead bool
-	// tells if the current request is a SQL or some other command
-	isSQL bool
 	// for debugging
 	id        string
 	sqlhash   int32
@@ -137,7 +135,7 @@ func (crd *Coordinator) Run() {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "coordinator run got client request.")
 			}
-			crd.isSQL = false
+			crd.nss = nil
 			// new session
 			handle, _ := crd.handleMux(ns)
 			if !handle {
@@ -331,7 +329,6 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 		crd.nss = nss
 		for _, ns := range nss {
 			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
-				crd.isSQL = true
 				crd.sqlhash = int32(utility.GetSQLHash(string(ns.Payload)))
 				crd.isRead = crd.sqlParser.IsRead(string(ns.Payload))
 				handled := false
@@ -684,9 +681,9 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	if crd.preppendCorrID {
 		var err error
 		if crd.corrID == nil {
-			err = worker.Write(netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet")), false)
+			err = worker.Write(netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet")), 1)
 		} else {
-			err = worker.Write(crd.corrID, false)
+			err = worker.Write(crd.corrID, 1)
 		}
 		if err != nil {
 			if logger.GetLogger().V(logger.Debug) {
@@ -696,7 +693,15 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 		}
 	}
 	if request != nil {
-		err := worker.Write(request, crd.isSQL)
+		cnt := 1
+		if request.IsComposite() {
+			cnt = len(crd.nss)
+			if cnt == 0 {
+				logger.GetLogger().Log(logger.Alert, "Unexpected embedded ns length")
+			}
+		}
+
+		err := worker.Write(request, uint16(cnt))
 		if err != nil {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "doRequest: can't send the session starter request to worker")
@@ -783,7 +788,17 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 
 			// this is typically for the JDBCs "execute" use case
 			//? TODO: we should actually modify the worker to send a IN_CURSOR_IN_TRANSACTION / IN_CURSOR_NOT_IN_TRANSACTION EOR after the execute
-			err := worker.Write(ns, false)
+			cnt := 1
+			if ns.IsComposite() {
+				nss, err := netstring.SubNetstrings(request)
+				if err != nil {
+					logger.GetLogger().Log(logger.Alert, "Can't parse embedded ns, size", len(ns.Serialized))
+					return false, ErrClientFail
+				}
+				cnt = len(nss)
+			}
+
+			err := worker.Write(ns, uint16(cnt))
 			if err != nil {
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, "doRequest: can't send request to worker, err=", err)
@@ -834,6 +849,18 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			}
 
 			if msg.free {
+				if msg.rqId != worker.rqId {
+					evname := "crqId"
+					if (msg.rqId > worker.rqId) && (worker.rqId > 128 /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+						// this is not expected, so log with different name
+						evname = "crqId_Error"
+					}
+					e := cal.NewCalEvent("OCCGOMUX", evname, cal.TransOK, "")
+					e.AddDataInt("mux", int64(worker.rqId))
+					e.AddDataInt("wk", int64(msg.rqId))
+					e.Completed()
+				}
+
 				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, "workersqltime=", worker.sqlStartTimeMs)
