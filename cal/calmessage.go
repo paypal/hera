@@ -170,6 +170,7 @@ type calTransaction struct {
 	calActivity
 	mParent   *calTransaction
 	mDuration int
+	mTimer CalTimer
 }
 
 // NewCalEvent creates a CAL event
@@ -237,7 +238,6 @@ func (act *calActivity) initialize(_type string, _name string, _status string, _
 	act.validateAndSetType(_type)
 	act.validateAndSetName(_name)
 	act.validateAndSetStatus(_status)
-
 	act.AddData(_data)
 }
 
@@ -739,6 +739,8 @@ func (act *calTransaction) init(_type string, _name string, _status string, _dat
 		act.SetRootCalTxn(act)
 	}
 	act.SetCurrentCalTxn(act)
+	act.mTimer.Reset()
+	act.mDuration = -1
 	//
 	// @TODO backtrace
 	//
@@ -972,17 +974,12 @@ func (act *calTransaction) prepareStartOfTransactionMessage(_msgClass string) st
 }
 
 func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) string {
-	/*
-		String duration_str;
-		double duration = mTimer.Duration();
-		if mDuration >= kMinDuration	{
-			duration = m_duration;
-		}
-		char* durationString = duration_str.alloc_buffer(256);
-		CalMicrosecondTimer::PrivFormatDuration (durationString, duration);
-		duration_str.release_buffer(CHARSET_US_ASCII);
-	*/
-
+	var duration_str string
+	duration := act.mTimer.Duration()
+	if act.mDuration >= CalMinDuration{
+		duration = float64(act.mDuration)
+	}
+	duration_str = strconv.FormatFloat(duration, 'f', 2, 64)
 	var buf bytes.Buffer
 	buf.WriteString(_msgClass)
 	buf.WriteString(act.mTimeStamp)
@@ -993,8 +990,7 @@ func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) stri
 	buf.WriteString(calTab)
 	buf.WriteString(act.mStatus)
 	buf.WriteString(calTab)
-	//buf.WriteString(duration_str)
-	buf.WriteString("")
+	buf.WriteString(duration_str)
 	buf.WriteString(calTab)
 	buf.WriteString(act.mData)
 	buf.WriteString(calEndOfLine)
