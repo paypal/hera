@@ -22,8 +22,8 @@ import (
 )
 
 const(
-  CalMinDuration = 0
-  CalMaxDuration = 999999
+	minDuration = 0
+	maxDuration = 999999
 )
 
 /*
@@ -41,8 +41,8 @@ func (ct *CalTimer) Reset(){
 }
 
 // return time elapsed since last Reset call in micro seconds
-func (ct *CalTimer) Duration() int{
+func (ct *CalTimer) Duration() int64{
   var timediff time.Duration
   timediff = time.Since(ct.tBegin)
-  return int(timediff.Nanoseconds() / int64(time.Millisecond))
+  return timediff.Nanoseconds() / int64(time.Millisecond)
 }
