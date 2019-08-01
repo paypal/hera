@@ -104,9 +104,6 @@ const (
 	calNameAlreadyCompleted   = "AlreadyCompleted"
 	calNameCompletingParent   = "CompletingParentWithUncompletedChild"
 
-	minDuration = 0
-	maxDuration = 999999
-
 	calClassStartTransaction  = "t"
 	calClassEndTransaction    = "T"
 	calClassAtomicTransaction = "A"
@@ -975,8 +972,15 @@ func (act *calTransaction) prepareStartOfTransactionMessage(_msgClass string) st
 
 func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) string {
 	var duration_str string
-	duration := act.mTimer.Duration()
-	if act.mDuration >= CalMinDuration{
+	// to safegurad 64 to 32 bit int conversion
+	value := act.mTimer.Duration()
+	var duration int
+	if value > maxDuration {
+		duration = maxDuration
+	} else {
+		duration = int(value)
+	}
+	if act.mDuration >= minDuration{
 		duration = act.mDuration
 	}
 	duration_str = strconv.Itoa(duration)
