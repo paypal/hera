@@ -977,9 +977,9 @@ func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) stri
 	var duration_str string
 	duration := act.mTimer.Duration()
 	if act.mDuration >= CalMinDuration{
-		duration = float64(act.mDuration)
+		duration = act.mDuration
 	}
-	duration_str = strconv.FormatFloat(duration, 'f', 2, 64)
+	duration_str = strconv.Itoa(duration)
 	var buf bytes.Buffer
 	buf.WriteString(_msgClass)
 	buf.WriteString(act.mTimeStamp)
