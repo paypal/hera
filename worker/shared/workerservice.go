@@ -209,6 +209,9 @@ outerloop:
 
 			break outerloop
 		}
+		if cmdprocessor.WorkerScope.Child_shutdown_flag {
+			break
+		}
 	}
 
 	if logger.GetLogger().V(logger.Info) {
