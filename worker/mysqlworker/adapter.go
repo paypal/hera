@@ -39,6 +39,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	user := os.Getenv("username")
 	pass := os.Getenv("password")
 	ds := os.Getenv("mysql_datasource")
+	tlsopt := os.Getenv("tls")
 
 	if user == "" {
 		return nil, errors.New("Can't get 'username' from env")
@@ -49,19 +50,22 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	if ds == "" {
 		return nil, errors.New("Can't get 'mysql_datasource' from env")
 	}
+	if tlsopt == "" {
+		tlsopt = "false"
+	}
 
 	var db *sql.DB
 	var err error
 	is_writable := false
 	for idx, curDs := range strings.Split(ds, "||") {
-		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
+		db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s?tls=%s", user, pass, curDs, tlsopt))
 		if err != nil {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
 			}
 			continue
 		}
-		is_writable = adapter.Heartbeat(db);
+		is_writable = adapter.Heartbeat(db)
 		if is_writable {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
@@ -73,7 +77,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/)
 			}
-			err = errors.New("cannot use read-only conn "+curDs)
+			err = errors.New("cannot use read-only conn " + curDs)
 			db.Close()
 		}
 	}
