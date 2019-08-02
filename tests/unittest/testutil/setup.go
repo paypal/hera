@@ -1,8 +1,10 @@
 package testutil
 
 import (
+	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"sync"
@@ -36,6 +38,8 @@ type mux struct {
 	opscfg  map[string]string
 	wType   WorkerType
 	wg      sync.WaitGroup
+	dbServ	*exec.Cmd
+	dbStop  context.CancelFunc
 }
 
 var initialized = false
@@ -98,17 +102,17 @@ func (m *mux) setupConfig() error {
 		return err
 	}
 
-	env := os.Getenv("username")
-	if env == "" {
-		return errors.New("username env is not defined")
+	if os.Getenv("username")  == "" {
+		os.Setenv("username", "herausertest")
+		os.Setenv("password", "Hera-User-Test-9")
 	}
-	env = os.Getenv("password")
-	if env == "" {
-		return errors.New("password env is not defined")
-	}
-	env = os.Getenv("TWO_TASK")
-	if env == "" {
-		return errors.New("TWO_TASK env is not defined")
+	if m.wType == OracleWorker {
+		env := os.Getenv("TWO_TASK")
+		if env == "" {
+			return errors.New("TWO_TASK env is not defined")
+		}
+	} else if os.Getenv("TWO_TASK") == "" {
+		os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
 	}
 
 	os.Remove("oracleworker")
@@ -155,6 +159,20 @@ func (m *mux) StartServer() error {
 	if err != nil {
 		return err
 	}
+	if m.wType != OracleWorker {
+		// clean up stray
+		cleanCmd := exec.Command("killall", "runserver")
+		cleanCmd.Run()
+
+		// spawn test db
+		ctx,cancelF := context.WithCancel(context.Background())
+		m.dbStop = cancelF
+		m.dbServ = exec.CommandContext(ctx, os.Getenv("GOPATH")+"/bin/runserver", "2121", "0.0")
+		err := m.dbServ.Start()
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "test mock mysql dbserv did not spawn " + err.Error())
+		}
+	}
 
 	m.wg.Add(1)
 	go func() {
@@ -192,6 +210,8 @@ func (m *mux) StartServer() error {
 
 func (m *mux) StopServer() {
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	m.dbStop()
+	syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
 
 	timer := time.NewTimer(time.Second * 5)
 	go func() {
