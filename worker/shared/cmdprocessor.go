@@ -151,6 +151,10 @@ type CmdProcessor struct {
 	// the name of the cal TXN
 	calSessionTxnName string
 	heartbeat         bool
+	// counter for requests, acting like ID
+	rqId uint16
+	// used in eor() to send the right code
+	moreIncomingRequests func() bool
 	queryScope        QueryScopeType
         WorkerScope       WorkerScopeType
 }
@@ -480,7 +484,7 @@ outloop:
 							cp.eor(EOR_IN_CURSOR_NOT_IN_TRANSACTION, resns)
 						}
 					*/
-					WriteAll(cp.SocketOut, resns.Serialized)
+					WriteAll(cp.SocketOut, resns)
 				} else {
 					if cp.inTrans {
 						cp.eor(common.EORInTransaction, resns)
@@ -543,7 +547,7 @@ outloop:
 			}
 			if len(nss) > 0 {
 				resns := netstring.NewNetstringEmbedded(nss)
-				err = WriteAll(cp.SocketOut, resns.Serialized)
+				err = WriteAll(cp.SocketOut, resns)
 				if err != nil {
 					if logger.GetLogger().V(logger.Warning) {
 						logger.GetLogger().Log(logger.Warning, "Error writing to mux", err.Error())
@@ -586,7 +590,7 @@ outloop:
 		}
 		if cts == nil {
 			ns := netstring.NewNetstringFrom(common.RcValue, []byte("0"))
-			err = WriteAll(cp.SocketOut, ns.Serialized)
+			err = WriteAll(cp.SocketOut, ns)
 		} else {
 			nss := make([]*netstring.Netstring, len(cts)*5+1)
 			nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte(strconv.Itoa(len(cts))))
@@ -633,7 +637,7 @@ outloop:
 				cnt++
 			}
 			resns := netstring.NewNetstringEmbedded(nss)
-			err = WriteAll(cp.SocketOut, resns.Serialized)
+			err = WriteAll(cp.SocketOut, resns)
 		}
 	case common.CmdCommit:
 		if logger.GetLogger().V(logger.Debug) {
@@ -741,20 +745,25 @@ func (cp *CmdProcessor) InitDB() error {
 }
 
 func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
+	if (code == common.EORFree) && cp.moreIncomingRequests() {
+		code = common.EORMoreIncomingRequests
+	}
 	if (code == common.EORFree) && (cp.calSessionTxn != nil) {
 		cp.calSessionTxn.Completed()
 		cp.calSessionTxn = nil
 	}
 	var payload []byte
 	if ns != nil {
-		payload = make([]byte, len(ns.Serialized)+1)
+		payload = make([]byte, len(ns.Serialized)+1 /*code*/ +2 /*rqId*/)
 		payload[0] = byte('0' + code)
-		copy(payload[1:], ns.Serialized)
+		payload[1] = byte(cp.rqId >> 8)
+		payload[2] = byte(cp.rqId & 0xFF)
+		copy(payload[3:], ns.Serialized)
 	} else {
-		payload = []byte{byte('0' + code)}
+		payload = []byte{byte('0' + code), byte(cp.rqId >> 8), byte(cp.rqId & 0xFF)}
 	}
 	cp.heartbeat = true
-	return WriteAll(cp.SocketOut, netstring.NewNetstringFrom(common.CmdEOR, payload).Serialized)
+	return WriteAll(cp.SocketOut, netstring.NewNetstringFrom(common.CmdEOR, payload))
 }
 
 func (cp *CmdProcessor) calExecErr(field string, err string) {

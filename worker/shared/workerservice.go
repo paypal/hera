@@ -123,7 +123,7 @@ func Start(adapter CmdProcessorAdapter) {
 	//
 	// TODO: get real info
 	payload := []byte("0 MyDB")
-	WriteAll(sockMux, netstring.NewNetstringFrom(common.CmdControlMsg, payload).Serialized)
+	WriteAll(sockMux, netstring.NewNetstringFrom(common.CmdControlMsg, payload))
 	//
 	// start worker mainloop.
 	//
@@ -138,6 +138,9 @@ func runworker(sockMux *os.File, cmdprocessor *CmdProcessor, cfg *workerConfig) 
 	var err error
 
 	nschannel := readNextNetstring(sockMux)
+	cmdprocessor.moreIncomingRequests = func() bool {
+		return (len(nschannel) > 0)
+	}
 	sigchannel := waitForSignal()
 
 outerloop:
@@ -183,6 +186,7 @@ outerloop:
 				break outerloop
 			}
 		case ns, ok = <-nschannel:
+			cmdprocessor.rqId++
 		}
 
 		//
@@ -277,13 +281,13 @@ func waitForSignal() <-chan int {
 
 // recoverworker drains the mux channel and rollbacks the current transaction
 func recoverworker(cmdprocessor *CmdProcessor, nschannel <-chan *netstring.Netstring) error {
-	drainIncomingChannel(nschannel)
+	drainIncomingChannel(cmdprocessor, nschannel)
 	err := cmdprocessor.ProcessCmd(netstring.NewNetstringFrom(common.CmdRollback, []byte("")))
 	return err
 }
 
 // drainIncomingChannel clears the mux channel
-func drainIncomingChannel(nschannel <-chan *netstring.Netstring) {
+func drainIncomingChannel(cmdprocessor *CmdProcessor, nschannel <-chan *netstring.Netstring) {
 	for {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "draining nschannel")
@@ -296,16 +300,19 @@ func drainIncomingChannel(nschannel <-chan *netstring.Netstring) {
 				}
 				return
 			}
+			cmdprocessor.rqId++
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "nschannel draining", DebugString(ns.Serialized))
 			}
 			//
 			// let readNextnetstring.Netstring reload nschannel if chann buffer was full.
 			//
-			time.Sleep(time.Microsecond * 10)
+			if len(nschannel) != 0 {
+				time.Sleep(time.Microsecond * 10)
+			}
 		default:
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "draining: lnschannel empty")
+				logger.GetLogger().Log(logger.Debug, "draining: nschannel empty")
 			}
 			return
 		}
