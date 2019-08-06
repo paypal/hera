@@ -28,6 +28,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/paypal/hera/utility/logger"
+	"github.com/paypal/hera/worker/shared"
 )
 
 type mysqlAdapter struct {
@@ -159,6 +160,37 @@ var colTypeMap = map[string]int{
 
 func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
+}
+
+func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
+	errStr := errToProcess.Error()
+	idx := strings.Index(errStr, ":")
+	if idx < 0 || idx >= len(errStr) {
+            return
+        }
+	var errno int
+	fmt.Sscanf(errStr[6:idx],"%d",&errno)
+
+	if logger.GetLogger().V(logger.Warning) {
+		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errToProcess.Error() + " sqlHash:"+ (*queryScope).SqlHash +" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d",errno))
+	}
+
+	switch (errno) {
+	case 1153: fallthrough // pkt too large
+	case 1154: fallthrough // read err fr pipe
+	case 1155: fallthrough // err fnctl
+	case 1156: fallthrough // pkt order
+	case 1157: fallthrough // err uncompress
+	case 1158: fallthrough // err read
+	case 1159: fallthrough // read timeout
+	case 1160: fallthrough // err write
+	case 1161: fallthrough // write timeout
+	case 1317: fallthrough // query interupt
+	case 1836: fallthrough // read-only mode
+	case 1874: fallthrough // innodb read-only
+	case 1878: // temp file write fail
+		(*workerScope).Child_shutdown_flag = true
+	}
 }
 
 func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {

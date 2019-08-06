@@ -13,7 +13,9 @@ import (
      "log"
      "io"
      "fmt"
+     "regexp"
      "strings"
+     "strconv"
      "math/rand"
 )
 
@@ -298,6 +300,9 @@ func (c *Conn) sendOKPacket(msg string) {
 
 /* Sends ERR Packet. */
 func (c *Conn) sendERRPacket(errc errcode, msg string) {
+     c.sendIntERRPacket(int(errc), msg)
+}
+func (c *Conn) sendIntERRPacket(errc int, msg string) {
      pos := 0
 
      // Write header int (1 byte).
@@ -395,10 +400,13 @@ func (c *Conn) writeColumnDefinition(cmd COM, qi *QueryInfo) {
 *  https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html
 */
 func (c *Conn) sendPreparedRSPacket(qi *QueryInfo) {
+     c.sendPreparedRSPacketBad(qi, 0x00)
+}
+func (c *Conn) sendPreparedRSPacketBad(qi *QueryInfo, errI int) {
      pos := 0
 
      // Write status int (1 byte).
-     WriteFixedLenInt(c.writeBuf, INT1, 0x00, &pos)
+     WriteFixedLenInt(c.writeBuf, INT1, errI, &pos)
      // Write statement id (4 bytes).
      WriteFixedLenInt(c.writeBuf, INT4, c.stmtid, &pos)
      // Write number of columns (1 byte).
@@ -523,14 +531,14 @@ func (c *Conn) readPacket(handshake bool) (bool) {
 
           // This is a command packet, so process according to
           // what kind of command it is.
+          payloadStr := string(payload[1:])
           switch COM(payload[0]) {
 
                case COM_QUERY:
                     // If this has a select statement, send rows, otherwise OK
-                    if strings.HasPrefix(strings.ToLower(string(payload[1:])), "select") {
+                    if strings.HasPrefix(strings.ToLower(payloadStr), "select") {
                          c.sendBinProtRS(&QueryInfo{})
                     } else {
-
                          // frac% failure, sending err packet instead
                          r := rand.Float64()
                          if r <= c.frac {
@@ -545,12 +553,20 @@ func (c *Conn) readPacket(handshake bool) (bool) {
                     c.stmtid++
                     // anything set with prepare
                     // Create new mapping between stmt id and actual statement
-                    qi := ParseQuery(string(payload[1:]), c.stmtid)
+                    qi := ParseQuery(payloadStr, c.stmtid)
                     c.stmts[c.stmtid] = qi
 
                     /* This implies the rest of the payload is the query. */
-                    /* Just return a COM_STMT_PREPARE_OK. */
-                    c.sendPreparedRSPacket(qi)
+
+                    re,_ := regexp.Compile(`mockErr([0-9]*)`)
+                    sub := re.FindStringSubmatch(payloadStr)
+                    if len(sub) > 0 {
+                         errI, _ := strconv.Atoi(string(sub[1]))
+                         c.sendIntERRPacket(errI, "MockEr-p-fixed-msg")
+                    } else {
+                         /* Just return a COM_STMT_PREPARE_OK. */
+                         c.sendPreparedRSPacket(qi)
+                    }
 
                case COM_STMT_EXECUTE:
 
