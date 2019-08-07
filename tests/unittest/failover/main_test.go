@@ -102,44 +102,38 @@ func TestFailover(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestFailover taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	conn.Close()
 
-	for i := 0; i < 111; i++ {
-		time.Sleep(1 * time.Second)
-		logger.GetLogger().Log(logger.Debug, "flushing conn loop"+fmt.Sprintf("%d",i))
-		ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
-		conn2, err := db.Conn(ctx)
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "flushing conn "+err.Error())
-			continue
-		}
-		// ignore errors since table may already exist & we're trying to flush out old db conn
-		stmt, err := conn2.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "pq flushing conn "+err.Error())
-			continue
-		}
-		_, err = stmt.Exec(1, fmt.Sprintf("loop %d flush conn,wait4good", i))
-		if err != nil {
-			logger.GetLogger().Log(logger.Debug, "qe flushing conn "+err.Error())
-			continue
-		}
-		break
+	time.Sleep(4 * time.Second)
+	/* It's easier just to wait for some time instead of trying to flush
+	old connections */
+	logger.GetLogger().Log(logger.Debug, "TestFailover flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	didWork := doCrud(conn, 2, t)
+	didWork = didWork || doCrud(conn, 3, t)
+	didWork = didWork || doCrud(conn, 4, t)
+	didWork = didWork || doCrud(conn, 5, t)
+	if !didWork {
+		logger.GetLogger().Log(logger.Warning, "TestFailover post primary shutdown, no work done")
+		t.Fatalf("failed to do any work after primary shutdown")
 	}
-	logger.GetLogger().Log(logger.Debug, "TestFailover conn flushed first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestFailover done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 
 }
 
-func doCrud(conn *sql.Conn, id int, t* testing.T) {
+func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
 
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-	stmt, _ := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
+	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
+	if err != nil {
+		return false
+	}
 	stmt.Exec()
 	// ignore errors since table may already exist
 
 	// not using txn since mysql
-	stmt, err := conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
+	stmt, err = conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
 	if err != nil {
 		t.Fatalf("Error preparing test (insert table) %s\n", err.Error())
 	}
@@ -180,5 +174,5 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) {
 	if err != nil {
 		t.Fatalf("Error preparing test (del table) %s\n", err.Error())
 	}
-
+	return true
 }
