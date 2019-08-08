@@ -714,9 +714,9 @@ outer:
 			}
 
 			if msg.ns == nil {
-				calMsg += "<nil>;"
+				// calMsg += "<nil>;"
 			} else {
-				calMsg += fmt.Sprintf("cmd = %d, payloadLen = %d; ", msg.ns.Cmd, len(msg.ns.Payload))
+				calMsg += fmt.Sprintf("cmd:%d,payloadLen:%d;", msg.ns.Cmd, len(msg.ns.Payload))
 			}
 
 			//
@@ -729,7 +729,7 @@ outer:
 			}
 
 			if len(calMsg) > 0 {
-				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, calMsg)
+				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=",worker.pid,worker.ID)+calMsg)
 				e.Completed()
 			}
 			return
