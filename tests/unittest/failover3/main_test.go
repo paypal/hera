@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"os/exec"
+	//"os/exec"
 	"testing"
 	"time"
 
@@ -73,72 +73,6 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
-func TestFailover(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestFailover begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-	if err != nil {
-		t.Fatal("Error starting Mux:", err)
-		return
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	defer conn.Close()
-
-	doCrud(conn, 1, t)
-	/*
-	conn2, err := db.Conn(ctx)
-	if err != nil {
-		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
-	}
-	doCrud(conn2, 1, t)
-	conn2.Close() //*/
-
-	logger.GetLogger().Log(logger.Debug, "TestFailover taking out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-        cleanCmd := exec.Command("docker", "stop", "mysql33")
-        cleanCmd.Run()
-	logger.GetLogger().Log(logger.Debug, "TestFailover taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
-	time.Sleep(8 * time.Second)
-	/* It's easier just to wait for some time instead of trying to flush
-	old connections */
-	logger.GetLogger().Log(logger.Debug, "TestFailover flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
-	conn2, err := db.Conn(ctx2)
-	if err != nil {
-		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
-	}
-	defer conn2.Close()
-	didWork := doCrud(conn2, 2, t)
-	logger.GetLogger().Log(logger.Debug, "TestFailover crud 222222222222222222222222222222222 \n")
-	didWork = didWork || doCrud(conn2, 3, t)
-	logger.GetLogger().Log(logger.Debug, "TestFailover crud 333333333333333333333333333333333 \n")
-	didWork = didWork || doCrud(conn2, 4, t)
-	logger.GetLogger().Log(logger.Debug, "TestFailover crud 444444444444444444444444444444444 \n")
-	didWork = didWork || doCrud(conn2, 5, t)
-	logger.GetLogger().Log(logger.Debug, "TestFailover crud 555555555555555555555555555555555 \n")
-	if !didWork {
-		logger.GetLogger().Log(logger.Warning, "TestFailover post primary shutdown, no work done")
-		t.Fatalf("failed to do any work after primary shutdown")
-	}
-	logger.GetLogger().Log(logger.Debug, "TestFailover done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
-	// clean up
-        cleanCmd = exec.Command("docker", "start", "mysql33")
-        cleanCmd.Run()
-
-}
-
 func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
 
@@ -195,4 +129,103 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	}
 	return true
 }
+
+func TestFailover2(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestFailover2 begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	defer conn.Close()
+
+	doCrud(conn, 1, t)
+	doCrud(conn, 1, t)
+	conn, err = db.Conn(ctx)
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
+	}
+	doCrud(conn, 1, t)
+
+	logger.GetLogger().Log(logger.Debug, "TestFailover2 taking out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	mysqlDirect("set global read_only = 1", t)
+
+	logger.GetLogger().Log(logger.Debug, "TestFailover2 taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	//conn.Close() // ?
+
+	time.Sleep(4 * time.Second)
+	/* It's easier just to wait for some time instead of trying to flush
+	old connections */
+	logger.GetLogger().Log(logger.Debug, "TestFailover2 flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	conn2, err := db.Conn(ctx2)
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
+	}
+	defer conn2.Close()
+	didWork := doCrud(conn2, 2, t)
+	didWork = didWork || doCrud(conn2, 3, t)
+	didWork = didWork || doCrud(conn2, 4, t)
+	didWork = didWork || doCrud(conn2, 5, t)
+	if !didWork {
+		logger.GetLogger().Log(logger.Warning, "TestFailover2 post primary shutdown, no work done")
+		t.Fatalf("failed to do any work after primary shutdown")
+	}
+	logger.GetLogger().Log(logger.Debug, "TestFailover2 done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	// cleanup
+	mysqlDirect("set global read_only = 0", t)
+
+}
+
+
+func mysqlDirect(query string, t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+        fullDsn:=fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+		os.Getenv("username"),
+		os.Getenv("password"),
+		ip1,
+		dbName)
+        //fmt.Println("fullDsn",fullDsn)
+        db0, err := sql.Open("mysql", fullDsn)
+        if err != nil {
+                t.Fatal("Error starting direct mysql:", err)
+                return
+        }
+        db0.SetMaxIdleConns(2)
+        defer db0.Close()
+	conn0, err := db0.Conn(ctx)
+        if err != nil {
+                t.Fatal("Error conn direct mysql:", err)
+                return
+        }
+	stmt0, err := conn0.PrepareContext(ctx, query)
+        if err != nil {
+                t.Fatal("Error prep direct mysql:", err)
+                return
+        }
+	_, err = stmt0.Exec()
+        if err != nil {
+                t.Fatal("Error exec direct mysql:", err)
+                return
+        }
+}
+
+
+
 
