@@ -73,6 +73,18 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
+func commit(conn *sql.Conn, t* testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+        tx, err := conn.BeginTx(ctx, nil)
+        if err != nil {
+                t.Fatalf("Error begin tx %s\n", err.Error())
+        }
+        err = tx.Commit()
+        if err != nil {
+                t.Fatalf("Error commit %s\n", err.Error())
+        }
+}
+
 func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
 
@@ -80,6 +92,7 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 
 	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
 	if err != nil {
+		commit(conn,t)
 		return false
 	}
 	stmt.Exec()
@@ -127,6 +140,7 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	if err != nil {
 		t.Fatalf("Error preparing test (del table) %s\n", err.Error())
 	}
+	commit(conn,t)
 	return true
 }
 
@@ -170,6 +184,7 @@ func TestFailover2(t *testing.T) {
 	old connections */
 	logger.GetLogger().Log(logger.Debug, "TestFailover2 flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
+	/*
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel2()
 	conn2, err := db.Conn(ctx2)
@@ -177,6 +192,8 @@ func TestFailover2(t *testing.T) {
 		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
 	}
 	defer conn2.Close()
+	// */
+	conn2 := conn
 	didWork := doCrud(conn2, 2, t)
 	didWork = didWork || doCrud(conn2, 3, t)
 	didWork = didWork || doCrud(conn2, 4, t)
