@@ -391,6 +391,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 		et := cal.NewCalEvent(cal.EventTypeWarning, "spawn_error", cal.TransOK, fmt.Sprintf("execl errored out with %s", er.Error()))
 		et.Completed()
+		time.Sleep(10 * time.Second)
 		return er
 	}
 	GetWorkerBrokerInstance().AddPidToWorkermap(worker, pid)
