@@ -1,8 +1,10 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -40,6 +42,7 @@ type mux struct {
 	wg      sync.WaitGroup
 	dbServ	*exec.Cmd
 	dbStop  context.CancelFunc
+	// dbIp    string
 }
 
 var initialized = false
@@ -102,18 +105,13 @@ func (m *mux) setupConfig() error {
 		return err
 	}
 
-	if os.Getenv("username")  == "" {
-		os.Setenv("username", "herausertest")
-		os.Setenv("password", "Hera-User-Test-9")
-	}
 	if m.wType == OracleWorker {
 		env := os.Getenv("TWO_TASK")
 		if env == "" {
 			return errors.New("TWO_TASK env is not defined")
 		}
-	} else if os.Getenv("TWO_TASK") == "" {
-		os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
 	}
+	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
 
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
@@ -152,6 +150,43 @@ func (m *mux) cleanupConfig() error {
 	return nil
 }
 
+func MakeMysql(dockerName string, dbName string) (ip string) {
+	CleanMysql(dockerName)
+
+	cmd:=exec.Command("docker","run","--name",dockerName,"-e","MYSQL_ROOT_PASSWORD=1-testDb","-e","MYSQL_DATABASE="+dbName,"-d","mysql:latest")
+	cmd.Run()
+
+	// find its IP
+	cmd=exec.Command("docker","inspect","--format","{{ .NetworkSettings.IPAddress }}",dockerName)
+	var ipBuf bytes.Buffer
+	cmd.Stdout = &ipBuf
+	cmd.Run()
+	ipBuf.Truncate(ipBuf.Len()-1)
+
+	os.Setenv("username", "root")
+	os.Setenv("password", "1-testDb")
+
+        for {
+                conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+                if err != nil {
+                        time.Sleep(1 * time.Second)
+                        logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
+                        continue
+                } else {
+                        conn.Close()
+                        break
+                }
+        }
+
+	return ipBuf.String()
+}
+func CleanMysql(dockerName string) {
+	cleanCmd := exec.Command("docker", "stop", dockerName)
+	cleanCmd.Run()
+	cleanCmd = exec.Command("docker", "rm", dockerName)
+	cleanCmd.Run()
+}
+
 func (m *mux) StartServer() error {
 	// setup working dir
 	m.setupWorkdir()
@@ -160,17 +195,30 @@ func (m *mux) StartServer() error {
 		return err
 	}
 	if m.wType != OracleWorker {
-		// clean up stray
-		cleanCmd := exec.Command("killall", "runserver")
-		cleanCmd.Run()
+		xMysql, ok := m.appcfg["x-mysql"]
+		if !ok {
+			xMysql = "auto"
+		}
+		if xMysql == "mock" {
+			// clean up stray
+			cleanCmd := exec.Command("killall", "runserver")
+			cleanCmd.Run()
 
-		// spawn test db
-		ctx,cancelF := context.WithCancel(context.Background())
-		m.dbStop = cancelF
-		m.dbServ = exec.CommandContext(ctx, os.Getenv("GOPATH")+"/bin/runserver", "2121", "0.0")
-		err := m.dbServ.Start()
-		if err != nil {
-			logger.GetLogger().Log(logger.Warning, "test mock mysql dbserv did not spawn " + err.Error())
+			// spawn test db
+			ctx,cancelF := context.WithCancel(context.Background())
+			m.dbStop = cancelF
+			m.dbServ = exec.CommandContext(ctx, os.Getenv("GOPATH")+"/bin/runserver", "2121", "0.0")
+			err := m.dbServ.Start()
+			if err != nil {
+				logger.GetLogger().Log(logger.Warning, "test mock mysql dbserv did not spawn " + err.Error())
+			}
+
+			os.Setenv("username", "herausertest")
+			os.Setenv("password", "Hera-User-Test-9")
+			os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
+		} else if xMysql == "auto" {
+			ip := MakeMysql("mysql22", "heratestdb")
+			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 		}
 	}
 
@@ -210,8 +258,11 @@ func (m *mux) StartServer() error {
 
 func (m *mux) StopServer() {
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
-	m.dbStop()
-	syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
+	if m.dbServ != nil {
+		m.dbStop()
+		syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
+	}
+	CleanMysql("mysql22")
 
 	timer := time.NewTimer(time.Second * 5)
 	go func() {
