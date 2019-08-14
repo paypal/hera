@@ -591,11 +591,11 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 						logger.GetLogger().Log(logger.Verbose, "worker pid <<<<", worker.pid, ">>>>req id of worker:", msg.rqId, " and  req id of mux:", worker.rqId, " does not match, Skip the EOR")
 					}
 					evname := "rrqId"
-					if (msg.rqId > worker.rqId) && (worker.rqId > 128 /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+					if (msg.rqId > worker.rqId) && ((worker.rqId > 128) || (msg.rqId < 128) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
 						// this is not expected, so log with different name
 						evname = "rrqId_Error"
 					}
-					e := cal.NewCalEvent("OCCGOMUX", evname, cal.TransOK, "")
+					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
 					e.AddDataInt("mux", int64(worker.rqId))
 					e.AddDataInt("wk", int64(msg.rqId))
 					e.Completed()
@@ -730,7 +730,7 @@ outer:
 			}
 
 			if len(calMsg) > 0 {
-				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=",worker.pid,worker.ID)+calMsg)
+				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
 				e.Completed()
 			}
 			return
