@@ -38,13 +38,12 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-	appcfg["child.executable"] = "mysqlworker"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	return appcfg, opscfg, testutil.MySQLWorker
+	return appcfg, opscfg, testutil.OracleWorker
 }
 
 func before() error {
@@ -59,8 +58,8 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
-func TestCoordinatorBasic(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestCoordinatorBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestCoordinatorRqId(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -78,12 +77,12 @@ func TestCoordinatorBasic(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/delete "+tableName)
+	stmt, _ := tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/delete "+tableName)
 	_, err = stmt.Exec()
 	if err != nil {
 		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
 	}
-	stmt, _ = tx.PrepareContext(ctx, "/*cmd*/insert into "+tableName+" (id, int_val, str_val) VALUES(?, ?, ?)")
+	stmt, _ = tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/insert into "+tableName+" (id, int_val, str_val) VALUES(?, ?, ?)")
 	_, err = stmt.Exec(1, time.Now().Unix(), "val 1")
 	if err != nil {
 		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
@@ -93,7 +92,7 @@ func TestCoordinatorBasic(t *testing.T) {
 		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
-	stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select id, int_val from "+tableName+" where id=?")
+	stmt, _ = conn.PrepareContext(ctx, "/*TestCoordinatorRqId*/Select id, int_val from "+tableName+" where id=?")
 	rows, _ := stmt.Query(1)
 	if !rows.Next() {
 		t.Fatalf("Expected 1 row")
@@ -105,5 +104,23 @@ func TestCoordinatorBasic(t *testing.T) {
 	cancel()
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestCoordinatorBasic done  -------------------------------------------------------------")
+	out, err := testutil.BashCmd("grep 'EOR code: 0' hera.log | wc -l")
+	if (err != nil) || (len(out) == 0) || (out[0] != '2') {
+		err = nil
+		t.Fatalf("Expected 2 'EOR 0'")
+	}
+
+	out, err = testutil.BashCmd("grep 'wrqId: 13 ): EOR code: 0 , rqId:  13' hera.log | wc -l")
+	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
+		err = nil
+		t.Fatalf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
+	}
+
+	out, err = testutil.BashCmd("grep 'wrqId: 19 ): EOR code: 0 , rqId:  19' hera.log | wc -l")
+	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
+		err = nil
+		t.Fatalf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
+	}
+
+	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId done  -------------------------------------------------------------")
 }
