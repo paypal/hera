@@ -790,7 +790,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			//? TODO: we should actually modify the worker to send a IN_CURSOR_IN_TRANSACTION / IN_CURSOR_NOT_IN_TRANSACTION EOR after the execute
 			cnt := 1
 			if ns.IsComposite() {
-				nss, err := netstring.SubNetstrings(request)
+				nss, err := netstring.SubNetstrings(ns)
 				if err != nil {
 					logger.GetLogger().Log(logger.Alert, "Can't parse embedded ns, size", len(ns.Serialized))
 					return false, ErrClientFail
@@ -851,11 +851,11 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if msg.free {
 				if msg.rqId != worker.rqId {
 					evname := "crqId"
-					if (msg.rqId > worker.rqId) && (worker.rqId > 128 /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+					if (msg.rqId > worker.rqId) && ((worker.rqId > 128) || (msg.rqId < 128) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
 						// this is not expected, so log with different name
 						evname = "crqId_Error"
 					}
-					e := cal.NewCalEvent("OCCGOMUX", evname, cal.TransOK, "")
+					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
 					e.AddDataInt("mux", int64(worker.rqId))
 					e.AddDataInt("wk", int64(msg.rqId))
 					e.Completed()
