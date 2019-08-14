@@ -158,6 +158,85 @@ func RunDMLCommitLater(dml string, wait_second int) error {
         return nil
 }
 
+func SetRacNodeStatus (status string, module string, diff_time int64)  error {
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
+        if err != nil {
+                fmt.Errorf ("Error connection to go mux: %s", err)
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        err = RunDML("DELETE from hera_maint")
+        if err != nil {
+                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+                return err
+        }
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                fmt.Errorf ("Error getting connection %s\n", err.Error())
+                return err
+        }
+
+        //Insert a rac maintenenace row
+        txn, _ := conn.BeginTx(ctx, nil)
+        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+
+	err = txn.Commit()
+        if err != nil {
+                return err
+        }
+
+
+        stmt.Close()
+        cancel()
+        conn.Close()
+        return nil
+
+}
+
+func SetRacNodeStatus1 (status string, module string, diff_time int64)  error {
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("occ", hostname + ":31002")
+        if err != nil {
+                fmt.Errorf ("Error connection to go mux: %s", err)
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                fmt.Errorf ("Error getting connection %s\n", err.Error())
+                return err
+        }
+
+        //Insert a rac maintenenace row
+        txn, _ := conn.BeginTx(ctx, nil)
+        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/ DELETE from occ_maint")
+        _, err = stmt.Exec()
+        if err != nil {
+                fmt.Errorf ("Error DELETE from occ_maint %s\n", err.Error())
+                return err
+        }
+        stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into occ_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+        stmt.Close()
+        cancel()
+        conn.Close()
+        return nil
+
+}
+
+
+
 
 
 func RegexCount(regex string) int {
