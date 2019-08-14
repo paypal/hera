@@ -18,12 +18,26 @@
 package shared
 
 import (
+	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 	"io"
 )
 
-// WriteAll blocks until writing all the data
-func WriteAll(w io.Writer, data []byte) error {
+func WriteAll(w io.Writer, ns *netstring.Netstring) error {
+	if logger.GetLogger().V(logger.Verbose) {
+		if ns.Cmd == common.CmdEOR {
+			logger.GetLogger().Log(logger.Verbose, "worker writing EOR to mux >>> ", len(ns.Serialized), ":", common.CmdEOR, " ",
+				byte(ns.Payload[0])-'0', "<", (uint16(ns.Payload[1])<<8)+uint16(ns.Payload[2]), "> ", DebugString(ns.Payload[3:]))
+		} else {
+			logger.GetLogger().Log(logger.Verbose, "worker writing to mux >>> ", DebugString(ns.Serialized))
+		}
+	}
+	return writeAll(w, ns.Serialized)
+}
+
+// writeAll blocks until writing all the data
+func writeAll(w io.Writer, data []byte) error {
 	written := 0
 	for written < len(data) {
 		n, err := w.Write(data[written:])
@@ -31,9 +45,6 @@ func WriteAll(w io.Writer, data []byte) error {
 			return err
 		}
 		written += n
-	}
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "worker writing to mux >>> ", DebugString(data))
 	}
 	return nil
 }

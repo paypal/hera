@@ -68,7 +68,10 @@ type workerMsg struct {
 	inTransaction bool
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
 	abort bool
-	ns    *netstring.Netstring
+	// the request counter / Id
+	rqId uint16
+	// the actual message to be sent to the client
+	ns *netstring.Netstring
 }
 
 func (msg *workerMsg) GetNetstring() *netstring.Netstring {
@@ -128,7 +131,7 @@ type WorkerClient struct {
 	// the maximum number of requests the worker is allowed, randomized value of "max_requests_per_child" ops config value
 	maxReqCount uint32
 	// request counter / identifier used when the mux interrupts an executing worker request
-	rqCounter uint16
+	rqId uint16
 
 	//
 	// under recovery. 0: no; 1: yes. use atomic.CompareAndSwapInt32 to check state.
@@ -388,6 +391,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 		et := cal.NewCalEvent(cal.EventTypeWarning, "spawn_error", cal.TransOK, fmt.Sprintf("execl errored out with %s", er.Error()))
 		et.Completed()
+		time.Sleep(10 * time.Second)
 		return er
 	}
 	GetWorkerBrokerInstance().AddPidToWorkermap(worker, pid)
@@ -490,9 +494,9 @@ func (worker *WorkerClient) Close() {
  */
 func (worker *WorkerClient) initiateRecover(param int) {
 	param = param << 16
-	param += int(worker.rqCounter)
+	param += int(worker.rqId)
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "SIGHUP: flag =", param>>16, ", id =", param&0xFFFF)
+		logger.GetLogger().Log(logger.Verbose, "SIGHUP: flag =", param>>16, ", rqId =", param&0xFFFF)
 	}
 	utility.KillParam(worker.pid, int(syscall.SIGHUP), param)
 }
@@ -582,20 +586,36 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 			// to avoid infinite loop ignore if worker asks for a restart again.
 			//
 			if msg.free {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, "stranded conn recovered", worker.Type, worker.pid)
-				}
-				worker.callogStranded("RECOVERED", info)
+				if msg.rqId != worker.rqId {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "worker pid <<<<", worker.pid, ">>>>req id of worker:", msg.rqId, " and  req id of mux:", worker.rqId, " does not match, Skip the EOR")
+					}
+					evname := "rrqId"
+					if (msg.rqId > worker.rqId) && ((worker.rqId > 128) || (msg.rqId < 128) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+						// this is not expected, so log with different name
+						evname = "rrqId_Error"
+					}
+					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
+					e.AddDataInt("mux", int64(worker.rqId))
+					e.AddDataInt("wk", int64(msg.rqId))
+					e.Completed()
+					// don't return yet, we expect another EOR message, matching the rqId
+				} else {
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, "stranded conn recovered", worker.Type, worker.pid)
+					}
+					worker.callogStranded("RECOVERED", info)
 
-				worker.setState(wsFnsh)
-				p.ReturnWorker(worker, ticket)
-				//
-				// donot set state to ACPT since worker could already be picked up by another
-				// client into wsBusy, if that worker ends up recovering, it will not finish
-				// recovery because of ACPT state. that worker will never get back to the pool
-				//
-				//worker.setState(ACPT)
-				return
+					worker.setState(wsFnsh)
+					p.ReturnWorker(worker, ticket)
+					//
+					// donot set state to ACPT since worker could already be picked up by another
+					// client into wsBusy, if that worker ends up recovering, it will not finish
+					// recovery because of ACPT state. that worker will never get back to the pool
+					//
+					//worker.setState(ACPT)
+					return
+				}
 			}
 		}
 	}
@@ -695,9 +715,9 @@ outer:
 			}
 
 			if msg.ns == nil {
-				calMsg += "<nil>;"
+				// calMsg += "<nil>;"
 			} else {
-				calMsg += fmt.Sprintf("cmd = %d, payloadLen = %d; ", msg.ns.Cmd, len(msg.ns.Payload))
+				calMsg += fmt.Sprintf("cmd:%d,payloadLen:%d;", msg.ns.Cmd, len(msg.ns.Payload))
 			}
 
 			//
@@ -710,7 +730,7 @@ outer:
 			}
 
 			if len(calMsg) > 0 {
-				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, calMsg)
+				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
 				e.Completed()
 			}
 			return
@@ -748,7 +768,7 @@ func (worker *WorkerClient) doRead() {
 		//
 		switch ns.Cmd {
 		case common.CmdEOR:
-			newPayload := ns.Payload[1:]
+			newPayload := ns.Payload[3:]
 			if len(payload) == 0 {
 				payload = newPayload
 			} else {
@@ -759,10 +779,11 @@ func (worker *WorkerClient) doRead() {
 					}
 				}
 			}
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "workerclient (<<< pid =", worker.pid, "): EOR code:", ns.Payload[0]-'0', ", data:", DebugString(payload))
-			}
 			eor := int(ns.Payload[0] - '0')
+			rqId := (uint16(ns.Payload[1]) << 8) + uint16(ns.Payload[2])
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "workerclient (<<< pid =", worker.pid, ",wrqId:", worker.rqId, "): EOR code:", eor, ", rqId: ", rqId, ", data:", DebugString(payload))
+			}
 			if eor == common.EORFree {
 				worker.setState(wsFnsh)
 				/*worker.sqlStartTimeMs = 0
@@ -773,7 +794,7 @@ func (worker *WorkerClient) doRead() {
 				worker.setState(wsWait)
 			}
 			if eor != common.EORMoreIncomingRequests {
-				worker.outCh <- &workerMsg{data: payload, eor: true, free: (eor == common.EORFree), inTransaction: ((eor == common.EORInTransaction) || (eor == common.EORInCursorInTransaction))}
+				worker.outCh <- &workerMsg{data: payload, eor: true, free: (eor == common.EORFree), inTransaction: ((eor == common.EORInTransaction) || (eor == common.EORInCursorInTransaction)), rqId: rqId}
 				payload = nil
 			} else {
 				// buffer data to avoid race condition
@@ -809,12 +830,11 @@ func (worker *WorkerClient) doRead() {
 }
 
 // Write sends a message to the worker
-func (worker *WorkerClient) Write(ns *netstring.Netstring, isSQL bool) error {
+func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error {
 	worker.setState(wsBusy)
 
-	if isSQL {
-		worker.rqCounter++
-	}
+	worker.rqId += nsCount
+
 	//
 	// racmaint query could come after a worker is already terminated during mux shutdown.
 	//
@@ -823,7 +843,7 @@ func (worker *WorkerClient) Write(ns *netstring.Netstring, isSQL bool) error {
 	}
 	err := WriteAll(worker.workerConn, ns.Serialized)
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "workerclient (>>>worker pid =", worker.pid, ", rqID =", worker.rqCounter, " ): ", DebugString(ns.Serialized))
+		logger.GetLogger().Log(logger.Debug, "workerclient (>>>worker pid =", worker.pid, ", rqID =", worker.rqId, " ): ", DebugString(ns.Serialized))
 	}
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
