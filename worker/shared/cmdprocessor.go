@@ -155,13 +155,13 @@ type CmdProcessor struct {
 	rqId uint16
 	// used in eor() to send the right code
 	moreIncomingRequests func() bool
-	queryScope        QueryScopeType
-        WorkerScope       WorkerScopeType
+	queryScope           QueryScopeType
+	WorkerScope          WorkerScopeType
 }
 
 type QueryScopeType struct {
-	NsCmd	string
-	SqlHash	string
+	NsCmd   string
+	SqlHash string
 }
 type WorkerScopeType struct {
 	Child_shutdown_flag bool
@@ -177,7 +177,6 @@ func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcesso
 	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true}
 }
 
-
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
 func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
 	if ns == nil {
@@ -188,7 +187,7 @@ func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
 	}
 	var err error
 
-	cp.queryScope.NsCmd = fmt.Sprintf("%d",ns.Cmd)
+	cp.queryScope.NsCmd = fmt.Sprintf("%d", ns.Cmd)
 outloop:
 	switch ns.Cmd {
 	case common.CmdClientCalCorrelationID:
@@ -223,7 +222,7 @@ outloop:
 			cp.calSessionTxn = cal.NewCalTransaction(cal.TransTypeAPI, cp.calSessionTxnName, cal.TransOK, "", cal.DefaultTGName)
 		}
 		cp.sqlHash = utility.GetSQLHash(string(ns.Payload))
-		cp.queryScope.SqlHash = fmt.Sprintf("%d",cp.sqlHash)
+		cp.queryScope.SqlHash = fmt.Sprintf("%d", cp.sqlHash)
 		cp.calExecTxn = cal.NewCalTransaction(cal.TransTypeExec, fmt.Sprintf("%d", cp.sqlHash), cal.TransOK, "", cal.DefaultTGName)
 		if (cp.tx == nil) && (startTrans) {
 			cp.tx, err = cp.db.Begin()
@@ -405,6 +404,7 @@ outloop:
 				} else {
 					cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
 				}
+				cp.lastErr = err
 				err = nil
 				break
 			}
@@ -566,10 +566,15 @@ outloop:
 			}
 			cp.rows = nil
 		} else {
+			// send back to client only if last result was ok
+			var nsr *netstring.Netstring
+			if cp.lastErr == nil {
+				nsr = netstring.NewNetstringFrom(common.RcError, []byte("fetch requested but no statement exists"))
+			}
 			if cp.inTrans {
-				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcError, []byte("fetch requested but no statement exists")))
+				cp.eor(common.EORInTransaction, nsr)
 			} else {
-				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcError, []byte("fetch requested but no statement exists")))
+				cp.eor(common.EORFree, nsr)
 			}
 		}
 	case common.CmdColsInfo:
