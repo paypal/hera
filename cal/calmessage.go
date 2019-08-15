@@ -166,7 +166,7 @@ type calHeartBeat struct {
 type calTransaction struct {
 	calActivity
 	mParent   *calTransaction
-	mDuration int
+	mDuration float32
 	mTimer CalTimer
 }
 
@@ -801,7 +801,7 @@ func (act *calTransaction) SetDuration(_duration int) {
 	} else if _duration > maxDuration {
 		act.mDuration = maxDuration
 	} else {
-		act.mDuration = _duration
+		act.mDuration = float32(_duration)
 	}
 }
 
@@ -972,18 +972,18 @@ func (act *calTransaction) prepareStartOfTransactionMessage(_msgClass string) st
 
 func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) string {
 	var duration_str string
-	// to safegurad 64 to 32 bit int conversion
+	// to safeguard 64 to 32 bit int conversion
 	value := act.mTimer.Duration()
-	var duration int
-	if value > maxDuration {
+	var duration float32
+	if int32(value) > maxDuration {		// Check on comparision between float and int
 		duration = maxDuration
 	} else {
-		duration = int(value)
+		duration = value
 	}
 	if act.mDuration >= minDuration{
 		duration = act.mDuration
 	}
-	duration_str = strconv.Itoa(duration)
+	duration_str = fmt.Sprintf("%.1f", duration)
 	var buf bytes.Buffer
 	buf.WriteString(_msgClass)
 	buf.WriteString(act.mTimeStamp)
