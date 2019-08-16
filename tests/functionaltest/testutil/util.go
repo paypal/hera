@@ -48,6 +48,61 @@ func BashCmd(cmd string) ([]byte, error) {
 	return exec.Command("/bin/bash", "-c", cmd).Output()
 }
 
+func RunSelect(query string) {
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
+        if err != nil {
+                fmt.Println("Error connecting to OCC:", err)
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                fmt.Println("Error creating context:", err)
+        }
+        defer conn.Close()
+        // cancel must be called before conn.Close()
+        defer cancel()
+        stmt, _ := conn.PrepareContext(ctx, query)
+        defer stmt.Close()
+        stmt.Query()
+}
+
+
+func Fetch (query string) (int) {
+        count := 0;
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
+        if err != nil {
+                fmt.Println("Error connecting to OCC:", err)
+                return count
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                fmt.Println("Error creating context:", err)
+                return count
+        }
+        defer conn.Close()
+        // cancel must be called before conn.Close()
+        defer cancel()
+        stmt, _ := conn.PrepareContext(ctx, query)
+        defer stmt.Close()
+        rows, _ := stmt.Query()
+        for rows.Next() {
+                count++;
+        }
+        return count;
+}
+
+
 func RunDML(dml string) error {
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
 	if err != nil {
