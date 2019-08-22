@@ -9,6 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import com.paypal.hera.conf.HeraClientConfigHolder.DATASOURCE_TYPE;
 import com.paypal.hera.ex.HeraExceptionBase;
 import com.paypal.hera.ex.HeraIOException;
 import com.paypal.hera.ex.HeraRuntimeException;
@@ -28,6 +29,7 @@ public class HeraStatement implements Statement {
 	protected int fetchSize;
 	private boolean escapeProcessingEnabled;
 	private boolean updateCountRetrieved;
+	private DATASOURCE_TYPE datasource;
 	
 	public HeraStatement(HeraConnection heraConnection) {
 		if (heraConnection == null)
@@ -36,6 +38,7 @@ public class HeraStatement implements Statement {
 		resultSet = null;
 		fetchSize = 0; // all rows
 		escapeProcessingEnabled = connection.enableEscape();
+		datasource = connection.getDataSource();
 	}
 	
 	ArrayList<HeraColumnMeta> getColumnMeta() {
@@ -65,7 +68,7 @@ public class HeraStatement implements Statement {
 	
 	protected void prepare(String _sql) throws HeraExceptionBase {
 		stCache = connection.getStatementCache().getEntry(_sql, escapeProcessingEnabled, 
-				connection.shardingEnabled(), connection.paramNameBindingEnabled());
+				connection.shardingEnabled(), connection.paramNameBindingEnabled(), datasource);
 		connection.getHeraClient().prepare(stCache.getParsedSQL());
 	}
 	

@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import com.paypal.hera.client.HeraClient;
 import com.paypal.hera.client.HeraClientFactory;
 import com.paypal.hera.conf.HeraClientConfigHolder;
+import com.paypal.hera.conf.HeraClientConfigHolder.DATASOURCE_TYPE;
 import com.paypal.hera.ex.HeraConfigException;
 import com.paypal.hera.ex.HeraExceptionBase;
 import com.paypal.hera.ex.HeraIOException;
@@ -61,6 +62,7 @@ public class HeraConnection implements Connection {
 	private boolean paramNameBindingEnabled;
 	private boolean isDBEncodingUTF8;
 	private boolean dateNullFixEnabled;
+	private DATASOURCE_TYPE datasource;
 	private byte[] shardKeyPayload;
 	private int shardID;
 	private static final String SERVER_LOGICAL_NAME = "host";
@@ -94,6 +96,7 @@ public class HeraConnection implements Connection {
 			paramNameBindingEnabled = config.enableParamNameBinding();
 			isDBEncodingUTF8 = config.isDBEncodingUTF8();
 			dateNullFixEnabled = config.enableDateNullFix();
+			datasource = config.getDataSourceName();
 			setShardKeyPayload(null);
 			setShardID(-1);
 			
@@ -629,5 +632,9 @@ public class HeraConnection implements Connection {
 	
 	public boolean enableDateNullFix() {
 		return dateNullFixEnabled;
+	}
+
+	public DATASOURCE_TYPE getDataSource() {
+		return datasource;
 	}
 }
