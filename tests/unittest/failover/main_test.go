@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 	// startup two mysql DBs
 	ip1 = testutil.MakeMysql("mysql33",dbName)
 	ip2 = testutil.MakeMysql("mysql44",dbName)
-	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=1s||tcp("+ip2+":3306)/"+dbName+"?timeout=1s")
+	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=11s||tcp("+ip2+":3306)/"+dbName+"?timeout=11s")
 
 	/*
 	for {
@@ -140,17 +140,32 @@ func TestFailover(t *testing.T) {
 }
 
 func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
-	note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
 
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
+	//note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
+	stmt, err := conn.PrepareContext(ctx, "drop table test_failover")
 	if err != nil {
 		return false
 	}
-	stmt.Exec()
+	//noTable := false
+	_,err = stmt.Exec()
+	if err != nil {
+		//noTable = true
+	}
+	// ignore errors since table might not exist
+
+	stmt, err = conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
+	if err != nil {
+		return false
+	}
+	_,err = stmt.Exec()
+	if err != nil {
+		t.Fatalf("create table had issue %s",err.Error())
+	}
 	// ignore errors since table may already exist
 
+	/*
 	// not using txn since mysql
 	stmt, err = conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
 	if err != nil {
@@ -161,6 +176,16 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 		t.Fatalf("Error exec test (insert table) %s\n", err.Error())
 	}
 
+	stmt, err = conn.PrepareContext(ctx, "insert into test_failover (id , note ) values ( ?, ? )")
+	if err != nil {
+		t.Fatalf("Error prep test (insert neg-id table) %s\n", err.Error())
+	}
+	_, err = stmt.Exec(-id, note)
+	if err != nil {
+		t.Fatalf("Error exec test (insert neg-id table) %s\n", err.Error())
+	}
+
+	/*
 	stmt, err = conn.PrepareContext(ctx, "select note from test_failover where id = ?")
 	if err != nil {
 		t.Fatalf("Error preparing test (sel table) %s\n", err.Error())
@@ -183,16 +208,19 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 
         rows.Close()
         stmt.Close()
+	// */
 
 
-	stmt, err = conn.PrepareContext(ctx, "delete from test_failover where id = ?")
+	/*
+	stmt, err := conn.PrepareContext(ctx, "delete from test_failover where id = ?")
 	if err != nil {
 		t.Fatalf("Error preparing test (del table) %s\n", err.Error())
 	}
 	_, err = stmt.Exec(id)
 	if err != nil {
-		t.Fatalf("Error preparing test (del table) %s\n", err.Error())
+		t.Fatalf("Error exec test (del table) %s\n", err.Error())
 	}
+	// */
 	return true
 }
 
