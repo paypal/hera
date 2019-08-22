@@ -96,7 +96,7 @@ public class HeraConnection implements Connection {
 			paramNameBindingEnabled = config.enableParamNameBinding();
 			isDBEncodingUTF8 = config.isDBEncodingUTF8();
 			dateNullFixEnabled = config.enableDateNullFix();
-			datasource = config.getDataSourceName();
+			datasource = config.getDataSourceType();
 			setShardKeyPayload(null);
 			setShardID(-1);
 			

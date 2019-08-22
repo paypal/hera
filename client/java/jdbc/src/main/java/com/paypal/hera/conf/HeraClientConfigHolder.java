@@ -62,7 +62,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	private Boolean enableParamNameBinding;
 	private Boolean isDBEncodingUTF8;
 	private Boolean enableDateNullFix;
-	private DATASOURCE_TYPE datasourceName;
+	private DATASOURCE_TYPE datasourceType;
 
 	private HeraClientConnectionFactory connectionFactory;
 
@@ -99,7 +99,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		enableParamNameBinding = validateAndReturnDefaultBoolean(ENABLE_PARAM_NAME_BINDING, DEFAULT_ENABLE_PARAM_NAME_BINDING);
 		isDBEncodingUTF8 = validateAndReturnDefaultBoolean(DB_ENCODING_UTF8, DEFAULT_DB_ENCODING_UTF8);
 		enableDateNullFix = validateAndReturnDefaultBoolean(ENABLE_DATE_NULL_FIX, DEFAULT_ENABLE_DATE_NULL_FIX);
-		datasourceName = validateAndReturnDefaultDatasource(DATASOURCE_NAME, DATASOURCE_TYPE.MYSQL);
+		datasourceType = validateAndReturnDefaultDatasource(DATASOURCE_NAME, DATASOURCE_TYPE.MYSQL);
 	}
 
 
@@ -157,8 +157,8 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		return enableDateNullFix;
 	}
 
-	public DATASOURCE_TYPE getDataSourceName(){
-		return datasourceName;
+	public DATASOURCE_TYPE getDataSourceType(){
+		return datasourceType;
 	}
 
 	public Properties getProperties() {
