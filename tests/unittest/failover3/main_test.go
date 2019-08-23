@@ -56,20 +56,6 @@ func TestMain(m *testing.M) {
 	ip1 = testutil.MakeMysql("mysql33",dbName)
 	ip2 = testutil.MakeMysql("mysql44",dbName)
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=1s||tcp("+ip2+":3306)/"+dbName+"?timeout=1s")
-
-	/*
-	for {
-		conn, err := net.Dial("tcp", ip2+":3306")
-		if err != nil {
-			time.Sleep(1 * time.Second)
-			logger.GetLogger().Log(logger.Warning, "waiting for mysql server to come up")
-			continue
-		} else {
-			conn.Close()
-			break
-		}
-	} // */
-
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
@@ -92,7 +78,7 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 
 	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
 	if err != nil {
-		commit(conn,t)
+		//commit(conn,t)
 		return false
 	}
 	stmt.Exec()
@@ -101,11 +87,17 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	// not using txn since mysql
 	stmt, err = conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
 	if err != nil {
-		t.Fatalf("Error preparing test (insert table) %s\n", err.Error())
+		// need to ignore when we're flushing out old connections
+		//commit(conn,t)
+		return false
+		//t.Fatalf("Error preparing test (insert table) %s\n", err.Error())
 	}
 	_, err = stmt.Exec(id, note)
 	if err != nil {
-		t.Fatalf("Error exec test (insert table) %s\n", err.Error())
+		// need to ignore when we're flushing out old connections
+		//commit(conn,t)
+		return false
+		//t.Fatalf("Error exec test (insert table) %s\n", err.Error())
 	}
 
 	stmt, err = conn.PrepareContext(ctx, "select note from test_failover where id = ?")
@@ -144,8 +136,8 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	return true
 }
 
-func TestFailover2(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestFailover2 begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestFailover3(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestFailover3 begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -172,37 +164,43 @@ func TestFailover2(t *testing.T) {
 	}
 	doCrud(conn, 1, t)
 
-	logger.GetLogger().Log(logger.Debug, "TestFailover2 taking out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestFailover3 taking out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	mysqlDirect("set global read_only = 1", t)
 
-	logger.GetLogger().Log(logger.Debug, "TestFailover2 taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	//conn.Close() // ?
+	logger.GetLogger().Log(logger.Debug, "TestFailover3 taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	time.Sleep(4 * time.Second)
-	/* It's easier just to wait for some time instead of trying to flush
-	old connections */
-	logger.GetLogger().Log(logger.Debug, "TestFailover2 flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
-	/*
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel2()
-	conn2, err := db.Conn(ctx2)
-	if err != nil {
-		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
+	/* some old connections won't have a recent heartbeat, so we'll lose
+	some queries. */
+	for i:=0;i<33;i++ {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel2()
+		conn2, err := db.Conn(ctx2)
+		if err != nil {
+			logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
+		}
+		defer conn2.Close()
+		didWork := doCrud(conn2, 2, t)
+		didWorkStr := "noWork"
+		if didWork {
+			didWorkStr = "workDone"
+		}
+		logger.GetLogger().Log(logger.Debug, "spinning checking conns "+didWorkStr+" "+fmt.Sprintf("%d loop", i))
+		time.Sleep(222 * time.Millisecond)
 	}
-	defer conn2.Close()
-	// */
+
+	logger.GetLogger().Log(logger.Debug, "TestFailover3 flush wait done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
 	conn2 := conn
 	didWork := doCrud(conn2, 2, t)
 	didWork = didWork || doCrud(conn2, 3, t)
 	didWork = didWork || doCrud(conn2, 4, t)
 	didWork = didWork || doCrud(conn2, 5, t)
 	if !didWork {
-		logger.GetLogger().Log(logger.Warning, "TestFailover2 post primary shutdown, no work done")
+		logger.GetLogger().Log(logger.Warning, "TestFailover3 post primary shutdown, no work done")
 		t.Fatalf("failed to do any work after primary shutdown")
 	}
-	logger.GetLogger().Log(logger.Debug, "TestFailover2 done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestFailover3 done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	// cleanup
 	mysqlDirect("set global read_only = 0", t)
@@ -211,36 +209,10 @@ func TestFailover2(t *testing.T) {
 
 
 func mysqlDirect(query string, t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-        fullDsn:=fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
-		os.Getenv("username"),
-		os.Getenv("password"),
-		ip1,
-		dbName)
-        //fmt.Println("fullDsn",fullDsn)
-        db0, err := sql.Open("mysql", fullDsn)
-        if err != nil {
-                t.Fatal("Error starting direct mysql:", err)
-                return
-        }
-        db0.SetMaxIdleConns(2)
-        defer db0.Close()
-	conn0, err := db0.Conn(ctx)
-        if err != nil {
-                t.Fatal("Error conn direct mysql:", err)
-                return
-        }
-	stmt0, err := conn0.PrepareContext(ctx, query)
-        if err != nil {
-                t.Fatal("Error prep direct mysql:", err)
-                return
-        }
-	_, err = stmt0.Exec()
-        if err != nil {
-                t.Fatal("Error exec direct mysql:", err)
-                return
-        }
+	err := testutil.MysqlDirect(query, ip1, dbName)
+	if err != nil {
+		t.Fatalf("mysqlDirect "+query+ip1+dbName+err.Error())
+	}
 }
 
 
