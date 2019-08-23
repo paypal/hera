@@ -195,6 +195,7 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 	case 1159: fallthrough // read timeout
 	case 1160: fallthrough // err write
 	case 1161: fallthrough // write timeout
+	case 1290: fallthrough // read-only mode
 	case 1317: fallthrough // query interupt
 	case 1836: fallthrough // read-only mode
 	case 1874: fallthrough // innodb read-only

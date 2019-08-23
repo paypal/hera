@@ -3,7 +3,9 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -163,9 +165,6 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 	cmd.Run()
 	ipBuf.Truncate(ipBuf.Len()-1)
 
-	os.Setenv("username", "root")
-	os.Setenv("password", "1-testDb")
-
         for {
                 conn, err := net.Dial("tcp", ipBuf.String()+":3306")
                 if err != nil {
@@ -178,6 +177,23 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
                 }
         }
 
+	os.Setenv("username", "root")
+	os.Setenv("password", "1-testDb")
+	q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
+	logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+	err := MysqlDirect(q, ipBuf.String(), dbName)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
+	}
+	q = "GRANT ALL PRIVILEGES ON "+dbName+" . * TO 'appuser'@'%';"
+	logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
+	err = MysqlDirect(q, ipBuf.String(), dbName)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
+	} else {
+		os.Setenv("username", "appuser")
+	}
+
 	return ipBuf.String()
 }
 func CleanMysql(dockerName string) {
@@ -185,6 +201,46 @@ func CleanMysql(dockerName string) {
 	cleanCmd.Run()
 	cleanCmd = exec.Command("docker", "rm", dockerName)
 	cleanCmd.Run()
+}
+
+var dbs map[string]*sql.DB
+func MysqlDirect(query string, ip string, dbName string) (error)  {
+	if dbs == nil {
+		dbs = make(map[string]*sql.DB)
+	}
+	db0, ok := dbs[ip+dbName]
+	if !ok {
+		fullDsn:=fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+			os.Getenv("username"),
+			os.Getenv("password"),
+			ip,
+			dbName)
+		//fmt.Println("fullDsn",fullDsn)
+		var err error
+		db0, err = sql.Open("mysql", fullDsn)
+		if err != nil {
+			return err
+		}
+		db0.SetMaxIdleConns(0)
+		// defer db0.Close()
+		dbs[ip+dbName] = db0
+	}
+        ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+        conn0, err := db0.Conn(ctx)
+        if err != nil {
+                return err
+        }
+	defer conn0.Close()
+        stmt0, err := conn0.PrepareContext(ctx, query)
+        if err != nil {
+                return err
+        }
+	defer stmt0.Close()
+        _, err = stmt0.Exec()
+        if err != nil {
+                return err
+        }
+	return nil
 }
 
 func (m *mux) StartServer() error {
