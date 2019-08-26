@@ -1,6 +1,5 @@
 package com.paypal.hera.example;
 
-import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -14,7 +13,6 @@ public class Client {
 		String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
 		Properties props = new Properties();
 		props.setProperty("foo", "bar");
-		props.setProperty("hera.datasource.name", "mysql1");
 		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		Connection dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
@@ -23,9 +21,5 @@ public class Client {
 		if (rs.next()) {
 			System.out.println("Result: " + rs.getString(1));
 		}
-		String query = "{ call DALCERT_INSERT_EMPLOYEE() }";
-		CallableStatement cst = dbConn.prepareCall(query);
-		cst.executeUpdate();
-		dbConn.commit();
 	}
 }
