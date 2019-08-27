@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.paypal.hera.cal.CalTransaction;
 import com.paypal.hera.cal.CalTransactionFactory;
-import com.paypal.hera.conf.HeraClientConfigHolder.DATASOURCE_TYPE;
+import com.paypal.hera.conf.HeraClientConfigHolder.E_DATASOURCE_TYPE;
 
 public class HeraStatementsCache {
 	public enum StatementType {
@@ -55,7 +55,7 @@ public class HeraStatementsCache {
 		}
 
 		public StatementCacheEntry(String _sql, boolean _escapeProcessingEnabled, 
-				boolean _shardingEnabled, boolean _paramNameBindingEnabled, DATASOURCE_TYPE datasource) {
+				boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 			parsedSQL = helperParseSQL(_sql, _escapeProcessingEnabled, 
 					_shardingEnabled, _paramNameBindingEnabled, datasource);
 			paramNameBindingEnabled = _paramNameBindingEnabled;
@@ -89,7 +89,7 @@ public class HeraStatementsCache {
 		 *  3> find the total param count
 		 */
 		private String helperParseSQL(String _sql, boolean _escapeProcessingEnabled, 
-				boolean _shardingEnabled, boolean _paramNameBindingEnabled, DATASOURCE_TYPE datasource) {
+				boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 			if (_sql == null) {
 				throw new NullPointerException("SQL string is null");
 			}
@@ -159,11 +159,11 @@ public class HeraStatementsCache {
 			return _sql;
 		}
 		
-		private String preprocessEscape(String _sql, DATASOURCE_TYPE datasource) {
+		private String preprocessEscape(String _sql, E_DATASOURCE_TYPE datasource) {
 			LOGGER.debug("Preprocess escape for: " + _sql);
 			Matcher m = escapePattern.matcher(_sql);
 			if (m.find()) {
-				if(datasource == DATASOURCE_TYPE.ORACLE) {
+				if(datasource == E_DATASOURCE_TYPE.ORACLE) {
 					_sql = "BEGIN " +  m.group(1) + "; END;" ;
 					
 				} else {
@@ -270,7 +270,7 @@ public class HeraStatementsCache {
 	
 	/// parse the SQL statement transforming ? into parameter names
 	public StatementCacheEntry getEntry(String _sql, boolean _escapeProcessingEnabled, 
-			boolean _shardingEnabled, boolean _paramNameBindingEnabled, DATASOURCE_TYPE datasource) {
+			boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 		StatementCacheEntry entry = stmtCache.get(_sql);
 		if (entry == null) {
 			synchronized (lock) {

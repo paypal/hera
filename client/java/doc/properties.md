@@ -4,10 +4,10 @@ As a JDBC driver, the client is configurable through a java.util.Properties obje
 
 The client application is not required to provide values for the driver properties when creating a connection. For reference, this is the list of the properties that can be used. They are defined as constants in the HeraClientConfigHolder class or the HeraConnectionConfig class which are part of the com.paypal.hera.conf package.
 
-## hera.datasource.name
+## hera.datasource.type
 + Determines the type of datasource the hera server is connected to
 + default: mysql
-+ constant: HeraClientConfigHolder.DATASOURCE_NAME
++ constant: HeraClientConfigHolder.DATASOURCE_TYPE
 + support: oracle & mysql only.
 
 ## hera.support.column_names

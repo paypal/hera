@@ -9,7 +9,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import com.paypal.hera.conf.HeraClientConfigHolder.DATASOURCE_TYPE;
+import com.paypal.hera.conf.HeraClientConfigHolder.E_DATASOURCE_TYPE;
 import com.paypal.hera.ex.HeraExceptionBase;
 import com.paypal.hera.ex.HeraIOException;
 import com.paypal.hera.ex.HeraRuntimeException;
@@ -29,7 +29,7 @@ public class HeraStatement implements Statement {
 	protected int fetchSize;
 	private boolean escapeProcessingEnabled;
 	private boolean updateCountRetrieved;
-	private DATASOURCE_TYPE datasource;
+	private E_DATASOURCE_TYPE datasource;
 	
 	public HeraStatement(HeraConnection heraConnection) {
 		if (heraConnection == null)

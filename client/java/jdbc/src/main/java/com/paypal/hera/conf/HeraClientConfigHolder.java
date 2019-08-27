@@ -28,7 +28,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	public static final String ENABLE_PARAM_NAME_BINDING = "hera.enable.param_name_binding";
 	public static final String DB_ENCODING_UTF8 = "hera.db_encoding.utf8";
 	public static final String ENABLE_DATE_NULL_FIX = "hera.enable.date_null_fix"; // ! TODO: this should be cleaned-up after all Heras are rolled out with the server fix
-	public static final String DATASOURCE_NAME = "hera.datasource.name";
+	public static final String DATASOURCE_TYPE = "hera.datasource.type";
 	// defaults
 	public static final boolean DEFAULT_SUPPORT_COLUMN_NAMES = true;
 	public static final boolean DEFAULT_SUPPORT_COLUMN_INFO = true;
@@ -43,7 +43,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	public static final boolean DEFAULT_ENABLE_DATE_NULL_FIX = false;
 
 	public static final String DEFAULT_CONNECTION_FACTORY="com.paypal.hera.conn.HeraTCPConnectionFactory";
-	public static enum DATASOURCE_TYPE {
+	public static enum E_DATASOURCE_TYPE {
 		MYSQL,
 		ORACLE
 	}
@@ -62,7 +62,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	private Boolean enableParamNameBinding;
 	private Boolean isDBEncodingUTF8;
 	private Boolean enableDateNullFix;
-	private DATASOURCE_TYPE datasourceType;
+	private E_DATASOURCE_TYPE datasourceType;
 
 	private HeraClientConnectionFactory connectionFactory;
 
@@ -99,15 +99,15 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		enableParamNameBinding = validateAndReturnDefaultBoolean(ENABLE_PARAM_NAME_BINDING, DEFAULT_ENABLE_PARAM_NAME_BINDING);
 		isDBEncodingUTF8 = validateAndReturnDefaultBoolean(DB_ENCODING_UTF8, DEFAULT_DB_ENCODING_UTF8);
 		enableDateNullFix = validateAndReturnDefaultBoolean(ENABLE_DATE_NULL_FIX, DEFAULT_ENABLE_DATE_NULL_FIX);
-		datasourceType = validateAndReturnDefaultDatasource(DATASOURCE_NAME, DATASOURCE_TYPE.MYSQL);
+		datasourceType = validateAndReturnDefaultDatasource(DATASOURCE_TYPE, E_DATASOURCE_TYPE.MYSQL);
 	}
 
 
-	private DATASOURCE_TYPE validateAndReturnDefaultDatasource(String pr, DATASOURCE_TYPE type) {
+	private E_DATASOURCE_TYPE validateAndReturnDefaultDatasource(String pr, E_DATASOURCE_TYPE type) {
 		String sval = config.getProperty(pr);
-		DATASOURCE_TYPE val = type;
+		E_DATASOURCE_TYPE val = type;
 		if (sval != null) {
-			val = sval.equals("mysql") ? DATASOURCE_TYPE.MYSQL : sval.equals("oracle") ? DATASOURCE_TYPE.ORACLE : DATASOURCE_TYPE.MYSQL;
+			val = sval.equals("mysql") ? E_DATASOURCE_TYPE.MYSQL : sval.equals("oracle") ? E_DATASOURCE_TYPE.ORACLE : E_DATASOURCE_TYPE.MYSQL;
 		}
 		return val;
 	}
@@ -157,7 +157,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		return enableDateNullFix;
 	}
 
-	public DATASOURCE_TYPE getDataSourceType(){
+	public E_DATASOURCE_TYPE getDataSourceType(){
 		return datasourceType;
 	}
 
