@@ -1,9 +1,14 @@
 # Driver properties
 
-As a JDBC driver, the client is configurable thorugh a java.util.Properties object passed in to java.sql.DriverManager.getConnection() when creating a connection.
+As a JDBC driver, the client is configurable through a java.util.Properties object passed in to java.sql.DriverManager.getConnection() when creating a connection.
 
-The client application is not required to provide values for the driver properties when creating a connection. For reference, this is the list of the properties than can be used. They are defined as constants in the HeraClientConfigHolder class or the HeraConnectionConfig class which are part of the com.paypal.hera.conf package.
+The client application is not required to provide values for the driver properties when creating a connection. For reference, this is the list of the properties that can be used. They are defined as constants in the HeraClientConfigHolder class or the HeraConnectionConfig class which are part of the com.paypal.hera.conf package.
 
+## hera.datasource.type
++ Determines the type of datasource the hera server is connected to
++ default: mysql
++ constant: HeraClientConfigHolder.DATASOURCE_TYPE
++ support: oracle & mysql only.
 
 ## hera.support.column_names
 + It is used internally in order to implement the ResultSet methods using the column names instead of column position, for example ResultSet.getString(String). If it is false and the application tries to use ResultSet with column names it will throw an exception. When true, there is a minor performance penalty the first time a query is run. The assumption is that for a certain query the column list and their order is not changed
