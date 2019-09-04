@@ -52,10 +52,16 @@ func main() {
 			log.Print("could not add rt pem " + certfile)
 			continue
 		}
-		mysql.RegisterTLSConfig(shortName, &tls.Config{RootCAs: rootCertPool})
+		serverName := os.Getenv("ServerCertCN")
+		if serverName != "" {
+			mysql.RegisterTLSConfig(shortName, &tls.Config{RootCAs: rootCertPool, ServerName: serverName})
+		} else {
+			mysql.RegisterTLSConfig(shortName, &tls.Config{RootCAs: rootCertPool})
+		}
 	}
 	workerservice.Start(&mysqlAdapter{})
 }
+
 /*
 To test DB cert validation, I put the db's cert in $certdir/certOrCa.pem
 export certdir=/path/to/dir/with/certs
@@ -84,7 +90,7 @@ then
     sed -e 's/^# ssl-key/ssl-key/;s/^# ssl-cert/ssl-cert/' -i mysql.conf.d/mysqld.cnf
 fi
 
-# for some installations, you'll also have to edit the bind_address to 
+# for some installations, you'll also have to edit the bind_address to
 # 0.0.0.0 in mysqld.conf and use a mysql client to adjust grants or permissions
 # to allow the user to login from other ip's.
 
