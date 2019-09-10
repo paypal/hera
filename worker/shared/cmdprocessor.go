@@ -227,6 +227,10 @@ outloop:
 		if (cp.tx == nil) && (startTrans) {
 			cp.tx, err = cp.db.Begin()
 		}
+		if cp.stmt != nil {
+			cp.stmt.Close()
+			cp.stmt = nil
+		}
 		if cp.tx != nil {
 			cp.stmt, err = cp.tx.Prepare(sqlQuery)
 		} else {
