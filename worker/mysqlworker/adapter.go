@@ -164,6 +164,15 @@ func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
 
 func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
 	errStr := errToProcess.Error()
+
+	if strings.HasPrefix(errStr, "driver: bad connection") {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "mysql ProcessError badConnRecycle "+ errStr + " sqlHash:"+ (*queryScope).SqlHash +" Cmd:"+(*queryScope).NsCmd)
+		}
+		(*workerScope).Child_shutdown_flag = true
+		return
+	}
+
 	idx := strings.Index(errStr, ":")
 	if idx < 0 || idx >= len(errStr) {
             return
@@ -172,10 +181,11 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 	fmt.Sscanf(errStr[6:idx],"%d",&errno)
 
 	if logger.GetLogger().V(logger.Warning) {
-		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errToProcess.Error() + " sqlHash:"+ (*queryScope).SqlHash +" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d",errno))
+		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+ errStr + " sqlHash:"+ (*queryScope).SqlHash +" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d",errno))
 	}
 
 	switch (errno) {
+	case 0: fallthrough // if there isn't a normal error number
 	case 1153: fallthrough // pkt too large
 	case 1154: fallthrough // read err fr pipe
 	case 1155: fallthrough // err fnctl
@@ -185,6 +195,7 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 	case 1159: fallthrough // read timeout
 	case 1160: fallthrough // err write
 	case 1161: fallthrough // write timeout
+	case 1290: fallthrough // read-only mode
 	case 1317: fallthrough // query interupt
 	case 1836: fallthrough // read-only mode
 	case 1874: fallthrough // innodb read-only
