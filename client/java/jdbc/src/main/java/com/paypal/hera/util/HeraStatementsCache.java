@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.paypal.hera.cal.CalTransaction;
 import com.paypal.hera.cal.CalTransactionFactory;
+import com.paypal.hera.conf.HeraClientConfigHolder.E_DATASOURCE_TYPE;
 
 public class HeraStatementsCache {
 	public enum StatementType {
@@ -54,9 +55,9 @@ public class HeraStatementsCache {
 		}
 
 		public StatementCacheEntry(String _sql, boolean _escapeProcessingEnabled, 
-				boolean _shardingEnabled, boolean _paramNameBindingEnabled) {
+				boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 			parsedSQL = helperParseSQL(_sql, _escapeProcessingEnabled, 
-					_shardingEnabled, _paramNameBindingEnabled);
+					_shardingEnabled, _paramNameBindingEnabled, datasource);
 			paramNameBindingEnabled = _paramNameBindingEnabled;
 			setStatementType(StatementType.UNKNOWN);
 		}
@@ -88,12 +89,12 @@ public class HeraStatementsCache {
 		 *  3> find the total param count
 		 */
 		private String helperParseSQL(String _sql, boolean _escapeProcessingEnabled, 
-				boolean _shardingEnabled, boolean _paramNameBindingEnabled) {
+				boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 			if (_sql == null) {
 				throw new NullPointerException("SQL string is null");
 			}
 			if (_escapeProcessingEnabled) {
-				_sql = preprocessEscape(_sql);
+				_sql = preprocessEscape(_sql, datasource);
 			}
 			if (_shardingEnabled) {
 				parseShardingHint(_sql);
@@ -158,12 +159,17 @@ public class HeraStatementsCache {
 			return _sql;
 		}
 		
-		private String preprocessEscape(String _sql) {
+		private String preprocessEscape(String _sql, E_DATASOURCE_TYPE datasource) {
 			LOGGER.debug("Preprocess escape for: " + _sql);
 			Matcher m = escapePattern.matcher(_sql);
 			if (m.find()) {
-				_sql = "BEGIN " +  m.group(1) + "; END;" ;
-				LOGGER.debug("Found call escape, SQL is: " + _sql); 
+				if(datasource == E_DATASOURCE_TYPE.ORACLE) {
+					_sql = "BEGIN " +  m.group(1) + "; END;" ;
+					
+				} else {
+					_sql = "CALL " + m.group(1) + ";";
+				}
+				LOGGER.debug("Found call escape, SQL is: " + _sql);
 			}
 			return _sql;
 		}
@@ -264,12 +270,12 @@ public class HeraStatementsCache {
 	
 	/// parse the SQL statement transforming ? into parameter names
 	public StatementCacheEntry getEntry(String _sql, boolean _escapeProcessingEnabled, 
-			boolean _shardingEnabled, boolean _paramNameBindingEnabled) {
+			boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 		StatementCacheEntry entry = stmtCache.get(_sql);
 		if (entry == null) {
 			synchronized (lock) {
 				entry = new StatementCacheEntry(_sql, _escapeProcessingEnabled, 
-						_shardingEnabled, _paramNameBindingEnabled);
+						_shardingEnabled, _paramNameBindingEnabled, datasource);
 				stmtCache.put(_sql, entry);
 			}
 		}
