@@ -210,7 +210,11 @@ func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {
 		var day, month, year int
 		fmt.Sscanf(res, "%d-%d-%d", &year, &month, &day)
 		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, 0, 0, 0)
-	case "TIMESTAMP":
+	case "TIME":
+		var hour, min, sec int
+		fmt.Sscanf(res, "%d:%d:%d", &hour, &min, &sec)
+		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", 0, 0, 0, hour, min, sec)
+	case "TIMESTAMP", "DATETIME":
 		var day, month, year, hour, min, sec int
 		fmt.Sscanf(res, "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &min, &sec)
 		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, hour, min, sec)
