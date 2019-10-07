@@ -36,6 +36,7 @@ public interface HeraClient {
 	public int getNumShards() throws HeraIOException, HeraProtocolException, HeraClientException;
 	public void setShard(int _shard_id) throws HeraIOException, HeraProtocolException, HeraClientException;
 	public void ping() throws HeraExceptionBase;
+	public boolean packetHasMoreData();
 	public void setServerLogicalName(String name);
 	public void setCalLogOption(String isCalEnabled);
 	public void setHeraHostName(String heraBoxName);
