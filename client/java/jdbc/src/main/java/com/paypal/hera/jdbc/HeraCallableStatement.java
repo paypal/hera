@@ -51,6 +51,8 @@ public class HeraCallableStatement extends HeraPreparedStatement implements Call
 		outParamWasNull = false;
 	}
 
+	protected int countOutParameter() { return out_params.size(); }
+
 	private void bindOut() throws HeraExceptionBase {
 		Map<String, String> paramPosToNameMap = stCache.getParamPosToNameMap();
 		
