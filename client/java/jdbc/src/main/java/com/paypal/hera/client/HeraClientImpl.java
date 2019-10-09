@@ -396,6 +396,10 @@ public class HeraClientImpl implements HeraClient{
 		}
 		return columnMeta;
 	} 	
+
+	public boolean packetHasMoreData() {
+		return response.hasNext();
+	}
 	
 	public void execDML(boolean _add_commit) throws SQLException {
 		if (LOGGER.isDebugEnabled())

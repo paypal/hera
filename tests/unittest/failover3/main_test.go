@@ -76,7 +76,7 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55) )")
+	stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55), autoI int not null auto_increment, primary key (autoI) )")
 	if err != nil {
 		//commit(conn,t)
 		return false
