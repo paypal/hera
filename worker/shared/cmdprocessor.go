@@ -430,6 +430,23 @@ outloop:
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, "exe row", rowcnt)
 				}
+
+                               lastId, err := cp.result.LastInsertId()
+                               if err != nil {
+                                       if logger.GetLogger().V(logger.Debug) {
+                                               logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error())
+                                       }
+                               } else {
+                                       // have last insert id
+                                       if len(cp.bindOuts) == 0 {
+                                               cp.bindOuts = append(cp.bindOuts, fmt.Sprintf("%d", lastId))
+                                               if logger.GetLogger().V(logger.Debug) {
+                                                       logger.GetLogger().Log(logger.Debug, "LastInsertId() fake bindOut:", lastId)
+                                               }
+                                       }
+                               }
+
+
 				sz := 2
 				if len(cp.bindOuts) > 0 {
 					sz++
