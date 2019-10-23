@@ -87,6 +87,10 @@ type CmdProcessor struct {
 	//
 	SocketOut *os.File
 	//
+	// socket receiving ctrl messages from mux
+	//
+	SocketCtrl *os.File
+	//
 	// db instance.
 	//
 	db *sql.DB
@@ -153,11 +157,15 @@ type CmdProcessor struct {
 	calSessionTxnName string
 	heartbeat         bool
 	// counter for requests, acting like ID
-	rqId uint16
+	rqId uint32
+	// request ID of the last EOR free
+	rqIdEORFree uint32
 	// used in eor() to send the right code
 	moreIncomingRequests func() bool
 	queryScope           QueryScopeType
 	WorkerScope          WorkerScopeType
+	// tells if the worker is dedicated: either in cursor or in transaction
+	dedicated bool
 }
 
 type QueryScopeType struct {
@@ -171,13 +179,13 @@ type WorkerScopeType struct {
 const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
 
 // NewCmdProcessor creates the processor using th egiven adapter
-func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcessor {
+func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
 	cs := os.Getenv("CAL_CLIENT_SESSION")
 	if cs == "" {
 		cs = "CLIENT_SESSION"
 	}
 
-	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true}
+	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, SocketCtrl: sockMuxCtrl, calSessionTxnName: cs, heartbeat: true}
 }
 
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
@@ -201,6 +209,7 @@ outloop:
 			cp.calSessionTxn.SetCorrelationID("@todo")
 		}
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
+		cp.dedicated = true
 		cp.queryScope = QueryScopeType{}
 		cp.lastErr = nil
 		cp.sqlHash = 0
@@ -781,22 +790,40 @@ func (cp *CmdProcessor) InitDB() error {
 }
 
 func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
-	if (code == common.EORFree) && cp.moreIncomingRequests() {
-		code = common.EORMoreIncomingRequests
+	if code == common.EORFree {
+		if cp.moreIncomingRequests() {
+			code = common.EORMoreIncomingRequests
+		} else {
+			if cp.rqId == cp.rqIdEORFree {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "EOR free again, rqId:", cp.rqId)
+				}
+				calevt := cal.NewCalEvent("ERROR", "EOR_FREE_AGAIN", cal.TransError, "")
+				calevt.Completed()
+				return errors.New("EOR_FREE_AGAIN")
+			}
+			if cp.calSessionTxn != nil {
+				cp.calSessionTxn.Completed()
+				cp.calSessionTxn = nil
+			}
+			cp.rqIdEORFree = cp.rqId
+			cp.dedicated = false
+		}
+
 	}
-	if (code == common.EORFree) && (cp.calSessionTxn != nil) {
-		cp.calSessionTxn.Completed()
-		cp.calSessionTxn = nil
-	}
-	var payload []byte
+
+	datalen := 0
 	if ns != nil {
-		payload = make([]byte, len(ns.Serialized)+1 /*code*/ +2 /*rqId*/)
-		payload[0] = byte('0' + code)
-		payload[1] = byte(cp.rqId >> 8)
-		payload[2] = byte(cp.rqId & 0xFF)
-		copy(payload[3:], ns.Serialized)
-	} else {
-		payload = []byte{byte('0' + code), byte(cp.rqId >> 8), byte(cp.rqId & 0xFF)}
+		datalen = len(ns.Serialized)
+	}
+	payload := make([]byte, 1 /*code*/ +4 /*rqId*/ +datalen)
+	payload[0] = byte('0' + code)
+	payload[1] = byte((cp.rqId & 0xFF000000) >> 24)
+	payload[2] = byte((cp.rqId & 0x00FF0000) >> 16)
+	payload[3] = byte((cp.rqId & 0x0000FF00) >> 8)
+	payload[4] = byte(cp.rqId & 0x000000FF)
+	if datalen != 0 {
+		copy(payload[5:], ns.Serialized)
 	}
 	cp.heartbeat = true
 	return WriteAll(cp.SocketOut, netstring.NewNetstringFrom(common.CmdEOR, payload))
