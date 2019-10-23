@@ -84,7 +84,7 @@ func (crd *Coordinator) getShardRec(key0 interface{}) *ShardMapRecord {
 	bucket := key % uint64(GetConfig().MaxScuttleBuckets)
 	shardRec := GetShardingCfg().records[bucket]
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Sharding map lookup: hash =", key, ", bucket =", bucket, ", shardID =", shardRec.logical)
+		logger.GetLogger().Log(logger.Debug, crd.id, "Sharding map lookup: hash =", key, ", bucket =", bucket, ", shardID =", shardRec.logical)
 	}
 	return shardRec
 }
@@ -125,11 +125,11 @@ func (crd *Coordinator) processSetShardID(val []byte) error {
 	if (GetConfig().EnableWhitelistTest || (!(GetConfig().EnableSharding))) && (crd.shard.shardID == -1) {
 		crd.shard.shardID = 0
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "Shard ID reset to 0")
+			logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID reset to 0")
 		}
 	} else {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "Shard ID forced to", crd.shard.shardID)
+			logger.GetLogger().Log(logger.Debug, crd.id, "Shard ID forced to", crd.shard.shardID)
 		}
 	}
 	return nil
@@ -181,7 +181,7 @@ func (crd *Coordinator) computeLogicalShards() {
 	for _, rec := range crd.shard.shardValues {
 		if len(rec) == 0 && GetConfig().EnableWhitelistTest {
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "null shard key value with whitelist enable, defaulting to shard 0")
+				logger.GetLogger().Log(logger.Debug, crd.id, "null shard key value with whitelist enable, defaulting to shard 0")
 			}
 			crd.shard.shardRecs = append(crd.shard.shardRecs, &ShardMapRecord{logical: 0})
 			/* the sh0 default here is ok
@@ -223,7 +223,7 @@ func (crd *Coordinator) computeLogicalShards() {
 				evt.AddDataInt("logical_shard_id", int64(shardRec.logical))
 				evt.Completed()
 				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "Sharding Key =", rec, "found in whitelist, shard =", shardRec.logical)
+					logger.GetLogger().Log(logger.Debug, crd.id, "Sharding Key =", rec, "found in whitelist, shard =", shardRec.logical)
 				}
 				// check if WL entry is valid
 				// TODO: is this OK, should we fallback or error instead?
@@ -289,7 +289,7 @@ func (crd *Coordinator) isShardKey(bind string) bool {
 // The decision to hang-up or not in case of error is based on backward compatibility
 func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "PreprocessSharding:", crd.shard)
+		logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessSharding:", crd.shard)
 	}
 	if crd.inTransaction {
 		crd.copyShardInfo(crd.prevShard, crd.shard)
@@ -345,7 +345,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 					evt.Completed()
 					if !GetConfig().EnableWhitelistTest && GetConfig().UseShardMap {
 						if logger.GetLogger().V(logger.Verbose) {
-							logger.GetLogger().Log(logger.Verbose, "req rejected, no shard key:", len(crd.shard.shardValues))
+							logger.GetLogger().Log(logger.Verbose, crd.id, "req rejected, no shard key:", len(crd.shard.shardValues))
 						}
 						evt := cal.NewCalEvent(EvtTypeSharding, EvtNameNoShardKey, cal.TransOK, "")
 						evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
@@ -366,9 +366,9 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 				}
 				if logger.GetLogger().V(logger.Verbose) {
 					if autodisc {
-						logger.GetLogger().Log(logger.Verbose, "Auto discovery superceeded by ShardKey")
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Auto discovery superceeded by ShardKey")
 					} else {
-						logger.GetLogger().Log(logger.Verbose, "Processed ShardKey")
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Processed ShardKey")
 					}
 				}
 				autodisc = false
@@ -405,7 +405,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 			shardRec := &ShardMapRecord{logical: 0}
 			crd.shard.shardRecs = []*ShardMapRecord{shardRec}
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "Sharding whitelist enabled or no shard map, defaulting to shard 0")
+				logger.GetLogger().Log(logger.Debug, crd.id, "Sharding whitelist enabled or no shard map, defaulting to shard 0")
 			}
 			evt := cal.NewCalEvent(EvtTypeSharding, EvtNameNoShardKey, cal.TransOK, "")
 			evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
@@ -432,7 +432,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 	if ((len(crd.shard.shardValues) > 0) && ((crd.shard.shardRecs[0].flags & ShardMapRecordFlagsBadLogical) != 0)) ||
 		((len(crd.shard.shardValues) > 0) && (crd.shard.shardRecs[0].logical >= GetConfig().NumOfShards)) {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "req rejected, no shard key, or multishard, or bad logical:", len(crd.shard.shardValues))
+			logger.GetLogger().Log(logger.Verbose, crd.id, "req rejected, no shard key, or multishard, or bad logical:", len(crd.shard.shardValues))
 		}
 		evt := cal.NewCalEvent(EvtTypeSharding, EvtNameBadMapping, cal.TransOK, "")
 		evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
@@ -454,7 +454,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 	if (len(crd.shard.shardValues) > 1) /*multiple keys*/ ||
 		((len(crd.shard.shardValues) == 0) && (crd.shard.sessionShardID == -1) && (len(crd.shard.shardRecs) == 0)) /*no keys*/ {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "req rejected, no shard key, or multishard, or bad logical:", len(crd.shard.shardValues))
+			logger.GetLogger().Log(logger.Verbose, crd.id, "req rejected, no shard key, or multishard, or bad logical:", len(crd.shard.shardValues))
 		}
 		evt := cal.NewCalEvent(EvtTypeSharding, EvtNameNoShardKey, cal.TransOK, "")
 		evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
@@ -470,7 +470,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 		if crd.isRead {
 			if (crd.shard.shardRecs[0].flags & ShardMapRecordFlagsReadStatusN) != 0 {
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "req rejected, scuttle is marked down for reading")
+					logger.GetLogger().Log(logger.Verbose, crd.id, "req rejected, scuttle is marked down for reading")
 				}
 				evt := cal.NewCalEvent(EvtTypeSharding, EvtNameScuttleMkdR, cal.TransOK, "")
 				evt.AddDataInt("scuttle_id", int64(crd.shard.shardRecs[0].bin))
@@ -501,13 +501,13 @@ func (crd *Coordinator) verifyXShard(oldShardValues []string, oldShardID int, ol
 	if crd.isRead {
 		if oldShardID != crd.shard.shardID {
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "Verify X shard, old =", oldShardID, ", new shard =", crd.shard.shardID)
+				logger.GetLogger().Log(logger.Verbose, crd.id, "Verify X shard, old =", oldShardID, ", new shard =", crd.shard.shardID)
 			}
 		}
 	} else {
 		if (len(oldShardValues) > 0) && (len(crd.shard.shardValues) > 0) {
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "two dmls have different shard_keys in same transactions")
+				logger.GetLogger().Log(logger.Verbose, crd.id, "two dmls have different shard_keys in same transactions")
 			}
 
 			if oldShardValues[0] != crd.shard.shardValues[0] {
@@ -529,7 +529,7 @@ func (crd *Coordinator) verifyXShard(oldShardValues []string, oldShardID int, ol
 		}
 		if (len(crd.shard.shardRecs) > 0) && (oldShardID != crd.shard.shardRecs[0].logical) {
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "two dmls in different shards in same transactions")
+				logger.GetLogger().Log(logger.Verbose, crd.id, "two dmls in different shards in same transactions")
 			}
 			evt := cal.NewCalEvent(EvtTypeSharding, EvtNameXShardsTxn, cal.TransOK, "")
 			evt.AddDataInt("shard1", int64(oldShardID))

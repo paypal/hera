@@ -21,12 +21,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
-	"net"
-	"time"
 )
 
 // Errors
@@ -63,7 +64,7 @@ func (p *tafResponsePreproc) Write(bf []byte) (int, error) {
 			// look inside for SQLError
 			if ns.Cmd == common.RcSQLError {
 				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, "TAF response: found SQL error", string(ns.Payload[:20]))
+					logger.GetLogger().Log(logger.Info, p.conn.RemoteAddr().String(), "TAF response: found SQL error", string(ns.Payload[:20]))
 				}
 				ora, sz := atoi(ns.Payload)
 				switch ora {
@@ -78,18 +79,18 @@ func (p *tafResponsePreproc) Write(bf []byte) (int, error) {
 		}
 	} else {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "TAF response error from worker:", err)
+			logger.GetLogger().Log(logger.Alert, p.conn.RemoteAddr().String(), "TAF response error from worker:", err)
 		}
 	}
 	if p.ok {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "TAF response forwarded to client")
+			logger.GetLogger().Log(logger.Verbose, p.conn.RemoteAddr().String(), "TAF response forwarded to client")
 		}
 		p.dataSent = true
 		return p.conn.Write(bf)
 	}
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "TAF response dropped")
+		logger.GetLogger().Log(logger.Verbose, p.conn.RemoteAddr().String(), "TAF response dropped")
 	}
 	// not an error, but zero bytes sent to the client
 	return 0, nil
@@ -123,11 +124,11 @@ func (crd *Coordinator) removeFetchSize(request *netstring.Netstring) *netstring
 // we can c ompletely switch to the primary when the primary eventualy comes back up
 func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "TAFSession: starting")
+		logger.GetLogger().Log(logger.Debug, crd.id, "TAFSession: starting")
 	}
 	defer func() {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "TAFSession: exiting")
+			logger.GetLogger().Log(logger.Debug, crd.id, "TAFSession: exiting")
 		}
 	}()
 
@@ -142,7 +143,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	if err != nil {
 		// wow, is this possible?
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "No primary pool")
+			logger.GetLogger().Log(logger.Alert, crd.id, "No primary pool")
 		}
 		return err
 	}
@@ -159,7 +160,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	fallbackPool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeStdBy, 0, crd.shard.shardID)
 	if (err != nil) || !fallbackPool.Healthy() {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, "Fallback not healthy, not using failover")
+			logger.GetLogger().Log(logger.Verbose, crd.id, "Fallback not healthy, not using failover")
 		}
 		err = crd.dispatchRequest(request)
 		return err
@@ -172,12 +173,12 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	if usePrimary {
 		if primaryPool.Healthy() {
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "Will try first the primary pool")
+				logger.GetLogger().Log(logger.Verbose, crd.id, "Will try first the primary pool")
 			}
 			worker, ticket, err = primaryPool.GetWorker(crd.sqlhash, 0 /*no wait in backlog*/)
 			if err == nil {
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "Trying first pool")
+					logger.GetLogger().Log(logger.Verbose, crd.id, "Trying first pool")
 				}
 				respProcessor := &tafResponsePreproc{conn: crd.conn, ok: true, dataSent: false}
 
@@ -185,7 +186,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				if queryNormallySlow {
 					timeout = 3600 * time.Second
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, "Running without failover, slow query", uint32(crd.sqlhash))
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Running without failover, slow query", uint32(crd.sqlhash))
 					}
 					evt := cal.NewCalEvent("TafNormSlow", fmt.Sprintf("%d", uint32(crd.sqlhash)), cal.TransOK, "")
 					if GetConfig().EnableSharding {
@@ -196,7 +197,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				if crd.isInternal {
 					timeout = 3600 * time.Second
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, "Running without failover, internal query", uint32(crd.sqlhash))
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Running without failover, internal query", uint32(crd.sqlhash))
 					}
 				}
 
@@ -212,7 +213,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 						crd.workerpool = primaryPool
 						crd.ticket = ticket
 						if logger.GetLogger().V(logger.Verbose) {
-							logger.GetLogger().Log(logger.Verbose, "DML in TAF allowed for testing")
+							logger.GetLogger().Log(logger.Verbose, crd.id, "DML in TAF allowed for testing")
 						}
 						if respProcessor.ok {
 							tf.NotifyOK()
@@ -243,7 +244,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 						return nil
 					}
 					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, "ORA error trying first pool")
+						logger.GetLogger().Log(logger.Debug, crd.id, "ORA error trying first pool")
 					}
 					tf.NotifyError()
 					evt := cal.NewCalEvent(EvtTypeTAF, EvtNameTAFOra+respProcessor.ora, cal.TransOK, "")
@@ -253,7 +254,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 					evt.Completed()
 				} else {
 					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, "Error trying first pool:", err)
+						logger.GetLogger().Log(logger.Debug, crd.id, "Error trying first pool:", err)
 					}
 					if err != ErrWorkerFail {
 						if err == ErrSaturationKill {
@@ -281,7 +282,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 					} else {
 						if (err == ErrWorkerFail) && !(respProcessor.ok) {
 							if logger.GetLogger().V(logger.Debug) {
-								logger.GetLogger().Log(logger.Debug, "ORA error trying first pool, worker exiting")
+								logger.GetLogger().Log(logger.Debug, crd.id, "ORA error trying first pool, worker exiting")
 							}
 							tf.NotifyError()
 							evt := cal.NewCalEvent(EvtTypeTAF, EvtNameTAFOra+respProcessor.ora, cal.TransOK, "")
@@ -296,7 +297,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				}
 			} else {
 				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "Error getting worker for first pool:", err)
+					logger.GetLogger().Log(logger.Debug, crd.id, "Error getting worker for first pool:", err)
 				}
 				evt := cal.NewCalEvent(EvtTypeTAF, EvtNAmeTafBklg, cal.TransOK, "")
 				evt.AddDataInt("pct", int64(tf.GetPct()))
@@ -309,7 +310,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	}
 
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "Trying the falback pool")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "Trying the falback pool")
 	}
 
 	var fbticket string
@@ -324,7 +325,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				crd.workerpool = fallbackPool
 				crd.ticket = fbticket
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "DML in TAF allowed for testing")
+					logger.GetLogger().Log(logger.Verbose, crd.id, "DML in TAF allowed for testing")
 				}
 				return nil
 			}
@@ -337,11 +338,11 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 		if err == nil {
 			fallbackPool.ReturnWorker(worker, fbticket)
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "Query finished using the fallback pool")
+				logger.GetLogger().Log(logger.Debug, crd.id, "Query finished using the fallback pool")
 			}
 		} else {
 			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "Error trying the last pool:", err)
+				logger.GetLogger().Log(logger.Debug, crd.id, "Error trying the last pool:", err)
 			}
 			if err != ErrWorkerFail {
 				if err == ErrSaturationKill {
@@ -353,7 +354,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 		}
 	} else {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "Error getting worker for the last pool:", err)
+			logger.GetLogger().Log(logger.Debug, crd.id, "Error getting worker for the last pool:", err)
 		}
 	}
 
