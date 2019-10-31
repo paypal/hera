@@ -115,6 +115,7 @@ type CmdProcessor struct {
 	// placeholders for bindouts
 	bindOuts    []string
 	numBindOuts int
+	sendLastInsertId bool
 	//
 	// matching bindname to location in query for faster lookup at CmdExec.
 	//
@@ -166,6 +167,8 @@ type QueryScopeType struct {
 type WorkerScopeType struct {
 	Child_shutdown_flag bool
 }
+
+const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
 
 // NewCmdProcessor creates the processor using th egiven adapter
 func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcessor {
@@ -246,6 +249,7 @@ outloop:
 		cp.result = nil
 		cp.bindOuts = cp.bindOuts[:0]
 		cp.numBindOuts = 0
+		cp.sendLastInsertId = false
 	case common.CmdBindName, common.CmdBindOutName:
 		if cp.stmt != nil {
 			cp.currentBindName = string(ns.Payload)
@@ -257,7 +261,7 @@ outloop:
 				buffer.Write(ns.Payload)
 				cp.currentBindName = buffer.String()
 			}
-			if cp.bindVars[cp.currentBindName] == nil {
+			if cp.bindVars[cp.currentBindName] == nil && cp.currentBindName != LAST_INSERT_ID_BIND_OUT_NAME {
 				//
 				// @TODO a bindname not in the query.
 				//
@@ -267,6 +271,9 @@ outloop:
 				err = fmt.Errorf("bindname not found in query: %s", cp.currentBindName)
 				cp.calExecErr("Bind error", cp.currentBindName)
 				break
+			}
+			if cp.currentBindName == LAST_INSERT_ID_BIND_OUT_NAME {
+				cp.bindVars[cp.currentBindName] = &(BindValue{index: 5000, name: LAST_INSERT_ID_BIND_OUT_NAME, valid: false, btype: btUnknown})
 			}
 			if ns.Cmd == common.CmdBindName {
 				cp.bindVars[cp.currentBindName].btype = btIn
@@ -350,6 +357,9 @@ outloop:
 				cp.bindOuts = make([]string, cp.numBindOuts)
 			}
 			curbindout := 0
+			if _,ok := cp.bindVars[LAST_INSERT_ID_BIND_OUT_NAME]; ok {
+				cp.sendLastInsertId = true
+			}
 			for i := 0; i < len(cp.bindPos); i++ {
 				key := cp.bindPos[i]
 				val := cp.bindVars[key]
@@ -434,14 +444,14 @@ outloop:
                                lastId, err := cp.result.LastInsertId()
                                if err != nil {
                                        if logger.GetLogger().V(logger.Debug) {
-                                               logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error())
+                                               logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error(), "sendLastInsertId:",cp.sendLastInsertId)
                                        }
                                } else {
                                        // have last insert id
-                                       if len(cp.bindOuts) == 0 {
-                                               cp.bindOuts = append(cp.bindOuts, fmt.Sprintf("%d", lastId))
+                                       if cp.sendLastInsertId {
+                                               cp.bindOuts[0] = fmt.Sprintf("%d", lastId)
                                                if logger.GetLogger().V(logger.Debug) {
-                                                       logger.GetLogger().Log(logger.Debug, "LastInsertId() fake bindOut:", lastId)
+                                                       logger.GetLogger().Log(logger.Debug, "LastInsertId() bindOut:", lastId)
                                                }
                                        }
                                }

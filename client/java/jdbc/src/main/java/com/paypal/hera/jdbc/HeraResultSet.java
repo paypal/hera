@@ -74,6 +74,12 @@ public class HeraResultSet implements ResultSet {
 		data = new ArrayList<ArrayList<byte[]>>();
 		currRowIdx = 0;
 	}
+	public  HeraResultSet(ArrayList<ArrayList<byte[]>> data, HashMap<String, Integer> columnIndexes) {
+		isFetchDone = true;
+		this.data = data;
+		this.columnIndexes = columnIndexes;
+		currRowIdx = 0;
+	}
 	void fetchAllData() throws HeraExceptionBase {
 		while (!isFetchDone) {
 			fetchNext(true/*append new fetch data*/);
