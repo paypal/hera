@@ -36,10 +36,26 @@ public class MySqlLastInsertIdTest {
 	private Connection dbConn;
 	private String host;
 	private boolean isMySQL;
+
+	public HeraConnection makeDbConn() {
+		try {
+			host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+			HeraClientConfigHolder.clear();
+			Properties props = new Properties();
+			props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
+			props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
+			props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
+			props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
+			Class.forName("com.paypal.hera.jdbc.HeraDriver");
+			return (HeraConnection)DriverManager.getConnection("jdbc:hera:" + host, props);
+		} catch (Throwable t) {
+			throw new RuntimeException(t);
+		}
+	}
 	
 	@Before
 	public void setUp() throws Exception {
-		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+		/* host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
 		HeraClientConfigHolder.clear();
 		Properties props = new Properties();
 		props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
@@ -47,7 +63,8 @@ public class MySqlLastInsertIdTest {
 		props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
 		Class.forName("com.paypal.hera.jdbc.HeraDriver");
-		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
+		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props); // */
+		dbConn = makeDbConn();
 
 		// determine database server
 		HeraConnection hera = (HeraConnection)dbConn;
@@ -68,9 +85,26 @@ public class MySqlLastInsertIdTest {
 	public void cleanUp() throws SQLException {
 		dbConn.close();
 	}
+
+	public int rowCount(Connection dbConn, String msg) throws SQLException {
+		PreparedStatement ps = dbConn.prepareStatement("select id from test_mysql_last_insert_id");
+		ResultSet rs = ps.executeQuery();
+		int count = 0;
+		while (rs.next()) {
+			System.out.println(msg+" select got id "+rs.getInt(1));
+			count++;
+		}
+		System.out.println(msg+" "+count+" rows fetched from select");
+		return count;
+	}
+	
 	
 	@Test
 	public void test_mysql_last_insert_id() throws IOException, SQLException{
+		PreparedStatement ps;
+		ResultSet rs;
+		int count;
+
 		if (!isMySQL) 
 			return;
 
@@ -80,45 +114,95 @@ public class MySqlLastInsertIdTest {
 		} catch (Throwable t) {
 			// ignore errors in setup
 		}
+
+
+		rowCount(dbConn, "beforeTableClearing");
+
 		PreparedStatement pst0 = dbConn.prepareStatement("delete from test_mysql_last_insert_id ");
 		pst0.executeUpdate();
+
+		count = rowCount(dbConn, "afterTableClearing");
+		Assert.assertTrue("make sure delete's lastInsertId did not corrupt connection protocol", (count==0) );
 		// setup done
 
-		PreparedStatement pst2 = dbConn.prepareStatement("insert into test_mysql_last_insert_id ( id , note ) values ( ?, ? )");
+		PreparedStatement pst2 = dbConn.prepareStatement("insert into test_mysql_last_insert_id ( id , note ) values ( ?, ? )", Statement.RETURN_GENERATED_KEYS);
 		pst2.setInt(1, 11);
 		pst2.setString(2, "eleven");
 		pst2.executeUpdate();
-		ResultSet rs = pst2.getGeneratedKeys();
+		rs = pst2.getGeneratedKeys();
 		long id = -1;
 		try {
-			id = rs.getLong(0);
+			id = rs.getLong(1);
 		} catch (Throwable t) {
 			Assert.assertTrue("oops no generated key", false);
 		}
+		count = rowCount(dbConn, "after1ins");
+		Assert.assertTrue("select sees first row", (count==1));
 		
+		pst2 = dbConn.prepareStatement("insert into test_mysql_last_insert_id ( id , note ) values ( ?, ? )", Statement.RETURN_GENERATED_KEYS);
 		pst2.setInt(1, 12);
 		pst2.setString(2, "twelve");
 		pst2.executeUpdate();
 		ResultSet rs3 = pst2.getGeneratedKeys();
 		long id3 = -1;
 		try {
-			id3 = rs3.getLong(0);
+			id3 = rs3.getLong(1);
 		} catch (Throwable t) {
+			System.out.println("getting last insert id"+t);
+			t.printStackTrace();
 			Assert.assertTrue("oops no last insert id", false);
 		}
 		System.out.println("last insert id are "+id+" "+id3);
 		Assert.assertTrue("diff rows inserted, expect diff ids", id3 != id);
+		count = rowCount(dbConn, "after2ins");
+		Assert.assertTrue("select sees second row", (count==2));
+
+		dbConn.commit(); // hrm. somehow needed to make the row stick
 
 		// some testing to see that the connection and protocol are good
-
-		PreparedStatement ps;
-		ps = dbConn.prepareStatement("select id from test_mysql_last_insert_id");
-		ps.executeQuery();
-		
 		ps = dbConn.prepareStatement("update test_mysql_last_insert_id set note='Eleven' where id=11");
-		ps.executeUpdate();
+		int rowsUpdated = ps.executeUpdate();
+		System.out.println(rowsUpdated+" rows updated");
+
+		// constraint violation
+		boolean caught = false;
+		try {
+			ps = dbConn.prepareStatement("insert into test_mysql_last_insert_id ( autoI ) values ( "+id3+" )");
+			ps.executeUpdate();
+		} catch (Throwable T) {
+			caught = true;
+		}
+		System.out.println("was exception caught:"+caught);
+		Assert.assertTrue("expected constraint exception", caught);
+		count = rowCount(dbConn, "after err");
+		Assert.assertTrue("select after err", (count==2));
 
 		ps = dbConn.prepareStatement("delete from test_mysql_last_insert_id where id=12");
 		ps.executeUpdate();
+
+		// try with autocommit
+		dbConn.setAutoCommit(true);
+		rowCount(dbConn, "beforeTableClearing2");
+
+		pst0 = dbConn.prepareStatement("delete from test_mysql_last_insert_id ");
+		pst0.executeUpdate();
+
+		count = rowCount(dbConn, "afterTableClearing2");
+		Assert.assertTrue("make sure 2delete's lastInsertId did not corrupt connection protocol", (count==0) );
+		// setup done
+
+		pst2 = dbConn.prepareStatement("insert into test_mysql_last_insert_id ( id , note ) values ( ?, ? )", Statement.RETURN_GENERATED_KEYS);
+		pst2.setInt(1, 11);
+		pst2.setString(2, "eleven b");
+		pst2.executeUpdate();
+		rs = pst2.getGeneratedKeys();
+		id = -1;
+		try {
+			id = rs.getLong(1);
+		} catch (Throwable t) {
+			Assert.assertTrue("ac: oops no generated key", false);
+		}
+		count = rowCount(dbConn, "2after1ins");
+		Assert.assertTrue("select sees first row", (count==1));
 	}
 }
