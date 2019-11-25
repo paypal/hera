@@ -18,19 +18,19 @@
 package common
 
 import (
-	"regexp"
+  "regexp"
   "strings"
 )
 
 // TableNameParser will remove comment from the sql string and return keyword after FROM or JOIN
 func TableNameParser(sql string) []string{
-	var result []string
+  var result []string
   tokenized := tokenizeSQL(removeComments(sql))
   for i := range tokenized {
-		if(strings.Compare(tokenized[i], "FROM") == 0 || strings.Compare(tokenized[i], "JOIN") == 0){
-			//grabbing next token by FROM or JOIN
-			result = append(result, tokenized[i+1])
-		}
+    if(strings.Compare(tokenized[i], "FROM") == 0 || strings.Compare(tokenized[i], "JOIN") == 0){
+      //grabbing next token by FROM or JOIN
+      result = append(result, tokenized[i+1])
+    }
   }
   return result
 }
@@ -46,5 +46,5 @@ func tokenizeSQL(sql string) []string{
 }
 
 func Split(r rune) bool {
-    return r == ' ' || r == '(' || r == ')' || r == ';' || r == ','
+  return r == ' ' || r == '(' || r == ')' || r == ';' || r == ','
 }
