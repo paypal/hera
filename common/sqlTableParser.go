@@ -29,6 +29,10 @@ func TableNameParser(sql string) []string{
   for i := range tokenized {
     if(strings.Compare(tokenized[i], "FROM") == 0 || strings.Compare(tokenized[i], "JOIN") == 0){
       //grabbing next token by FROM or JOIN
+      // ignoring nested query
+      if(strings.Compare(tokenized[i+1], "SELECT") == 0){
+        continue
+      }
       result = append(result, tokenized[i+1])
     }
   }
