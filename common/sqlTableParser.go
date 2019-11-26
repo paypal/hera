@@ -22,6 +22,12 @@ import (
   "strings"
 )
 
+const(
+  KEYWORD_PAREN_OPEN = "("
+  KEYWORD_PAREN_CLOSE = ")"
+  KEYWORD_COMMA = ","
+)
+
 // TableNameParser will remove comment from the sql string and return keyword after FROM or JOIN
 func TableNameParser(sql string) []string{
   var result []string
@@ -30,10 +36,16 @@ func TableNameParser(sql string) []string{
     if(strings.Compare(tokenized[i], "FROM") == 0 || strings.Compare(tokenized[i], "JOIN") == 0){
       //grabbing next token by FROM or JOIN
       // ignoring nested query
-      if(strings.Compare(tokenized[i+1], "SELECT") == 0){
+      if(strings.Contains(tokenized[i+1], KEYWORD_PAREN_OPEN) == true){
         continue
       }
-      result = append(result, tokenized[i+1])
+      // processing multiple table names after FROM keyword w/ or w/o alias
+      if(shouldProcessMultipleTables(tokenized[i+2])){
+        result = append(result, tokenized[i+1])
+        result = append(result, tokenized[i+3])
+      } else {
+        result = append(result, tokenized[i+1])
+      }
     }
   }
   return result
@@ -50,5 +62,9 @@ func tokenizeSQL(sql string) []string{
 }
 
 func Split(r rune) bool {
-  return r == ' ' || r == '(' || r == ')' || r == ';' || r == ','
+  return r == ' ' || r == ';'
+}
+
+func shouldProcessMultipleTables(nextToken string) bool{
+  return nextToken != "" && strings.Contains(nextToken, KEYWORD_COMMA)
 }
