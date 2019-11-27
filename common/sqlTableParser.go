@@ -42,7 +42,9 @@ func TableNameParser(sql string) []string{
       // processing multiple table names after FROM keyword w/ or w/o alias
       if(shouldProcessMultipleTables(tokenized[i+2])){
         result = append(result, tokenized[i+1])
-        result = append(result, tokenized[i+3])
+        if(strings.Contains(tokenized[i+3], KEYWORD_PAREN_OPEN) == false){
+          result = append(result, tokenized[i+3])
+        }
       } else {
         result = append(result, tokenized[i+1])
       }
