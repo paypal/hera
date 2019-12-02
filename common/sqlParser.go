@@ -34,6 +34,7 @@ type SQLParser interface {
 type regexSQLParser struct {
 	matcher          *regexp.Regexp
 	matcherForUpdate *regexp.Regexp
+	matcherStartTransaction *regexp.Regexp
 }
 
 type dummyParser struct {
@@ -43,6 +44,10 @@ type dummyParser struct {
 func NewRegexSQLParser() (SQLParser, error) {
 	parser := &regexSQLParser{}
 	var err error
+	parser.matcherStartTransaction, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*start \\s*transaction")
+	if err != nil {
+		return nil, err
+	}
 	parser.matcher, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*select\\s+")
 	if err != nil {
 		return nil, err
@@ -55,7 +60,7 @@ func NewRegexSQLParser() (SQLParser, error) {
 }
 
 func (parser *regexSQLParser) MustExecInsteadOfPrepare(sql string) bool {
-	return false
+	return parser.matcherStartTransaction.MatchString(sql)
 }
 
 // IsRead tells is the SQL is doing a read, basically a SELECT but not a SELECT ... FOR UPDATE or nextval
@@ -102,46 +107,6 @@ func (parser *dummyParser) Parse(sql string) (bool, bool) {
 	return false, false
 }
 
-type autoCommitParser struct {
-	matcher *regexp.Regexp
-	matcherBeginOrStartTransaction *regexp.Regexp
-}
-// NewDummyParser crestes a parser that always returns false
-func NewAutoCommitParser() (SQLParser, error) {
-	parser := &autoCommitParser{}
-	var err error
-	parser.matcherBeginOrStartTransaction, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*(start \\s*transaction|begin)")
-	if err != nil {
-		return nil, err
-	}
-	parser.matcher, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*select\\s+")
-	if err != nil {
-		return nil, err
-	}
-	return parser, nil
-}
-
-func (parser *autoCommitParser) MustExecInsteadOfPrepare(sql string) bool {
-	return parser.matcherBeginOrStartTransaction.MatchString(sql)
-}
-
-func (parser *autoCommitParser) IsRead(sql string) bool {
-	if parser.matcherBeginOrStartTransaction.MatchString(sql) {
-		return false
-	}
-	return true
-}
-
-// - first return code tells if the query is a SELECT
-// - second returns code tells the query starts a transaction
-// mysql-autocommit select..for update doesn't start a transaction
-func (parser *autoCommitParser) Parse(sql string) (bool, bool) {
-	isSelect := parser.matcher.MatchString(sql)
-	if parser.matcherBeginOrStartTransaction.MatchString(sql) {
-		return isSelect, true
-	}
-	return isSelect, false
-}
 
 
 

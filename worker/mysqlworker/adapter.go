@@ -36,7 +36,7 @@ type mysqlAdapter struct {
 }
 
 func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser ,error) {
-	return common.NewAutoCommitParser()
+	return common.NewRegexSQLParser()
 }
 
 // InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
