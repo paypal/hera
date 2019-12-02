@@ -27,9 +27,14 @@ import (
 	_ "gopkg.in/goracle.v2"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/paypal/hera/worker/shared"
+	"github.com/paypal/hera/common"
 )
 
 type oracleAdapter struct {
+}
+
+func (adapter *oracleAdapter) MakeSqlParser() (common.SQLParser, error) {
+	return common.NewRegexSQLParser()
 }
 
 // InitDB creates sql.DB object for conection to the database, using "username", "password" and "TWO_TASK" environment

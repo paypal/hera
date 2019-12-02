@@ -40,6 +40,7 @@ import (
 // CmdProcessorAdapter is interface for differentiating the specific database implementations.
 // For example there is an adapter for MySQL, another for Oracle
 type CmdProcessorAdapter interface {
+	MakeSqlParser() (common.SQLParser, error)
 	GetColTypeMap() map[string]int
 	Heartbeat(*sql.DB) bool
 	InitDB() (*sql.DB, error)
@@ -243,7 +244,14 @@ outloop:
 			cp.stmt.Close()
 			cp.stmt = nil
 		}
-		if cp.tx != nil {
+		if cp.sqlParser.MustExecInsteadOfPrepare(sqlQuery) {
+			_, err = cp.tx.Exec(sqlQuery)
+			cp.calExecTxn.AddDataStr("directExec","t")
+			cp.calExecTxn.Completed()
+			cp.calExecTxn = nil
+			// keep cp.stmt nil so we don't exec
+			cp.stmt = nil
+		} else if cp.tx != nil {
 			cp.stmt, err = cp.tx.Prepare(sqlQuery)
 		} else {
 			cp.stmt, err = cp.db.Prepare(sqlQuery)
@@ -534,7 +542,16 @@ outloop:
 				}
 			}
 		} else {
-			if cp.inTrans {
+			if cp.calExecTxn == nil {
+				// for mysql begin/start transaction
+				// exec already done instead of prepare
+				nss := make([]*netstring.Netstring, 2)
+				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
+				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows
+				// no bind outs
+				resns := netstring.NewNetstringEmbedded(nss)
+				cp.eor(common.EORInTransaction, resns)
+			} else if cp.inTrans {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
 				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
@@ -770,7 +787,8 @@ func (cp *CmdProcessor) InitDB() error {
 	cp.db.SetMaxOpenConns(1)
 
 	//
-	cp.sqlParser, err = common.NewRegexSQLParser()
+	// cp.sqlParser, err = common.NewRegexSQLParser()
+	cp.sqlParser, err = cp.adapter.MakeSqlParser()
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, "bindname regex complie:", err.Error())
