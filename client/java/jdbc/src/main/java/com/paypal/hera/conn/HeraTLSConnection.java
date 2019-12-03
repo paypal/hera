@@ -7,6 +7,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.SocketException;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
@@ -120,6 +121,18 @@ public class HeraTLSConnection implements HeraClientConnection {
 			return socketAddress.toString().substring(1);
 		}
 		return socketAddress.toString();
+	}
+
+
+	@Override
+	public int getSoTimeout() throws SocketException {
+		return socket.getSoTimeout();
+	}
+
+
+	@Override
+	public void setSoTimeout(int tmo) throws SocketException {
+		socket.setSoTimeout(tmo);		
 	}
 
 }

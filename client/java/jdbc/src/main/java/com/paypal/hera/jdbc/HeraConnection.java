@@ -448,7 +448,19 @@ public class HeraConnection implements Connection {
 	}
 
 	public boolean isValid(int timeout) throws SQLException {
-		throw new SQLFeatureNotSupportedException("HeraConnection.isValid is not implemented");
+		if (isClosed()) {
+			return false;
+		}
+		if (timeout < 0) { 
+			throw new SQLException("Timeout must be positive");
+		}
+		try {
+			getHeraClient().ping(timeout * 1000);
+			return true;
+		} catch(Exception e) {
+			close();
+			return false;
+		}
 	}
 
 	public void setClientInfo(Properties properties) throws SQLClientInfoException {
