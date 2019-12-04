@@ -34,8 +34,6 @@ String host = "1:127.0.0.1:11111";
 Properties props = new Properties();
 // Override any default property
 props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
-// register
-Class.forName("com.paypal.hera.jdbc.HeraDriver");
 dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
 // do standard JDBC
