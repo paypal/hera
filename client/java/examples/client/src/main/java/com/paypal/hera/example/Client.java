@@ -13,7 +13,6 @@ public class Client {
 		String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
 		Properties props = new Properties();
 		props.setProperty("foo", "bar");
-		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		Connection dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
 		PreparedStatement pst = dbConn.prepareStatement("SELECT 'foo' from dual");
