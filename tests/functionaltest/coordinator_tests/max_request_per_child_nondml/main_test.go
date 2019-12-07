@@ -46,6 +46,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	//appcfg["readonly_children_pct"] = "50"
         appcfg["opscfg.default.server.max_requests_per_child"] = "5"
 	appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "4"

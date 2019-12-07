@@ -6,10 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
-	//"github.com/paypal/hera/client/gosqldriver"
-        _"github.com/paypal/hera/client/gosqldriver/tcp"
+        //"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
-	"github.com/paypal/hera/utility/logger"
 )
 
 /*
@@ -40,6 +38,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
         appcfg["opscfg.default.server.idle_timeout_ms"] = "4000"
 	appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -59,7 +58,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestIdleTimeoutWorkerNotAssigned(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestIdleTimeoutWorkerNotAssigned begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	fmt.Println ("TestIdleTimeoutWorkerNotAssigned begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -109,5 +108,5 @@ func TestIdleTimeoutWorkerNotAssigned(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
-	logger.GetLogger().Log(logger.Debug, "TestIdleTimeoutWorkerNotAssigned done  -------------------------------------------------------------")
+	fmt.Println ("TestIdleTimeoutWorkerNotAssigned done  -------------------------------------------------------------")
 }

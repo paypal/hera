@@ -10,7 +10,9 @@ import (
 	"os/exec"
 	"regexp"
 	"time"
-	 _"github.com/paypal/hera/client/gosqldriver/tcp"
+	"strings"
+	"testing"
+	_"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -329,3 +331,25 @@ func RegexCountFile(regex string, filename string) int {
 	//fmt.Println("DONE searching "+regex)
 	return count
 }
+
+func ExtractClientId (logfile string, client_num string) string {
+    cmd := "grep 'server: accepted from' " +  " " + runFolder + "/" + logfile + " | awk -F\":\" '{print $7}' | awk 'NR==" + client_num + "'"
+    fmt.Println ("Grep command in ExtractClientId: ", cmd)
+    out, err := BashCmd(cmd)
+    if (err != nil) {
+        fmt.Errorf("Error occur when extracting client id: %s", out)
+    }
+    client := strings.TrimSpace (string(out))
+    return client
+}
+
+func VerifyKilledClient (t *testing.T, client_num string){
+    client_id := ExtractClientId ("hera.log", client_num)
+    search_str := "'" + client_id + ".*use of closed network connection" + "'";
+    fmt.Println ("Search String in VerifyKilledClient(): ", search_str)
+    count := RegexCount (search_str)
+    if (count < 1) {
+	t.Fatalf ("Error: count: %d", count);
+    }
+}
+

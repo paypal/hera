@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	//"github.com/paypal/hera/client/gosqldriver"
         _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -39,7 +38,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
         appcfg["opscfg.default.server.idle_timeout_ms"] = "3000"
-	appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"

@@ -38,7 +38,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-	appcfg["child.executable"] = "mysqlworker"
+	//appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "1"
@@ -83,15 +84,18 @@ func TestFreeWorkerCrashes(t *testing.T) {
                 t.Fatalf("Error getting connection %s\n", err.Error())
         }
 
-        fmt.Println ("Set autocommit to false")
         tx, _ := conn.BeginTx(ctx, nil)
-
         fmt.Println ("Inserting a row and sleep, not commit");
         stmt, _ := tx.PrepareContext(ctx, "/*cmd*/insert into test_simple_table_2 (accountID, Name, Status) VALUES(:AccountID, :Name, :Status)")
          _, err = stmt.Exec(sql.Named("AccountID", "12346"), sql.Named("Name", "Steve"), sql.Named("Status", "done"))
         if err != nil {
                 t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
         }
+        err = tx.Commit()
+        if err != nil {
+                t.Fatalf("Error commit %s\n", err.Error())
+        }
+
 
         stmt.Close()
         go killworker ()
@@ -100,14 +104,11 @@ func TestFreeWorkerCrashes(t *testing.T) {
         cancel()
         conn.Close()
 
-	/*if ( testutil.RegexCount("worker.*received signal. transits from state  2  to terminated'") < 1) {
+	if ( testutil.RegexCount("worker.*received signal. transits from state  1  to terminated") < 1) {
            t.Fatalf ("Error: should get log regarding worker getting killed");
-        }*/
-
-	if ( testutil.RegexCountFile("WARNING.*unexpected_eof.*closed connection on coordinator", "cal.log") < 1) {
-           t.Fatalf ("Error: should see unexpected_eof from CAL");
         }
 
+        //time.Sleep(5 * time.Second);
 	fmt.Print ("Verify after worker gets restarted, it serves requests successfully");
         ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
         // cleanup and insert one row in the table
