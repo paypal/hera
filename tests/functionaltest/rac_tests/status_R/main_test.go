@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 	//"github.com/paypal/hera/client/gosqldriver"
-        _"github.com/paypal/hera/client/gosqldriver/tcp"
+        //_"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -40,6 +40,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "2"
         appcfg["lifespan_check_interval"] = "1"
 	appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "1"
@@ -142,8 +143,7 @@ func TestStatusU_to_R(t *testing.T) {
            t.Fatalf ("Error: should have RAC_ID event");
         }
 
-        count := testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log")
-	if (count > 0) {
+        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") < 1) {
 	    t.Fatalf ("Error: should see DB_UNAME event");
 	}
 

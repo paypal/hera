@@ -40,7 +40,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
         appcfg["opscfg.default.server.idle_timeout_ms"] = "3000"
         appcfg["opscfg.default.server.transaction_idle_timeout_ms"] = "5000"
-	appcfg["child.executable"] = "mysqlworker"
+	//appcfg["child.executable"] = "mysqlworker"
+	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "4"

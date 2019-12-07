@@ -138,8 +138,7 @@ func TestStatusU_to_F(t *testing.T) {
            t.Fatalf ("Error: should have RAC_ID event");
         }
 
-        count := testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log")
-	if (count > 0) {
+        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") < 1) {
 	    t.Fatalf ("Error: should see DB_UNAME event");
 	}
 
