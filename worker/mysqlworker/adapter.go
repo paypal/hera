@@ -27,11 +27,16 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/paypal/hera/worker/shared"
 )
 
 type mysqlAdapter struct {
+}
+
+func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser ,error) {
+	return common.NewRegexSQLParser()
 }
 
 // InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
@@ -210,7 +215,11 @@ func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {
 		var day, month, year int
 		fmt.Sscanf(res, "%d-%d-%d", &year, &month, &day)
 		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, 0, 0, 0)
-	case "TIMESTAMP":
+	case "TIME":
+		var hour, min, sec int
+		fmt.Sscanf(res, "%d:%d:%d", &hour, &min, &sec)
+		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", 0, 0, 0, hour, min, sec)
+	case "TIMESTAMP", "DATETIME":
 		var day, month, year, hour, min, sec int
 		fmt.Sscanf(res, "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &min, &sec)
 		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, hour, min, sec)

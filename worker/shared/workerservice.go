@@ -70,6 +70,7 @@ func Start(adapter CmdProcessorAdapter) {
 	if logPrefix == "" {
 		logPrefix = "WORKER"
 	}
+	logPrefix += fmt.Sprintf(" %d", os.Getpid())
 	err = logger.CreateLogger(cfg.GetOrDefaultString("log_file", "hera.log"), logPrefix, int32(logLevel))
 	if err != nil {
 		return
@@ -108,8 +109,9 @@ func Start(adapter CmdProcessorAdapter) {
 	// set up uds.
 	//
 	sockMux := os.NewFile(uintptr(3), fmt.Sprintf("worker_sp%d", 0))
+	sockMuxCtrl := os.NewFile(uintptr(4), fmt.Sprintf("workerc_sp%d", 0))
 
-	cmdprocessor := NewCmdProcessor(adapter, sockMux)
+	cmdprocessor := NewCmdProcessor(adapter, sockMux, sockMuxCtrl)
 
 	err = cmdprocessor.InitDB()
 	if err != nil {
@@ -127,21 +129,23 @@ func Start(adapter CmdProcessorAdapter) {
 	//
 	// start worker mainloop.
 	//
-	runworker(sockMux, cmdprocessor, wconfig)
+	runworker(cmdprocessor, wconfig)
 }
 
 // runworker is the infinite loop, serving requests
-func runworker(sockMux *os.File, cmdprocessor *CmdProcessor, cfg *workerConfig) {
+func runworker(cmdprocessor *CmdProcessor, cfg *workerConfig) {
 	var ns *netstring.Netstring
 	var ok = true
 	var sig int
 	var err error
 
+	sockMux := cmdprocessor.SocketOut
 	nschannel := readNextNetstring(sockMux)
 	cmdprocessor.moreIncomingRequests = func() bool {
 		return (len(nschannel) > 0)
 	}
 	sigchannel := waitForSignal()
+	ctrlchannel := waitForCtrl(cmdprocessor.SocketCtrl)
 
 outerloop:
 	for {
@@ -163,23 +167,52 @@ outerloop:
 			}
 			continue
 
-		case sig, ok = <-sigchannel:
-			if sig == signalRecover {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker recover")
-				}
-				evt := cal.NewCalEvent("WORKER", "recoverworker", cal.TransOK, "")
-				evt.Completed()
-				//
-				// if recover fails, stop worker.
-				//
-				err = recoverworker(cmdprocessor, nschannel)
-				if err != nil {
-					break outerloop
-				} else {
+		case ns, ok = <-ctrlchannel:
+			if ns.Cmd == common.CmdInterruptMsg {
+				if cmdprocessor.dedicated {
+					flag := ns.Payload[0]
+					rqId := (uint32(ns.Payload[1]) << 24) + (uint32(ns.Payload[2]) << 16) + (uint32(ns.Payload[3]) << 8) + uint32(ns.Payload[4])
+
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker recover", flag, ", muxrqid:", rqId, ", wrqid:", cmdprocessor.rqId)
+					}
+					if flag == common.StrandedSaturationRecover {
+						evt := cal.NewCalEvent("HARD_EVICTION", cmdprocessor.queryScope.SqlHash, cal.TransOK, "")
+						evt.Completed()
+					}
+					var evt cal.Event
+					if cmdprocessor.tx == nil {
+						evt = cal.NewCalEvent("RECOVER", "dedicated_no_trans", cal.TransOK, "")
+					} else {
+						evt = cal.NewCalEvent("RECOVER", "dedicated", cal.TransOK, "")
+					}
+					evt.Completed()
+					//
+					// if recover fails, stop worker.
+					//
+					err = recoverworker(cmdprocessor, nschannel, rqId)
+					if err != nil {
+						break outerloop
+					} else {
+						continue
+					}
+				} else { // not dedicated
+					evt := cal.NewCalEvent("RECOVER", "not_dedicated", cal.TransWarning, "")
+					evt.Completed()
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, sockMux.Name(), "Mux asks to abort existing work, but worker is not allocated")
+					}
 					continue
 				}
-			} else if sig == signalExit {
+			} else {
+				if logger.GetLogger().V(logger.Alert) {
+					logger.GetLogger().Log(logger.Alert, "Unsupported control message type:", ns.Cmd)
+				}
+				break outerloop
+			}
+
+		case sig, ok = <-sigchannel:
+			if sig == signalExit {
 				if logger.GetLogger().V(logger.Info) {
 					logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker exiting")
 				}
@@ -253,10 +286,9 @@ func readNextNetstring(sockMux *os.File) <-chan *netstring.Netstring {
 }
 
 // waitForSignal runs in its goroutine waiting for signals. When a signal is received, a message is sent to the
-// channel where the main processor listen. There are two signals used: SIGHUP - used when the mux asks the worker to interrups to current work
-// and SIGTERM - used when the workewr is asked to exit
+// channel where the main processor listen. Only one signal is currently used - SIGTERM - used when the workewr is asked to exit
 func waitForSignal() <-chan int {
-	recoverch := make(chan int)
+	sigch := make(chan int)
 
 	schannel := make(chan os.Signal, 1)
 	signal.Notify(schannel, syscall.SIGHUP, syscall.SIGTERM)
@@ -266,55 +298,70 @@ func waitForSignal() <-chan int {
 			select {
 			case signal := <-sigchannel:
 				switch signal {
-				case syscall.SIGHUP:
-					recoverch <- signalRecover
 				case syscall.SIGTERM:
-					recoverch <- signalExit
+					sigch <- signalExit
 					break outerloop
 				}
 			}
 		}
 		close(schannel)
 	}(schannel)
-	return recoverch
+	return sigch
 }
 
-// recoverworker drains the mux channel and rollbacks the current transaction
-func recoverworker(cmdprocessor *CmdProcessor, nschannel <-chan *netstring.Netstring) error {
-	drainIncomingChannel(cmdprocessor, nschannel)
-	err := cmdprocessor.ProcessCmd(netstring.NewNetstringFrom(common.CmdRollback, []byte("")))
-	return err
-}
-
-// drainIncomingChannel clears the mux channel
-func drainIncomingChannel(cmdprocessor *CmdProcessor, nschannel <-chan *netstring.Netstring) {
-	for {
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "draining nschannel")
+/**
+ * waits for control messages from mux
+ */
+func waitForCtrl(sockMux *os.File) <-chan *netstring.Netstring {
+	ctrlch := make(chan *netstring.Netstring, 10)
+	nsreader := netstring.NewNetstringReader(sockMux)
+	go func() {
+		for {
+			ns, err := nsreader.ReadNext()
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, sockMux.Name(), ":worker readerr", err.Error())
+				}
+				ctrlch <- nil
+			} else {
+				ctrlch <- ns
+			}
 		}
-		select {
-		case ns, ok := <-nschannel:
+		//close(commandch)
+	}()
+	return ctrlch
+}
+
+// recoverworker free up the worker (rollbacks the current transaction if existed)
+func recoverworker(cmdprocessor *CmdProcessor, nschannel <-chan *netstring.Netstring, rqId uint32) error {
+	var err error
+	/*
+		for rqId > cmdprocessor.rqId {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "muxid:", rqId, " > wkid:", cmdprocessor.rqId)
+			}
+			_, ok := <-nschannel
 			if !ok {
 				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "draining: nschannel closed")
+					logger.GetLogger().Log(logger.Debug, "Channel closed while recoveringl")
 				}
-				return
+				return errors.New("Channel closed")
 			}
 			cmdprocessor.rqId++
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "nschannel draining", DebugString(ns.Serialized))
-			}
-			//
-			// let readNextnetstring.Netstring reload nschannel if chann buffer was full.
-			//
-			if len(nschannel) != 0 {
-				time.Sleep(time.Microsecond * 10)
-			}
-		default:
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "draining: nschannel empty")
-			}
-			return
+		}
+	*/
+	if rqId != cmdprocessor.rqId {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Race interrupting SQL, muxid:", rqId, ", wkid:", cmdprocessor.rqId)
+		}
+		evt := cal.NewCalEvent("RECOVER", "REQID_MISMATCH", cal.TransWarning, fmt.Sprintf("muxid: %d, wkid: %d", rqId, cmdprocessor.rqId))
+		evt.Completed()
+	} else {
+		if cmdprocessor.tx != nil {
+			cmdprocessor.ProcessCmd(netstring.NewNetstringFrom(common.CmdRollback, []byte("")))
+		} else {
+			cmdprocessor.eor(common.EORFree, nil)
 		}
 	}
+	return err
 }

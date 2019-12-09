@@ -40,6 +40,7 @@ import (
 // CmdProcessorAdapter is interface for differentiating the specific database implementations.
 // For example there is an adapter for MySQL, another for Oracle
 type CmdProcessorAdapter interface {
+	MakeSqlParser() (common.SQLParser, error)
 	GetColTypeMap() map[string]int
 	Heartbeat(*sql.DB) bool
 	InitDB() (*sql.DB, error)
@@ -87,6 +88,10 @@ type CmdProcessor struct {
 	//
 	SocketOut *os.File
 	//
+	// socket receiving ctrl messages from mux
+	//
+	SocketCtrl *os.File
+	//
 	// db instance.
 	//
 	db *sql.DB
@@ -115,6 +120,7 @@ type CmdProcessor struct {
 	// placeholders for bindouts
 	bindOuts    []string
 	numBindOuts int
+	sendLastInsertId bool
 	//
 	// matching bindname to location in query for faster lookup at CmdExec.
 	//
@@ -152,11 +158,15 @@ type CmdProcessor struct {
 	calSessionTxnName string
 	heartbeat         bool
 	// counter for requests, acting like ID
-	rqId uint16
+	rqId uint32
+	// request ID of the last EOR free
+	rqIdEORFree uint32
 	// used in eor() to send the right code
 	moreIncomingRequests func() bool
 	queryScope           QueryScopeType
 	WorkerScope          WorkerScopeType
+	// tells if the worker is dedicated: either in cursor or in transaction
+	dedicated bool
 }
 
 type QueryScopeType struct {
@@ -167,14 +177,16 @@ type WorkerScopeType struct {
 	Child_shutdown_flag bool
 }
 
+const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
+
 // NewCmdProcessor creates the processor using th egiven adapter
-func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcessor {
+func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
 	cs := os.Getenv("CAL_CLIENT_SESSION")
 	if cs == "" {
 		cs = "CLIENT_SESSION"
 	}
 
-	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, heartbeat: true}
+	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, SocketCtrl: sockMuxCtrl, calSessionTxnName: cs, heartbeat: true}
 }
 
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
@@ -198,6 +210,7 @@ outloop:
 			cp.calSessionTxn.SetCorrelationID("@todo")
 		}
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
+		cp.dedicated = true
 		cp.queryScope = QueryScopeType{}
 		cp.lastErr = nil
 		cp.sqlHash = 0
@@ -231,7 +244,14 @@ outloop:
 			cp.stmt.Close()
 			cp.stmt = nil
 		}
-		if cp.tx != nil {
+		if cp.sqlParser.MustExecInsteadOfPrepare(sqlQuery) {
+			_, err = cp.tx.Exec(sqlQuery)
+			cp.calExecTxn.AddDataStr("directExec","t")
+			cp.calExecTxn.Completed()
+			cp.calExecTxn = nil
+			// keep cp.stmt nil so we don't exec
+			cp.stmt = nil
+		} else if cp.tx != nil {
 			cp.stmt, err = cp.tx.Prepare(sqlQuery)
 		} else {
 			cp.stmt, err = cp.db.Prepare(sqlQuery)
@@ -246,6 +266,7 @@ outloop:
 		cp.result = nil
 		cp.bindOuts = cp.bindOuts[:0]
 		cp.numBindOuts = 0
+		cp.sendLastInsertId = false
 	case common.CmdBindName, common.CmdBindOutName:
 		if cp.stmt != nil {
 			cp.currentBindName = string(ns.Payload)
@@ -257,7 +278,7 @@ outloop:
 				buffer.Write(ns.Payload)
 				cp.currentBindName = buffer.String()
 			}
-			if cp.bindVars[cp.currentBindName] == nil {
+			if cp.bindVars[cp.currentBindName] == nil && cp.currentBindName != LAST_INSERT_ID_BIND_OUT_NAME {
 				//
 				// @TODO a bindname not in the query.
 				//
@@ -267,6 +288,9 @@ outloop:
 				err = fmt.Errorf("bindname not found in query: %s", cp.currentBindName)
 				cp.calExecErr("Bind error", cp.currentBindName)
 				break
+			}
+			if cp.currentBindName == LAST_INSERT_ID_BIND_OUT_NAME {
+				cp.bindVars[cp.currentBindName] = &(BindValue{index: 5000, name: LAST_INSERT_ID_BIND_OUT_NAME, valid: false, btype: btUnknown})
 			}
 			if ns.Cmd == common.CmdBindName {
 				cp.bindVars[cp.currentBindName].btype = btIn
@@ -350,6 +374,9 @@ outloop:
 				cp.bindOuts = make([]string, cp.numBindOuts)
 			}
 			curbindout := 0
+			if _,ok := cp.bindVars[LAST_INSERT_ID_BIND_OUT_NAME]; ok {
+				cp.sendLastInsertId = true
+			}
 			for i := 0; i < len(cp.bindPos); i++ {
 				key := cp.bindPos[i]
 				val := cp.bindVars[key]
@@ -430,6 +457,23 @@ outloop:
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, "exe row", rowcnt)
 				}
+
+                               lastId, err := cp.result.LastInsertId()
+                               if err != nil {
+                                       if logger.GetLogger().V(logger.Debug) {
+                                               logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error(), "sendLastInsertId:",cp.sendLastInsertId)
+                                       }
+                               } else {
+                                       // have last insert id
+                                       if cp.sendLastInsertId {
+                                               cp.bindOuts[0] = fmt.Sprintf("%d", lastId)
+                                               if logger.GetLogger().V(logger.Debug) {
+                                                       logger.GetLogger().Log(logger.Debug, "LastInsertId() bindOut:", lastId)
+                                               }
+                                       }
+                               }
+
+
 				sz := 2
 				if len(cp.bindOuts) > 0 {
 					sz++
@@ -498,7 +542,16 @@ outloop:
 				}
 			}
 		} else {
-			if cp.inTrans {
+			if cp.calExecTxn == nil {
+				// for mysql begin/start transaction
+				// exec already done instead of prepare
+				nss := make([]*netstring.Netstring, 2)
+				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
+				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows
+				// no bind outs
+				resns := netstring.NewNetstringEmbedded(nss)
+				cp.eor(common.EORInTransaction, resns)
+			} else if cp.inTrans {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
 				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
@@ -734,7 +787,8 @@ func (cp *CmdProcessor) InitDB() error {
 	cp.db.SetMaxOpenConns(1)
 
 	//
-	cp.sqlParser, err = common.NewRegexSQLParser()
+	// cp.sqlParser, err = common.NewRegexSQLParser()
+	cp.sqlParser, err = cp.adapter.MakeSqlParser()
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, "bindname regex complie:", err.Error())
@@ -754,22 +808,40 @@ func (cp *CmdProcessor) InitDB() error {
 }
 
 func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
-	if (code == common.EORFree) && cp.moreIncomingRequests() {
-		code = common.EORMoreIncomingRequests
+	if code == common.EORFree {
+		if cp.moreIncomingRequests() {
+			code = common.EORMoreIncomingRequests
+		} else {
+			if cp.rqId == cp.rqIdEORFree {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "EOR free again, rqId:", cp.rqId)
+				}
+				calevt := cal.NewCalEvent("ERROR", "EOR_FREE_AGAIN", cal.TransError, "")
+				calevt.Completed()
+				return errors.New("EOR_FREE_AGAIN")
+			}
+			if cp.calSessionTxn != nil {
+				cp.calSessionTxn.Completed()
+				cp.calSessionTxn = nil
+			}
+			cp.rqIdEORFree = cp.rqId
+			cp.dedicated = false
+		}
+
 	}
-	if (code == common.EORFree) && (cp.calSessionTxn != nil) {
-		cp.calSessionTxn.Completed()
-		cp.calSessionTxn = nil
-	}
-	var payload []byte
+
+	datalen := 0
 	if ns != nil {
-		payload = make([]byte, len(ns.Serialized)+1 /*code*/ +2 /*rqId*/)
-		payload[0] = byte('0' + code)
-		payload[1] = byte(cp.rqId >> 8)
-		payload[2] = byte(cp.rqId & 0xFF)
-		copy(payload[3:], ns.Serialized)
-	} else {
-		payload = []byte{byte('0' + code), byte(cp.rqId >> 8), byte(cp.rqId & 0xFF)}
+		datalen = len(ns.Serialized)
+	}
+	payload := make([]byte, 1 /*code*/ +4 /*rqId*/ +datalen)
+	payload[0] = byte('0' + code)
+	payload[1] = byte((cp.rqId & 0xFF000000) >> 24)
+	payload[2] = byte((cp.rqId & 0x00FF0000) >> 16)
+	payload[3] = byte((cp.rqId & 0x0000FF00) >> 8)
+	payload[4] = byte(cp.rqId & 0x000000FF)
+	if datalen != 0 {
+		copy(payload[5:], ns.Serialized)
 	}
 	cp.heartbeat = true
 	return WriteAll(cp.SocketOut, netstring.NewNetstringFrom(common.CmdEOR, payload))

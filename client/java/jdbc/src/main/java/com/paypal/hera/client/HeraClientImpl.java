@@ -396,6 +396,10 @@ public class HeraClientImpl implements HeraClient{
 		}
 		return columnMeta;
 	} 	
+
+	public boolean packetHasMoreData() {
+		return response.hasNext();
+	}
 	
 	public void execDML(boolean _add_commit) throws SQLException {
 		if (LOGGER.isDebugEnabled())
@@ -812,13 +816,22 @@ public class HeraClientImpl implements HeraClient{
 	}
 
 	@Override
-	public void ping() throws HeraExceptionBase {
+	public void ping(int tmo) throws HeraExceptionBase {
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::sendPing()");
 		os.add(HeraConstants.SERVER_PING_COMMAND, "".getBytes());
 		try {
 			os.flush();
+			int oldTmo = 0;
+			if (tmo > 0) {
+				oldTmo = conn.getSoTimeout();
+				conn.setSoTimeout(tmo);
+			}
 			NetStringObj resp = getResponse("HERA_CLIENT_PING");
+			// restore the timeout
+			if (tmo > 0) {
+				conn.setSoTimeout(oldTmo);
+			}
 			if (resp.getCommand() != HeraConstants.SERVER_ALIVE){
 				throw new HeraClientException("HeraClient::sendPing(): Error " + resp.getCommand());
 			}

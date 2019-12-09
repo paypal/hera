@@ -96,7 +96,6 @@ public class BatchTest {
 		props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
-		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
 		// determine database server

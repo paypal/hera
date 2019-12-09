@@ -19,8 +19,9 @@ package common
 
 // Internal commands between worker and proxy
 const (
-	CmdControlMsg = 501
-	CmdEOR        = 502 // end of response
+	CmdControlMsg   = 501
+	CmdEOR          = 502 // end of response
+	CmdInterruptMsg = 503 // sent by mux to worker to interrupt the running request
 )
 
 // EOR codes
