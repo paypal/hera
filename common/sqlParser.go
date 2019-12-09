@@ -28,11 +28,13 @@ import (
 type SQLParser interface {
 	IsRead(string) bool
 	Parse(sql string) (isSelect bool, transaction bool)
+	MustExecInsteadOfPrepare(sql string) (bool)
 }
 
 type regexSQLParser struct {
 	matcher          *regexp.Regexp
 	matcherForUpdate *regexp.Regexp
+	matcherStartTransaction *regexp.Regexp
 }
 
 type dummyParser struct {
@@ -42,6 +44,10 @@ type dummyParser struct {
 func NewRegexSQLParser() (SQLParser, error) {
 	parser := &regexSQLParser{}
 	var err error
+	parser.matcherStartTransaction, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*start \\s*transaction")
+	if err != nil {
+		return nil, err
+	}
 	parser.matcher, err = regexp.Compile("(?i)^\\s*(/\\*.*\\*/)*\\s*select\\s+")
 	if err != nil {
 		return nil, err
@@ -51,6 +57,10 @@ func NewRegexSQLParser() (SQLParser, error) {
 		return nil, err
 	}
 	return parser, nil
+}
+
+func (parser *regexSQLParser) MustExecInsteadOfPrepare(sql string) bool {
+	return parser.matcherStartTransaction.MatchString(sql)
 }
 
 // IsRead tells is the SQL is doing a read, basically a SELECT but not a SELECT ... FOR UPDATE or nextval
@@ -85,6 +95,10 @@ func NewDummyParser() SQLParser {
 	return &dummyParser{}
 }
 
+func (parser *dummyParser) MustExecInsteadOfPrepare(sql string) bool {
+	return false
+}
+
 func (parser *dummyParser) IsRead(sql string) bool {
 	return false
 }
@@ -92,3 +106,7 @@ func (parser *dummyParser) IsRead(sql string) bool {
 func (parser *dummyParser) Parse(sql string) (bool, bool) {
 	return false, false
 }
+
+
+
+

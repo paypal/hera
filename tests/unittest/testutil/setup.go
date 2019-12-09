@@ -85,6 +85,9 @@ func (m *mux) setupConfig() error {
 	// opscfg
 	m.appcfg["opscfg.hera.server.max_connections"] = m.opscfg["opscfg.default.server.max_connections"]
 	m.appcfg["opscfg.hera.server.log_level"] = m.opscfg["opscfg.default.server.log_level"]
+	if m.wType != OracleWorker {
+		m.appcfg["child.executable"] = "mysqlworker"
+	}
 	err := createCfg(m.appcfg, "hera")
 	if err != nil {
 		return err

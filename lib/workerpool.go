@@ -122,7 +122,7 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed starting worker: ", er)
 		}
-		return er
+		panic(er)
 	}
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "worker started type ", pool.Type, " id", worker.ID, " instid", pool.InstID, " shardid", pool.ShardID)

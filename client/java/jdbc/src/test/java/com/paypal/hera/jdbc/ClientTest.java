@@ -90,7 +90,6 @@ public class ClientTest {
 		props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
-		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
 		// determine database server
@@ -1720,7 +1719,7 @@ public class ClientTest {
 			HeraConnection heraConn = (HeraConnection)dbConn;
 			HeraClient heraClient = heraConn.getHeraClient();
 			long start = System.currentTimeMillis();
-			heraClient.ping();
+			heraClient.ping(0);
 			System.out.println("ping took (ms):" + (System.currentTimeMillis() - start));
 
 		} catch (Exception e) {
@@ -1744,4 +1743,28 @@ public class ClientTest {
 			
 		}
 	}
+	
+	@Test
+	public void test_isValid_connection() throws IOException, SQLException {
+		try {
+			Properties props = new Properties();
+			Connection dbConn2 = DriverManager.getConnection("jdbc:hera:" + host, props);
+			Assert.assertTrue("isValid(0) - no timeout", dbConn2.isValid(0));
+			Assert.assertTrue("isValid(10) - 10 s timeout", dbConn2.isValid(10));
+			dbConn2.close();
+			Assert.assertFalse("isValid(0) false after connection is closed", dbConn2.isValid(0));
+			
+			// recreate the connection
+			dbConn2 = DriverManager.getConnection("jdbc:hera:" + host, props);
+			Assert.assertTrue("isValid(0) - no timeout, re-created connection", dbConn2.isValid(0));
+			// close the socket from under the JDBC connection
+			HeraClient heraClient = ((HeraConnection)dbConn2).getHeraClient();
+			heraClient.close();
+			// this time isValid() will attempt to send the ping, over a stale connection
+			Assert.assertFalse("isValid(0) false after connection got stale", dbConn2.isValid(0));
+		} catch (Exception e) {
+			Assert.assertTrue("expect no exception", false);
+		}
+	}
+	
 }
