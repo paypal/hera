@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.paypal.com/AppDataServices/mux/tests/unittest/testutil"
-	"github.paypal.com/AppDataServices/mux/utility/logger"
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"testing"
 	"time"
@@ -49,7 +49,7 @@ func TestMysqlAutocommit(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMysqlAutocommit begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	shard := 0
-	db, err := sql.Open("occloop", fmt.Sprintf("%d:0:0", shard))
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -99,9 +99,11 @@ func TestMysqlAutocommit(t *testing.T) {
 	if getRows(2, conn) != 1 {
 		t.Fatalf("exp 1 row id2")
 	}
+	/* hera blends Oracle implicit transaction starts
+	so they must be committed to be visible.
 	if getRows(2, conn2) != 1 {
 		t.Fatalf("exp 1 row id2 conn2")
-	}
+	} // */
 
 	// in txn, other conn sees after commit
 	tx, _ = conn.BeginTx(ctx, nil)
