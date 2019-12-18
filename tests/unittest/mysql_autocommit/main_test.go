@@ -107,7 +107,7 @@ func TestMysqlAutocommit(t *testing.T) {
 
 	// in txn, other conn sees after commit
 	tx, _ = conn.BeginTx(ctx, nil)
-	_/*result*/, err = tx.ExecContext(ctx, "begin /* start transaction */")
+	_/*result*/, err = tx.ExecContext(ctx, "start transaction")
 	if err != nil {
 		t.Fatalf("begin/start txn statement issue %s", err.Error())
 	}
