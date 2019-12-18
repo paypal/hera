@@ -103,6 +103,7 @@ type CmdProcessor struct {
 	// prepared statement yet to be executed.
 	//
 	stmt *sql.Stmt
+	didExecAtPrepare bool
 	//
 	// tells if the current SQL is a query which returns result set (i.e. SELECT)
 	//
@@ -244,7 +245,12 @@ outloop:
 			cp.stmt.Close()
 			cp.stmt = nil
 		}
+		cp.didExecAtPrepare = false
 		if cp.sqlParser.MustExecInsteadOfPrepare(sqlQuery) {
+			cp.didExecAtPrepare = true
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "didExecAtPrepare: exec'ing at prepare")
+			}
 			_, err = cp.tx.Exec(sqlQuery)
 			cp.calExecTxn.AddDataStr("directExec","t")
 			cp.calExecTxn.Completed()
@@ -542,9 +548,12 @@ outloop:
 				}
 			}
 		} else {
-			if cp.calExecTxn == nil {
+			if cp.didExecAtPrepare {
 				// for mysql begin/start transaction
 				// exec already done instead of prepare
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "didExecAtPrepare exec skip since exec'd at prepare")
+				}
 				nss := make([]*netstring.Netstring, 2)
 				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
 				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows

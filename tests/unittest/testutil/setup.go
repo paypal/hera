@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
