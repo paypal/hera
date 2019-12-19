@@ -35,7 +35,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["rac_sql_interval"] = "0"
-	appcfg["readonly_children_pct"] = "50"
+	//appcfg["readonly_children_pct"] = "50"
         appcfg["request_backlog_timeout"] = "6000"
         appcfg["opscfg.default.server.saturation_recover_threshold"] = "0"
         appcfg["opscfg.default.server.saturation_recover_throttle_rate"] = "80" //Killing interval = 1000/(3*80) = 416ms

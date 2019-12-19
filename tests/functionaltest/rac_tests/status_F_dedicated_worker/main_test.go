@@ -49,9 +49,11 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 }
 
 func setupDb() error {
-	 testutil.RunDML("DROP TABLE IF EXISTS hera_maint")
+	testutil.RunDML("DROP TABLE IF EXISTS hera_maint")
         err := testutil.RunDML("CREATE TABLE hera_maint (MACHINE varchar(512) not null, INST_ID int, MODULE VARCHAR(128), STATUS VARCHAR(1), STATUS_TIME INT, REMARKS varchar(64))")
-        if err != nil {
+	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_2")
+        err1 := testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
+        if (err != nil || err1 != nil) {
             return err
         }
         return nil
@@ -128,8 +130,8 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 
 
         fmt.Println ("Now commit the changes, expected 2 workers to be restarted");
-        time.Sleep(1500 * time.Millisecond)
 	err = tx.Commit()
+        time.Sleep(2000 * time.Millisecond)
         if err != nil {
                 t.Fatalf("Error commit %s\n", err.Error())
         }
