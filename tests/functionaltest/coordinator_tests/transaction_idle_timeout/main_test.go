@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 	//"github.com/paypal/hera/client/gosqldriver"
-        _"github.com/paypal/hera/client/gosqldriver/tcp"
+        //_"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -40,7 +40,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
         appcfg["opscfg.default.server.idle_timeout_ms"] = "3000"
         appcfg["opscfg.default.server.transaction_idle_timeout_ms"] = "5000"
-	//appcfg["child.executable"] = "mysqlworker"
+	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
