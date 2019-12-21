@@ -115,15 +115,16 @@ func TestSaturationRecover(t *testing.T) {
 	fmt.Println ("Since we have only 3 workers, saturation will be kicked in to kill long running queries")
 
 	fmt.Println ("Verify BKLG & bklg_timeout events")
-	if ( testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log") < 2) {
+	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	if ( count < 2) {
             t.Fatalf ("Error: expected 2 RECOVERED_SATURATION_RECOVERED events");
         }
-        if ( testutil.RegexCountFile ("WORKER.*recoverworker", "cal.log") < 1) {
-            t.Fatalf ("Error: expected worker recover  event");
+        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < count ) {
+            t.Fatalf ("Error: expected recover  event");
         }
 
 	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*saturation kill") < 1) {
+        if ( testutil.RegexCount("error to client.*saturation kill") < count) {
 	   t.Fatalf ("Error: should get saturation kill error");
 	}
 

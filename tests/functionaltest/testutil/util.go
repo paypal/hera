@@ -172,6 +172,42 @@ func RunDML1(dml string) error {
         return nil
 }
 
+func PopulateShardMap(max_scuttle int) error {
+        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
+        if err != nil {
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        // cancel must be called before conn.Close()
+        defer cancel()
+        // cleanup and insert one row in the table
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                return err
+        }
+        defer conn.Close()
+        tx, _ := conn.BeginTx(ctx, nil)
+        for x := 0; x < max_scuttle; x++ {
+	    dml := fmt.Sprint ("INSERT INTO hera_shard_map VALUES (", x, ", ",  x % 5, ",'Y','Y','Y','Initial')")
+            stmt, _ := tx.PrepareContext(ctx, dml)
+       	    defer stmt.Close()
+            _, err = stmt.Exec()
+	}
+        if err != nil {
+                return err
+        }
+        err = tx.Commit()
+        if err != nil {
+                return err
+        }
+
+        //stmt.Close()
+        return nil
+}
+
 func RunDMLCommitLater(dml string, wait_second int) error {
         hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -291,9 +327,6 @@ func SetRacNodeStatus1 (status string, module string, diff_time int64)  error {
         return nil
 
 }
-
-
-
 
 
 func RegexCount(regex string) int {

@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	//"github.com/paypal/hera/client/gosqldriver"
         _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -22,8 +21,6 @@ export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
 export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
 export DB_DATASOURCE=$TWO_TASK
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
 */
 
 var mx testutil.Mux
@@ -123,6 +120,11 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 		 t.Fatalf ("Error: should have Rac maint activating");
         }
 
+        fmt.Println ("Verify CAL log for RACMAINT events when F command is detected");
+        if (testutil.RegexCountFile ( "E.*RACMAINT.*F.*0", "cal.log") != 1 ) {
+		t.Fatalf ("Error: should have 2 Rac maint event");
+        }
+
 	fmt.Println ("Since the transaction is not completed, only 1 worker is restarted")
 	if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 1) {
                  t.Fatalf ("Error: should have 1 'Lifespan exceeded, terminate' in log");
@@ -136,17 +138,11 @@ func TestStatusFDedicatedWorker(t *testing.T) {
                 t.Fatalf("Error commit %s\n", err.Error())
         }
 
-        fmt.Println ("Verify CAL log for RAC events");
-        if (testutil.RegexCountFile ( "E.*RACMAINT.*F.*0", "cal.log") != 2 ) {
-		t.Fatalf ("Error: should have 2 Rac maint event");
-        }
-
-        time.Sleep(2500 * time.Millisecond)
+        time.Sleep(2000 * time.Millisecond)
         fmt.Println ("Verify worker retarted")
         if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 2) {
 		 t.Fatalf ("Error: should have 2 'Lifespan exceeded, terminate' in log");
         }
-
 
         fmt.Println ("Verify RAC_ID and DB_UNAME cal event")
         if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") != 2) {
