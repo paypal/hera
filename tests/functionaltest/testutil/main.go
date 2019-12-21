@@ -54,6 +54,19 @@ func saveLogs() {
 	}
 }
 
+func DoDefaultValidation (t *testing.T) {
+    fmt.Printf ("At DoDefaultValidation")
+    c1 := RegexCount ( "panic")
+    if c1 > 0 {
+        t.Fatalf ("Error: PANIC FOUND !!! PLEASE CHECK!!")
+    }
+    c2 := RegexCount ("signal 11");
+    if c2 > 0 {
+        t.Fatalf ("Error: SIGNAL 11 FOUND !!! PLEASE CHECK!!")
+    }
+
+}
+
 func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 	localFolder, _ = os.Getwd()
 	err := setup(cfg)

@@ -159,6 +159,7 @@ func (m *mux) cleanupConfig() error {
 func MakeMysql(dockerName string, dbName string) (ip string) {
 	CleanMysql(dockerName)
 
+	//Commented out temporarily so we don't have to run docker all the time
 	cmd:=exec.Command("docker","run","--name",dockerName,"-e","MYSQL_ROOT_PASSWORD=1-testDb","-e","MYSQL_DATABASE="+dbName,"-d","mysql:latest")
 	cmd.Run()
 
@@ -281,6 +282,14 @@ func (m *mux) StartServer() error {
 		} else if xMysql == "auto" {
 			ip := MakeMysql("mysql22", "heratestdb")
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
+			twoTask := os.Getenv("TWO_TASK")
+        		os.Setenv ("TWO_TASK_0", twoTask)
+        		os.Setenv ("TWO_TASK_1", twoTask)
+			twoTask1 := os.Getenv("TWO_TASK")
+			fmt.Println ("TWO_TASK_1: ", twoTask1)
+        		os.Setenv ("TWO_TASK_2", twoTask)
+        		os.Setenv ("TWO_TASK_3", twoTask)
+        		os.Setenv ("TWO_TASK_4", twoTask)
 			os.Setenv("TWO_TASK_READ", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_STANDBY0", "tcp("+ip+":3306)/heratestdb")
 		}
