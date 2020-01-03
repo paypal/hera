@@ -36,7 +36,7 @@ var tableName string
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg := make(map[string]string)
-	appcfg["x-mysql"] = "manual" // disable test framework spawning mysql server
+	// appcfg["x-mysql"] = "manual" // disable test framework spawning mysql server
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
