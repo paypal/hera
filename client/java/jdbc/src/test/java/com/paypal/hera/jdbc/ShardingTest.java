@@ -48,6 +48,7 @@ public class ShardingTest {
 
 	@Before
 	public void setUp() throws Exception {
+		Util.makeAndStartHeraMux(null);
 		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
 		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
 		HeraClientConfigHolder.clear();
@@ -58,6 +59,7 @@ public class ShardingTest {
 		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
 		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
+		Util.runDml(dbConn, "create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))");
 
 		// determine database server
 		HeraConnection hera = (HeraConnection)dbConn;

@@ -82,6 +82,7 @@ public class ClientTest {
 
 	@BeforeClass
 	public static void setUp() throws Exception {
+		Util.makeAndStartHeraMux(null);
 		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
 		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
 		HeraClientConfigHolder.clear();
@@ -271,14 +272,24 @@ public class ClientTest {
 		Assert.assertTrue("Insert row", st.executeUpdate("insert into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + ROWS) + "," + sINT_VAL2 + ",'abcd', 0, 47.42, null, null, null)") == 1);
 		dbConn.commit();
 		
-		PreparedStatement pst = dbConn.prepareStatement("select int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+		PreparedStatement pst;
+
+		// run first with binding just one value
+		pst = dbConn.prepareStatement("select int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
 		pst.setInt(1, iINT_VAL1);
+		boolean gotExpectedErr = false;
 		try {
 			pst.executeQuery();
-//			Assert.fail("Second param not bound");
 		} catch(SQLException e) {
-			Assert.assertTrue("Second param not bound", true);
+			gotExpectedErr = true;
 		}
+		Assert.assertTrue("got expected unbound param err", gotExpectedErr); 
+		dbConn.close();
+		dbConn = Util.makeDbConn(); // reconnect after error
+
+		// remake statement, do both binds
+		pst = dbConn.prepareStatement("select int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+		pst.setInt(1, iINT_VAL1);
 		pst.setString(2, "abcd");
 		pst.setFetchSize(0);
 		ResultSet rs = pst.executeQuery();
@@ -313,7 +324,7 @@ public class ClientTest {
 		while (rs.next()) 
 			rows++;
 		Assert.assertTrue("rows #", rows == ROWS);
-		cleanTable(st, sID_START, 20, true);
+		cleanTable(dbConn.createStatement(), sID_START, 20, true);
 	}	
 
 	@Test
