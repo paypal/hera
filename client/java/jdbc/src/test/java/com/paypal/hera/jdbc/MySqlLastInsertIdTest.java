@@ -36,34 +36,11 @@ public class MySqlLastInsertIdTest {
 	private Connection dbConn;
 	private String host;
 	private boolean isMySQL;
-
-	public HeraConnection makeDbConn() {
-		try {
-			host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
-			HeraClientConfigHolder.clear();
-			Properties props = new Properties();
-			props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
-			props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
-			props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
-			props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
-			return (HeraConnection)DriverManager.getConnection("jdbc:hera:" + host, props);
-		} catch (Throwable t) {
-			throw new RuntimeException(t);
-		}
-	}
 	
 	@Before
 	public void setUp() throws Exception {
-		/* host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
-		HeraClientConfigHolder.clear();
-		Properties props = new Properties();
-		props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
-		props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
-		props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
-		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
-		Class.forName("com.paypal.hera.jdbc.HeraDriver");
-		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props); // */
-		dbConn = makeDbConn();
+		Util.makeAndStartHeraMux(null);
+		dbConn = Util.makeDbConn();
 
 		// determine database server
 		HeraConnection hera = (HeraConnection)dbConn;
