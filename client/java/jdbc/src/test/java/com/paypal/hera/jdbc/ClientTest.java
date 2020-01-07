@@ -1715,7 +1715,7 @@ public class ClientTest {
 	public void test_execute_autoCommit_exception() throws IOException, SQLException {
 		try {
 			HeraClientConfigHolder config = new HeraClientConfigHolder(new Properties());
-			HeraClientImpl heraClient = (HeraClientImpl) HeraClientFactory.createClient(config, "stage2z3414.qa.paypal.com", "10101");
+			HeraClientImpl heraClient = (HeraClientImpl) HeraClientFactory.createClient(config, "localhost", "11111");
 			Method m = heraClient.getClass().getDeclaredMethod("setServerLogicalName", String.class);
 			m.setAccessible(true);		  
 			m.invoke(heraClient, new String("foo")); 			
