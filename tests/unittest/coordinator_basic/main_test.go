@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,10 @@ func before() error {
 	tableName = os.Getenv("TABLE_NAME")
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
+	}
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		// mysql
+		testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
 	}
 	return nil
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 
-	//	"fmt"
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,7 +41,40 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	return appcfg, opscfg, testutil.OracleWorker
+	return appcfg, opscfg, testutil.MySQLWorker
+}
+
+func setupShardMap(t *testing.T) {
+        twoTask := os.Getenv("TWO_TASK")
+        if !strings.HasPrefix(twoTask, "tcp") {
+                // not mysql
+                return
+        }
+        shard := 0
+        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+        if err != nil {
+                t.Fatal("Error starting Mux:", err)
+                return
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        defer cancel()
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                t.Fatalf("Error getting connection %s\n", err.Error())
+        }
+        defer conn.Close()
+
+        testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+
+        for i := 0; i < 1024; i++ {
+		shard := 0
+		if i <= 8 {
+			shard = i%3
+		}
+                testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard ) )
+        }
 }
 
 func before() error {
@@ -48,6 +82,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
+        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+                // mysql
+                testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+        }
 	return nil
 }
 
@@ -57,7 +95,7 @@ func TestMain(m *testing.M) {
 
 func cleanup(ctx context.Context, conn *sql.Conn) error {
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*Cleanup*/delete "+tableName+" where id != :id")
+	stmt, _ := tx.PrepareContext(ctx, "/*Cleanup*/delete from "+tableName+" where id != :id")
 	_, err := stmt.Exec(sql.Named("id", -123))
 	if err != nil {
 		return err
@@ -67,6 +105,8 @@ func cleanup(ctx context.Context, conn *sql.Conn) error {
 }
 
 func TestShardingBasic(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestShardingBasic setup")
+	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname, _ := os.Hostname()
