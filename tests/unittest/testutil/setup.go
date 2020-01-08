@@ -184,13 +184,13 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 	os.Setenv("username", "root")
 	os.Setenv("password", "1-testDb")
 	q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
-	logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+	//logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
 	err := MysqlDirect(q, ipBuf.String(), dbName)
 	if err != nil {
 		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
 	}
 	q = "GRANT ALL PRIVILEGES ON "+dbName+" . * TO 'appuser'@'%';"
-	logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
+	//logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
 	err = MysqlDirect(q, ipBuf.String(), dbName)
 	if err != nil {
 		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
@@ -279,6 +279,9 @@ func (m *mux) StartServer() error {
 		} else if xMysql == "auto" {
 			ip := MakeMysql("mysql22", "heratestdb")
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("MYSQL_IP", ip)
 		}
 	}
 

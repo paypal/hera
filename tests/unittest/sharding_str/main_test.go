@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.paypal.com/AppDataServices/mux/tests/unittest/testutil"
-	"github.paypal.com/AppDataServices/mux/utility/logger"
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,7 +56,7 @@ func TestMain(m *testing.M) {
 /*
 export TWO_TASK_0=tcp(db.host..
 export TWO_TASK_1=tcp(db.host..
-create table occ_shard_map
+create table hera_shard_map
 (
     scuttle_id smallint not null,
     shard_id tinyint not null,
@@ -71,18 +72,18 @@ BEGIN
 DECLARE counter  INT;              
 SET     counter  = 0;              
 1_to_5_counter: WHILE counter < 1024 DO                          
-    insert into occ_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( counter, 0, 'Y', 'Y', 'Y' );
+    insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( counter, 0, 'Y', 'Y', 'Y' );
     SET counter = counter + 1;               
 END WHILE 1_to_5_counter;              
 END
 $$
 DELIMITER ;
-delete from occ_shard_map;
+delete from hera_shard_map;
 call populate_shard_map();
 
 
 and for oracle
-create table pypl_occ_shard_map
+create table hera_shard_map
 (
     scuttle_id Number not null,
     shard_id Number not null,
@@ -92,27 +93,54 @@ create table pypl_occ_shard_map
     remarks varchar2(500)
 );
 
-create unique index pypl_occ_shard_map_scuttle_pk on pypl_occ_shard_map(scuttle_id);
-create unique index pypl_shard_map_scttle_shard_uk on pypl_occ_shard_map(scuttle_id,shard_id);
-
-ALTER TABLE pypl_occ_shard_map ADD CONSTRAINT check_status CHECK (status IN ('Y','N' ));
-ALTER TABLE pypl_occ_shard_map ADD CONSTRAINT check_scuttle_id check (scuttle_id between 0 and 1023);
-
 BEGIN
    FOR i IN 0..1023 LOOP
-      INSERT INTO pypl_occ_shard_map VALUES (i,0,'Y','Y','Y','Initial');
+      INSERT INTO hera_shard_map VALUES (i,0,'Y','Y','Y','Initial');
    END LOOP;
    COMMIT;
 END;
 /
 */
+func setupShardMap(t *testing.T) {
+	twoTask := os.Getenv("TWO_TASK")
+	if !strings.HasPrefix(twoTask, "tcp") {
+		// not mysql
+		return
+	}
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	defer conn.Close()
+
+	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
+	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+
+	for i := 0; i < 1024; i++ {
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 0, 'Y', 'Y', 'Y' )", i) )
+	}
+}
 
 func TestShardingStr(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestShardingStr function, now setting up shard map")
+	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+
 
 	// -1 as the shard does a reset so all the automatic things should work instead of assigning to a specific shard
 	shard := -1
-	db, err := sql.Open("occloop", fmt.Sprintf("%d:0:0", shard))
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -140,14 +168,14 @@ func TestShardingStr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error exec %s %s\n", sqlDesc, err.Error())
 	}
-	if testutil.RegexCount("bucket = 786") != 1 {
+	if testutil.RegexCountFile("bucket = 786", "occ.log") != 1 {
 		t.Fatalf("Error did not map to proper scuttle bucket")
 	}
 	_, err = stmt.Exec(sql.Named("email_addr", "FutureStringWithMod1024"), sql.Named("note", "not an email"))
 	if err != nil {
 		t.Fatalf("Error exec2 %s %s\n", sqlDesc, err.Error())
 	}
-	if testutil.RegexCount("bucket = 362") != 1 {
+	if testutil.RegexCountFile("bucket = 362", "occ.log") != 1 {
 		t.Fatalf("Error2 did not map to proper scuttle bucket")
 	}
 	err = tx.Commit()
