@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	return appcfg, opscfg, testutil.OracleWorker
+	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func before() error {
@@ -51,6 +52,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
+        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
+		// with testutil.RunDML, extra log line throws off test
+		testutil.MysqlDirect("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))", os.Getenv("MYSQL_IP"), "heratestdb")
+        }
 	return nil
 }
 
@@ -77,7 +82,7 @@ func TestCoordinatorRqId(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/delete "+tableName)
+	stmt, _ := tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/delete from "+tableName)
 	_, err = stmt.Exec()
 	if err != nil {
 		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
