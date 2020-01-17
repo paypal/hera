@@ -26,17 +26,27 @@ const(
   KEYWORD_PAREN_OPEN = "("
   KEYWORD_PAREN_CLOSE = ")"
   KEYWORD_COMMA = ","
+  KEYWORD_ON = "ON"
+  KEYWORD_WHERE = "WHERE"
 )
 
+var tokenized []string
+var currentPos int
+var nextPos int
+var nextNxPos int
+
 // TableNameParser will remove comment from the sql string and return keyword after FROM or JOIN
-func TableNameParser(sql string) []string{
+func TableNameParser(sql string) []string {
   var result []string
-  tokenized := tokenizeSQL(removeComments(sql))
-  for i := range tokenized {
-    if(strings.Compare(tokenized[i], "FROM") == 0 || strings.Compare(tokenized[i], "JOIN") == 0){
+  tokenized = tokenizeSQL(removeComments(sql))
+  for currentPos := range tokenized {
+    if(strings.Compare(tokenized[currentPos], "FROM") == 0 || strings.Compare(tokenized[currentPos], "JOIN") == 0){
       //grabbing next token by FROM or JOIN
       // ignoring nested query
-      if(strings.Contains(tokenized[i+1], KEYWORD_PAREN_OPEN) == true){
+      nextPos = currentPos  +1
+      nextNxPos = nextPos + 1
+
+      if(strings.Contains(tokenized[nextPos], KEYWORD_PAREN_OPEN) == true){
         continue
       }
       // processing multiple table names after FROM keyword w/ or w/o alias
@@ -51,6 +61,26 @@ func TableNameParser(sql string) []string{
     }
   }
   return result
+}
+
+func checkMultipleTableEntry(position int) bool{
+  // Check for ','
+  
+
+}
+
+func getClosingParenIdx(openPos int) int{
+  closePos := openPos
+  var counter int = 1
+  while(counter > 0){
+    closePos = closePos + 1
+    if(strings.Compare(tokenized[closePos], KEYWORD_PAREN_OPEN) == 0){
+      counter = counter +1
+    } else if (strings.Compare(tokenized[closePos], KEYWORD_PAREN_CLOSE) == 0){
+      counter = counter -1
+    }
+  }
+  return closePos
 }
 
 // Remove the /* */ comments
@@ -69,4 +99,8 @@ func Split(r rune) bool {
 
 func shouldProcessMultipleTables(nextToken string) bool{
   return nextToken != "" && strings.Contains(nextToken, KEYWORD_COMMA)
+}
+
+func remove unwantedParenthesis(sql string) string{
+
 }

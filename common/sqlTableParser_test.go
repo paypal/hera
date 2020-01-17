@@ -20,6 +20,7 @@ package common
 import (
   "testing"
   "strings"
+  "fmt"
 )
 
 const(
@@ -30,6 +31,7 @@ const(
   sqlStr4 = "SELECT /* JoinedMap.FIND_ACTIVE_PRIMARY_ACCOUNT_PARTY_RELATIONSHIP.1 */ AP.RELATIONSHIP, AP.STATUS, AP.ACCOUNT_NUMBER FROM ACCOUNT AP, ACCOUNT_PARTY_PRIMARY APP WHERE AP.ACCOUNT_NUMBER = :account_number AND AP.RELATIONSHIP = :relationship_type AND (APP.ACCOUNT_NUMBER = AP.ACCOUNT_NUMBER) ORDER BY AP.ID DESC"
   sqlStr5 = "SELECT /* JoinedMap.FIND_ACCOUNT_PARTY_RELATIONSHIPS.1 */ APP.UPDATE_VERSION FROM ACCOUNT_PARTY_PRIMARY APP, (    SELECT AP.RELATIONSHIP_TYPE, AP.UPDATE_VERSION FROM    (        SELECT AP.UPDATE_VERSION, rownum r__        FROM        (SELECT AP.UPDATE_VERSION FROM ACCOUNT_PARTY AP WHERE AP.ACCOUNT_NUMBER = :account_number AND AP.RELATIONSHIP_TYPE = :relationship_type ORDER BY AP.ID DESC        ) AP        WHERE rownum < :p3    ) AP    WHERE r__ >= :p4) AP WHERE (APP.ACCOUNT_NUMBER = AP.ACCOUNT_NUMBER)"
   sqlStr6 = "SELECT /* JoinedMap.FINDBYLAYERID.1 */ PCL.NAME, PCL.TYPE, PCL.ACTIVE_END_TIME, PCL.ACTIVE_START_TIME, PCL.ID, PCL.TIME_CREATED, PCL.TIME_UPDATED, PCL.UPDATE_VERSION, PCLP.PROD_CONFIG_PARAM_NAME, PCLP.VALUE, PCLP.PROD_CONFIG_LAYER_ID, PCLP.TIME_CREATED, PCLP.TIME_UPDATED, PCLP.UPDATE_VERSION, PCLPN.PROD_CONFIG_LAYER_NAME, PCLPN.PROD_CONFIG_LAYER_ID, PCLPN.TIME_CREATED FROM PROD_CONFIG_LAYER PCL LEFT JOIN ( PROD_CONFIG_LAYER_PARAM PCLP  ) ON PCL.ID = PCLP.PROD_CONFIG_LAYER_ID LEFT JOIN ( PROD_CONFIG_LAYER_PUBLIC_NAME PCLPN  ) ON PCL.ID = PCLPN.PROD_CONFIG_LAYER_ID WHERE PCL.ID = :id AND ((1 = 1))"
+  sqlStr7 = "SELECT hello FROM DUAL"
 )
 
 func TestRemoveComments(t *testing.T) {
@@ -84,4 +86,29 @@ func TestTableNameParserWithMultipleTablesWithNestedQuery(t *testing.T) {
     t.Error("Incorrect output from TestTableNameParserWithMultipleTablesWithNestedQuery:"+ output[0] + " " + output[1])
   }
   t.Log("----Done TestTableNameParserWithMultipleTablesWithNestedQuery")
+}
+
+func TestTableNameParserMultiJoinsQuery(t *testing.T) {
+  t.Log("++++Running TestTableNameParserMultiJoinsQuery")
+  output := TableNameParser(sqlStr6)
+  printOutput(output)
+  if strings.Compare(output[0], "PROD_CONFIG_LAYER") != 0 || strings.Compare(output[1], "PROD_CONFIG_LAYER_PARAM") != 0 || strings.Compare(output[2], "PROD_CONFIG_LAYER_PUBLIC_NAME") != 0{
+    t.Error("Incorrect output from TestTableNameParserMultiJoinsQuery:"+ output[0] + " " + output[1] + " " + output[2])
+  }
+  t.Log("----Done TestTableNameParserMultiJoinsQuery")
+}
+
+func TestTableNameParserDualQuery(t *testing.T) {
+  t.Log("++++Running TestTableNameParserDualQuery")
+  output := TableNameParser(sqlStr7)
+  if strings.Compare(output[0], "DUAL") != 0 {
+    t.Error("Incorrect output from TestTableNameParserDualQuery:"+ output[0])
+  }
+  t.Log("----Done TestTableNameParserDualQuery")
+}
+
+func printOutput(output []string){
+  for _, each := range output{
+    fmt.Println(each)
+  }
 }
