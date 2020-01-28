@@ -70,6 +70,8 @@ public class HeraClientImpl implements HeraClient{
 	private String serverLogicalName;
 	private String calLogFrequency;
 	private String heraHostName;
+	private boolean isFirstSQL;
+	//TODO: migrate stale conn impl from OpenDAK.
 
 	public HeraClientImpl(HeraClientConnection _conn, int _connTimeout, boolean _columnNamesEnabled, boolean _columnInfoEnabled) throws HeraExceptionBase{
 		conn = _conn;
@@ -850,6 +852,11 @@ public class HeraClientImpl implements HeraClient{
 		ConnectionMetaInfo connectionMetaInfo = new ConnectionMetaInfo();
 		connectionMetaInfo.setServerBoxName(heraHostName);
 		return connectionMetaInfo;
+	}
+
+	@Override
+	public void setFirstSQL(boolean isFirstSQL) {
+		this.isFirstSQL = isFirstSQL;
 	}
 
 }
