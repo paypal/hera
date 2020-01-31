@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * mappings, e.g. for the input sql:
  * select c.car_id, c.make, c.model,c.year from car c where c.car_id=:p1 
  * the mappings would be:
- * p1-->car_id
+ * p1--&lt;car_id
  * 
  * Please note, the output mapping could be a subset of all the available hera position
  * binding token mappings. The parsing would ignore some mapping cases of which 
@@ -65,10 +65,10 @@ public class HeraSqlTokenAnalyzer {
 	 * This token analysis phase takes care of parsing 'between' clause, for instance, 
 	 * select c.car_id, c.make, c.model,c.year from car c where c.car_id between :p1 and :p2
 	 * it would take the sql and append parsing result to the same
-	 * passed in map, e.g. in above example, p1->car_id, p2->car_id2
+	 * passed in map, e.g. in above example, p1-&lt;car_id, p2-&lt;car_id2
 	 * 
-	 * @param sql
-	 * @param mappings
+	 * @param sql Query text
+	 * @param mappings Of binds
 	 */
 	protected static void parseSQLBetween(String sql, Map<String, String> mappings){
 
@@ -108,8 +108,8 @@ public class HeraSqlTokenAnalyzer {
 	 * it would take the sql and append parsing result to the same
 	 * passed in map.
 	 * 
-	 * @param sql
-	 * @param mappings
+	 * @param sql to be parsed
+	 * @param mappings query binds
 	 */
 	protected static void parseSQLKVBinding(String sql, Map<String, String> mappings){
 
@@ -139,10 +139,10 @@ public class HeraSqlTokenAnalyzer {
 	 * This token analysis phase takes care of parsing insert statement, for instance, 
 	 * "insert into exp (id, name ) values (:p1, :p2 )"
 	 * it would take the sql and append parsing result to the same
-	 * passed in map, e.g. in above example, p1->id, p2->name
+	 * passed in map, e.g. in above example, p1-&lt;id, p2-&lt;name
 	 * 
-	 * @param sql
-	 * @param mappings
+	 * @param sql query needing parsing
+	 * @param mappings binds
 	 */
 	protected static void parseSQLValues(String sql, Map<String, String> mappings){
 
@@ -243,10 +243,10 @@ public class HeraSqlTokenAnalyzer {
 	 * This token analysis phase takes care of parsing 'in' clause, for instance, 
 	 * select c.car_id, c.make, c.model,c.year from car c where c.car_id in (:p1, :p2) 
 	 * it would take the sql and append parsing result to the same
-	 * passed in map, e.g. in above example, p1->car_id, p2->car_id2
+	 * passed in map, e.g. in above example, p1-&lt;car_id, p2-&lt;car_id2
 	 * 
-	 * @param sql
-	 * @param mappings
+	 * @param sql Parsable query
+	 * @param mappings Bind map
 	 */
 	protected static void parseSQLIn(String sql, Map<String, String> mappings){
 
@@ -292,18 +292,19 @@ public class HeraSqlTokenAnalyzer {
 	 * hera token parsing and analysis. It returns a map that contains the hera position 
 	 * binding token to its actual param name binding, for example:
 	 * "select id, name, price from product where id = :p1"
-	 * the output binding would be: "p1" ==> "id"
+	 * the output binding would be: "p1" ==&lt; "id"
 	 * 
 	 * Note:
-	 * <li>The returned map could contain only subset of all hera parameter names 
+	 * The returned map could contain only subset of all hera parameter names 
 	 * in a hera sql because some hera params are not possible to be used as 
-	 * sharding key, e.g. open end ">=" parameter. Token Analyszer would ignore 
+	 * sharding key, e.g. open end "&lt;=" parameter. Token Analyszer would ignore 
 	 * parsing those params for sake of efficiency and complexity. 
-	 * <li>The actual param names in the returned map don't have table alias 
+	 * 
+	 * The actual param names in the returned map don't have table alias 
 	 * prefix.
 	 * 
-	 * @param sql
-	 * @return
+	 * @param sql Query to parse
+	 * @return Bind name mapping
 	 */
 	public static Map<String, String> getHeraParamToActualParamNameBindings (String sql){
 
