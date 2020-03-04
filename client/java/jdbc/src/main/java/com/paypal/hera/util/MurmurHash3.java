@@ -43,7 +43,10 @@ public final class MurmurHash3 {
     return k;
   }
 
-  /** Gets a long from a byte buffer in little endian byte order. */
+  /** Gets a long from a byte buffer in little endian byte order. 
+  @param buf input
+  @param offset position to read
+  @return long value */
   public static final long getLongLittleEndian(byte[] buf, int offset) {
     return     ((long)buf[offset+7]    << 56)   // no mask needed
             | ((buf[offset+6] & 0xffL) << 48)
@@ -56,7 +59,12 @@ public final class MurmurHash3 {
   }
 
 
-  /** Returns the MurmurHash3_x86_32 hash. */
+  /** Returns the MurmurHash3_x86_32 hash. 
+  @param data input
+  @param offset starting point
+  @param len how much to read 
+  @param seed helps diversify starting points 
+  @return 32-bit hash */
   public static int murmurhash3_x86_32(byte[] data, int offset, int len, int seed) {
 
     final int c1 = 0xcc9e2d51;
@@ -112,6 +120,11 @@ public final class MurmurHash3 {
   /** Returns the MurmurHash3_x86_32 hash of the UTF-8 bytes of the String without actually encoding
    * the string to a temporary buffer.  This is more than 2x faster than hashing the result
    * of String.getBytes().
+   * @param data input
+   * @param offset starting point
+   * @param len how much to read
+   * @param seed diversify output
+   * @return 32-bit hash
    */
   public static int murmurhash3_x86_32(CharSequence data, int offset, int len, int seed) {
 
@@ -235,7 +248,12 @@ public final class MurmurHash3 {
   }
 
 
-  /** Returns the MurmurHash3_x64_128 hash, placing the result in "out". */
+  /** Returns the MurmurHash3_x64_128 hash, placing the result in "out". 
+  @param key 16-bytes in
+  @param offset position 
+  @param len how much to read
+  @param seed diversify output
+  @param out 128-bit hash */
   public static void murmurhash3_x64_128(byte[] key, int offset, int len, int seed, LongPair out) {
     // The original algorithm does have a 32 bit unsigned seed.
     // We have to mask to match the behavior of the unsigned types and prevent sign extension.
