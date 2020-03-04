@@ -7,9 +7,6 @@ import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 
-/*To better understand NetString, users of this file are asked to refer to
- * TODO: http://dev.paypal.com/wiki/JavaInfrastructure/NetstringUtility
- */
 /**
  * <p>NetStringObj class.</p>
  */
@@ -34,7 +31,7 @@ public final class NetStringObj {
      * <p>Constructor for NetStringObj.</p>
      *
      * @param command a long.
-     * @param nsobs an array of {@link com.paypal.infra.util.netstring.NetStringObj} objects.
+     * @param nsobs inner netstrings to encapsulate
      * @throws java.io.IOException if any.
      */
     public NetStringObj(long command, NetStringObj[] nsobs) throws IOException {
@@ -272,7 +269,7 @@ public final class NetStringObj {
      * Some NetString objects' data element is itself a netstring object. This is a convenience function
      * to return the data as an array of netstring objects.
      *
-     * @return an array of {@link com.paypal.infra.util.netstring.NetStringObj} objects.
+     * @return inner netstrings
      * @throws java.io.IOException if any.
      */
     public NetStringObj[] getDataAsNetStringObjects() throws IOException{

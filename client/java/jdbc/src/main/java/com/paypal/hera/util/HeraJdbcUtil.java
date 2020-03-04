@@ -476,7 +476,7 @@ public class HeraJdbcUtil {
 	/**
 	 * Convert an errorMessage to SQLErrorCode
 	 * 
-	 * @param message
+	 * @param errorMessage which needs parsing
 	 * @return SQLErrorCode. i.e. ORA-00942 
 	 */
 	public static String ErrorToSqlErrorCodeConverter (String errorMessage) {
@@ -502,7 +502,7 @@ public class HeraJdbcUtil {
 	/**
 	 * Convert an errorMessage to SQLState
 	 * 
-	 * @param message
+	 * @param errorMessage which needs conversion
 	 * @return SQLState and vendor code
 	 */
 	public static Pair<String, Integer> ErrorToSqlStateAndVendorCodeConverter (String errorMessage) {
@@ -529,7 +529,11 @@ public class HeraJdbcUtil {
 	•	1 means ORA error 1, which is unique violation
 	DB side would have row 1-3 and row 5 inserted. Including row 4 before insertion, DB side has row 1-5 after batch insert.
 	
-	This additional information is added only when #dml>1 and #dml errors > 0.
+	This additional information is added only when #dml&lt;1 and #dml errors &lt; 0.
+
+	@param errorMessage To be parsed
+	@param _num_queries Size of array to allocate and return
+	@return Array of counts or error codes
 	 */
 	public static int[] getArrayCounts(String errorMessage, int _num_queries) {
 		int[] counts = new int[_num_queries];
