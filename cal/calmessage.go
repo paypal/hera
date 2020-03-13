@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"github.com/paypal/hera/utility"
 	//"log"
 )
 
@@ -645,12 +646,19 @@ func (act *calActivity) reportAlreadyCompletedEvent(_func string, _arg string) {
 	event.Completed()
 }
 
-/**
- * @TODO
- */
-func (act *calActivity) SendSQLData(sqlQuery string) int64 {
-	var hash64 int64
-	return hash64
+func (act *calActivity) SendSQLData(sqlQuery string) uint32 {
+	hash32 := utility.GetSQLHash(sqlQuery)
+
+	var buf bytes.Buffer
+	buf.WriteString(calDollar)
+	buf.WriteString(fmt.Sprintf("%d", hash32))
+	buf.WriteString(calTab)
+	buf.WriteString(sqlQuery)
+	buf.WriteString(calEndOfLine)
+
+	act.writeData(buf.String())
+
+	return hash32
 }
 func (act *calActivity) isBacktraceEnabled() bool {
 	return false
