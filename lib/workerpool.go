@@ -357,10 +357,9 @@ func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *Work
 				logger.GetLogger().Log(logger.Debug, "backlog timeout. type:", pool.Type, ", instance:", pool.InstID)
 			}
 			//
-			// we are bailing out. but the waiting routine is still sleeping. a notify
-			// later is going to eventually wake that up. the sleeping routine writes
-			// to noone and release the lock. no resource deadlock or leaking.
+			// we are bailing out. but the waiting routine is still sleeping.
 			//
+			pool.poolCond.Signal() // try to jostle the waiting routine free
 			if longTo {
 				return nil, "", ErrBklgTimeout
 			}

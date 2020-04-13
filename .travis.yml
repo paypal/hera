@@ -1,6 +1,11 @@
 language: go
 env:
  - GO111MODULE=on
+#services:
+# - docker
 script: 
  - go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/worker/oracleworker
- - mvn install -f client/java/jdbc/pom.xml -Dmaven.test.skip=true
+ - go test github.com/paypal/hera/tests/unittest/coordinator_basic
+ - $GOPATH/src/github.com/paypal/hera/tests/unittest/testall.sh
+ - mvn install -f client/java/jdbc/pom.xml
+# -Dmaven.test.skip=true # if tests run too long, we can skip test and have a script skip the slow, less important ones

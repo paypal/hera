@@ -20,6 +20,7 @@ public class HeraDatabaseMetadata implements DatabaseMetaData {
 	}
 	/*** instead of throwing an exception, which will fail hibernate, we just log an debug info, only when at debug mode 
 	 *   logging in debug mode only so we will not impact performance during non-debug mode
+	 * @throws SQLException if not connected
 	 */
 	protected final void logNoImplementationInDebug() throws SQLException{
 		connection.checkOpened();

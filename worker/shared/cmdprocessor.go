@@ -235,6 +235,7 @@ outloop:
 		if cp.calSessionTxn == nil {
 			cp.calSessionTxn = cal.NewCalTransaction(cal.TransTypeAPI, cp.calSessionTxnName, cal.TransOK, "", cal.DefaultTGName)
 		}
+		cp.calSessionTxn.SendSQLData(string(ns.Payload))
 		cp.sqlHash = utility.GetSQLHash(string(ns.Payload))
 		cp.queryScope.SqlHash = fmt.Sprintf("%d", cp.sqlHash)
 		cp.calExecTxn = cal.NewCalTransaction(cal.TransTypeExec, fmt.Sprintf("%d", cp.sqlHash), cal.TransOK, "", cal.DefaultTGName)

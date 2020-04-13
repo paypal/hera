@@ -29,7 +29,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	return appcfg, opscfg, testutil.OracleWorker
+	//return appcfg, opscfg, testutil.OracleWorker
+	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func before() error {
