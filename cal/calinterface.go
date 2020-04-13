@@ -39,7 +39,7 @@ type Activity interface {
 	SetCurrentCalTxn(Transaction)
 	AddPoolStack()
 	SetParentStack(string, string, ...string)
-	SendSQLData(string) int64
+	SendSQLData(string) uint32
 	SetLossyRootTxnFlag()
 }
 

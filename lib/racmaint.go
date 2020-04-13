@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -44,9 +45,13 @@ type racAct struct {
 
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
+var curTime int64
+var hostName string
 
 // InitRacMaint initializes RAC maintenance, if enabled, by starting one goroutine racMaintMain per shard
 func InitRacMaint(cmdLineModuleName string) {
+	curTime = time.Now().Unix()
+	hostName, _ = os.Hostname()
 	interval := GetConfig().RacMaintReloadInterval
 	if interval > 0 {
 		for i := 0; i < GetConfig().NumOfShards; i++ {
@@ -69,11 +74,12 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	}
 	defer db.Close()
 	db.SetMaxIdleConns(0)
-	prev := make([]racCfg, MaxRacID, MaxRacID)
-	for i := 0; i < MaxRacID; i++ {
-		prev[i].inst = i + 1
+	prev := make([]racCfg, MaxRacID+1, MaxRacID+1)
+	for i := 0; i <= MaxRacID; i++ {
+		prev[i].inst = i
 		prev[i].status = "U"
 		prev[i].tm = 0
+		prev[i].module = ""
 	}
 	racSQL := fmt.Sprintf("/*shard=%d*/ SELECT inst_id, UPPER(status), status_time, UPPER(module) "+
 		"FROM %s_maint "+
@@ -136,12 +142,24 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	evt.Completed()
 	for rows.Next() {
 		row := racCfg{}
-		err = rows.Scan(&(row.inst), &(row.status), &(row.tm), &(row.module))
+		// use NullXYZ types for NULLABLE db columns
+		var status sql.NullString
+		var tm sql.NullString
+		err = rows.Scan(&(row.inst), &(status), &(tm), &(row.module))
 		if err != nil {
 			if logger.GetLogger().V(logger.Info) {
 				logger.GetLogger().Log(logger.Info, "Error (rows) rac maint for shard =", shard, ",err :", err)
 			}
-			return
+		}
+		// set the status when Not Null
+		if status.Valid {
+			row.status = status.String
+		}
+
+		// set the timestamp when Not NULL
+		if tm.Valid { // sql.NULLInt* does not work as expected, so have to use sql.NULLString for Number type as well
+			tmVal, _ := strconv.ParseInt(tm.String, 10, 32)
+			row.tm = int(tmVal)
 		}
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "Rac maint row, shard =", shard, ", inst =", row.inst, ", status =", row.status, ", time =", row.tm, ", module = ", row.module)
@@ -182,10 +200,25 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 				}
 				prev[row.inst].tm = row.tm
 				prev[row.inst].status = row.status
+				prev[row.inst].module = row.module
 
-				evt := cal.NewCalEvent("RACMAINT", row.status, cal.TransOK, "")
+				out := fmt.Sprintf("%+v", prev[row.inst])
+				evt := cal.NewCalEvent("RACMAINT_INFO_CHANGE", hostName, cal.TransOK, out)
 				evt.Completed()
-			} // else ignore
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "Rac maint: Change detected : ", out)
+				}
+			} else {
+				if curTime <= time.Now().Unix() {
+					out := fmt.Sprintf("%+v", prev)
+					evt := cal.NewCalEvent("RACMAINT_INFO", hostName, cal.TransOK, out)
+					evt.Completed()
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, "Rac maint: Data from DB: ", out, " time Now:", time.Now().Unix())
+					}
+					curTime = time.Now().Unix() + 60 // Print the racmaint_info once in every 60 seconds
+				}
+			}
 		}
 	}
 }

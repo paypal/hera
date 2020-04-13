@@ -18,7 +18,7 @@ import com.paypal.hera.ex.HeraExceptionBase;
 /**
  * Hera Driver implementation
  * 
- * Example URL: jdbc:hera:1:<ip>:<port>
+ * Example URL: jdbc:hera:1:[ip]:[port]
  * 
  * @author pvoicu
  */
@@ -126,7 +126,7 @@ public class HeraDriver implements Driver {
 
 	/**
 	 * Reports whether this driver is a genuine JDBC
-	 * COMPLIANT<sup><font size=-2>TM</font></sup> driver.
+	 * COMPLIANT driver.
 	 * A driver may only report true here if it passes the JDBC compliance
 	 * tests; otherwise it is required to return false.
 	 */
