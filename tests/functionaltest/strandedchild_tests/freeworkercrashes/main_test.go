@@ -12,18 +12,12 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-/*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
+/*
+
+The test will start Mysql docker and OCC connects to this Mysql DB docker
+No setup needed
+
 */
 
 var mx testutil.Mux
@@ -62,6 +56,10 @@ func killworker () {
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, setupDb))
 }
+
+/************
+ **Validate stranded recovery when Free worker crashes.
+ ************/
 
 func TestFreeWorkerCrashes(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestFreeWorkerCrashes begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
@@ -108,9 +106,9 @@ func TestFreeWorkerCrashes(t *testing.T) {
            t.Fatalf ("Error: should get log regarding worker getting killed");
         }
 
-        //time.Sleep(5 * time.Second);
 	fmt.Print ("Verify after worker gets restarted, it serves requests successfully");
         ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
+
         // cleanup and insert one row in the table
         conn1, err := db.Conn(ctx1)
         if err != nil {

@@ -11,17 +11,10 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
+The test will start Mysql server docker and OCC connects to this Mysql DB docker
+No setup needed
+
 */
 
 var mx testutil.Mux
@@ -77,7 +70,7 @@ func TestMain(m *testing.M) {
 # Single Target: No R/W configuration, default config of request_backlog_timeout, short_backlog_timeout
 # Send many requests so request goes to backlog
 # Verify correct default setting
-# Verify some requests in backlog will be processed and some of them are timed out
+# Verify some requests will be timed out or evicted
 ###############################################################################*/
 
 func TestBklgLongQTimeout(t *testing.T) {

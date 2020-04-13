@@ -13,17 +13,10 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
+The test will start Mysql server docker and OCC connects to this Mysql DB docker
+No setup needed
+
 */
 
 var mx testutil.Mux
@@ -58,6 +51,12 @@ func setupDb() error {
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, setupDb))
 }
+
+/*****
+ *
+ *  Verify workers are restarted when max_requests_per_child is reached
+ *
+ ****/
 
 func TestMaxRequestPerChildDML(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMaxRequestPerChildDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")

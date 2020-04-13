@@ -13,17 +13,10 @@ import (
 )
 
 /*
-To run the test
-export DB_USER=x
-export DB_PASSWORD=x
-export DB_DATASOURCE=x
-export username=realU
-export password=realU-pwd
-export TWO_TASK='tcp(mysql.example.com:3306)/someSchema?timeout=60s&tls=preferred||tcp(failover.example.com:3306)/someSchema'
-export TWO_TASK_READ='tcp(mysqlr.example.com:3306)/someSchema?timeout=6s&tls=preferred||tcp(failover.example.com:3306)/someSchema'
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
-$GOROOT/bin/go test -c .../tests/unittest/coordinator_basic && ./coordinator_basic.test
+
+The test will start Mysql server docker and OCC connects to this Mysql DB docker
+No setup needed
+
 */
 
 var mx testutil.Mux
@@ -43,7 +36,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-	//appcfg["readonly_children_pct"] = "50"
         appcfg["opscfg.default.server.max_requests_per_child"] = "5"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
@@ -65,8 +57,12 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, setupDb))
 }
 
-func TestCoordinatorBasic(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestCoordinatorBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+/*******************
+ ** Validate max_requests_per_child set for the Hera take effect when we send nonDML requests
+ *******************/
+
+func TestMaxRequestsNonDML(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestMaxRequestsNonDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -111,5 +107,5 @@ func TestCoordinatorBasic(t *testing.T) {
 	cancel()
 	conn.Close()
 
-	logger.GetLogger().Log(logger.Debug, "TestCoordinatorBasic done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestMaxRequestsNonDML done  -------------------------------------------------------------")
 }
