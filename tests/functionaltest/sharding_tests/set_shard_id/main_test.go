@@ -62,19 +62,17 @@ func TestMain (m *testing.M) {
 
 /* ##########################################################################################
  # Sharding enabled with num_shards > 0
- # Set shard id to 3 and perform an insert
- # Verify insert request is sent to shard 3
- # Reset shard ID
- # Verify next query without shard key will get error
- # Verify Log
+ # Set shard id to shard #4
+ # Sending insert, update, select request in same connection
+ # Veriy all requests go to same shard #4
+ # Verify app Log and CAL log
  #
  #############################################################################################*/
-
-func TestSetResetShardID(t *testing.T) {
+func TestSetShardID(t *testing.T) {
         twoTask := os.Getenv("TWO_TASK_2")
         fmt.Println ("TWO_TASK_2: ", twoTask)
-	fmt.Println ("TestSetResetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	logger.GetLogger().Log(logger.Debug, "TestSetResetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	fmt.Println ("TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	logger.GetLogger().Log(logger.Debug, "TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -107,7 +105,7 @@ func TestSetResetShardID(t *testing.T) {
 	fmt.Println ("Insert using shard 4")
         mux.SetShardID(4)
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/* TestSetResetShardID */insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
+	stmt, _ := tx.PrepareContext(ctx, "/* TestSetShardID */insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
 	_, err = stmt.Exec(sql.Named("ID", "12346"), sql.Named("Name", "Steve"), sql.Named("Status", 999))
 	if err != nil {
 		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
@@ -126,7 +124,7 @@ func TestSetResetShardID(t *testing.T) {
 
 
  	fmt.Println ("Verify insert and update request is sent to shard 4")	
-        count := testutil.RegexCount ("WORKER shd4.*Preparing.*TestSetResetShardID.*insert into test_simple_table_1")
+        count := testutil.RegexCount ("WORKER shd4.*Preparing.*TestSetShardID.*insert into test_simple_table_1")
 	if (count < 1) {
             t.Fatalf ("Error: Insert Query does NOT go to shd4");
         }
@@ -172,6 +170,6 @@ func TestSetResetShardID(t *testing.T) {
 	
 
 	testutil.DoDefaultValidation(t)
-	logger.GetLogger().Log(logger.Debug, "TestSetResetShardID done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestSetShardID done  -------------------------------------------------------------")
 }
 

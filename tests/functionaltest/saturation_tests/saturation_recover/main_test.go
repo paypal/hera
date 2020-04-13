@@ -10,17 +10,9 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
+The test will start Mysql docker and OCC connects to this Mysql DB docker
+No setup needed
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
 */
 
 var mx testutil.Mux

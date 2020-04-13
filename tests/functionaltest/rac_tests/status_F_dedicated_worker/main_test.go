@@ -12,14 +12,9 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
+
+The test will start Mysql docker and OCC connects to this Mysql DB docker
+No setup needed
 
 */
 
@@ -63,8 +58,12 @@ func TestMain(m *testing.M) {
 
 /* #####################################################################################
  #  Testing RAC change to status 'F'
- #  Verify mux detects status change and restart workers
- #  Run a non-dml query and expect to run without any exceptios
+ # (1)Run a dml query without commit (so the one occworker remains dedicated)
+ # (2)Update the hera_maint table in DB to F state
+ # (3)Check that the occworker should not restart  
+ # (4)Commit the changes
+ # (5)Check to see the occworker has moved to F state and get restarted
+ # (6)Run a non-dml query and expect to run successfully
  #######################################################################################*/
 
 func TestStatusFDedicatedWorker(t *testing.T) {

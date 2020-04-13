@@ -12,17 +12,10 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
+The test will start Mysql server docker and OCC connects to this Mysql DB docker
+No setup needed
+
 */
 
 var mx testutil.Mux
@@ -52,6 +45,9 @@ func setupDb() error {
         return testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
 }
 
+/*******************
+ *  Validate client idle_timeout NOT kick in when worker is assigned
+ *******************/
 
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, setupDb))

@@ -10,17 +10,9 @@ import (
 )
 
 /*
-To run the test
-export username=clocapp
-export password=clocappstg
-export DB_USER=$username
-export DB_PASSWORD=password
-export TWO_TASK='tcp(127.0.0.1:3306)/world?timeout=10s'
-export TWO_TASK_READ='tcp(127.0.0.1:3306)/world?timeout=10s'
-export DB_DATASOURCE=$TWO_TASK
+The test will start Mysql docker and OCC connects to this Mysql DB docker
+No setup needed
 
-$GOROOT/bin/go install  .../worker/{mysql,oracle}worker
-ln -s $GOPATH/bin/{mysql,oracle}worker .
 */
 
 var mx testutil.Mux
@@ -78,9 +70,9 @@ func TestMain(m *testing.M) {
  *   saturation_recover_threshold is set to 0
  *   saturation_recover_throttle_rate="80" - killing rate is 1000/(0.8 * 1)
  *   First Thread performs an insert to a table but not commit
- *   Five threads to connect to occmux and perform an update on same table. Since first client is not commit,
- *   they will have long query running
- *   We have 2 read workers and 2 write workers, backlog queue size for write worker reached limit, write workers enter into saturation status
+ *   Five threads to connect to occmux and perform an update on same table. 
+ *   Since first client does not commit, other clients will have long query running
+ *   We have 3 write workers, backlog queue size for write worker reached limit, write workers enter into saturation status
  * Verifications:
  *   Verify saturation recovery kicks in to kill long running queries
  *   Verify proxy recovers long session successfully by checking logs
