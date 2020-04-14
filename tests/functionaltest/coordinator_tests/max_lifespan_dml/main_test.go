@@ -112,7 +112,6 @@ func TestMaxLifespanDML(t *testing.T) {
 	   t.Fatalf ("Error: should have worker recycle");
 	}
 
-	//Not sure why I don't get these events, this test used to pass in May
         time.Sleep(10 * time.Second)
         fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
         count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
