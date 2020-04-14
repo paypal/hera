@@ -36,12 +36,12 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-        appcfg["opscfg.default.server.max_requests_per_child"] = "5"
+        appcfg["opscfg.default.server.max_requests_per_child"] = "4"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
 
 	opscfg := make(map[string]string)
-	opscfg["opscfg.default.server.max_connections"] = "4"
+	opscfg["opscfg.default.server.max_connections"] = "2"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
 	return appcfg, opscfg, testutil.MySQLWorker
@@ -64,8 +64,9 @@ func TestMain(m *testing.M) {
 func TestMaxRequestsNonDML(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMaxRequestsNonDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -74,18 +75,13 @@ func TestMaxRequestsNonDML(t *testing.T) {
 	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// cleanup and insert one row in the table
+	// insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/delete from test_simple_table_1")
-	_, err = stmt.Exec()
-	if err != nil {
-		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
-	}
-	stmt, _ = tx.PrepareContext(ctx, "/*cmd*/insert into test_simple_table_1 (id, Name, Status) VALUES(?, ?, ?)")
+	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/insert into test_simple_table_1 (id, Name, Status) VALUES(?, ?, ?)")
 	_, err = stmt.Exec(1, time.Now().Unix(), 1*10)
 	if err != nil {
 		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
@@ -95,14 +91,33 @@ func TestMaxRequestsNonDML(t *testing.T) {
 		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
-	stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select id, name, status from test_simple_table_1 where id=?")
-	rows, _ := stmt.Query(1)
-	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
-	}
+	//Send 80 select requests, max_requests_per_child = 4, verify workers are terminated a total of 20 times
+	for i := 1; i < 80; i++ {
+		stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select id, name, status from test_simple_table_1 where id=?")
+		rows, _ := stmt.Query(1)
+		if !rows.Next() {
+			t.Fatalf("Expected 1 row")
+		}
 
-	rows.Close()
-	stmt.Close()
+		rows.Close()
+		stmt.Close()
+	}
+	time.Sleep(5 * time.Second)
+        fmt.Println ("Verify worker is recycled due to max_request_per_child setting");
+        if ( testutil.RegexCount("PROXY.*Max requests exceeded, terminate worker.*cnt 4 max 4") < 20) {
+           t.Fatalf ("Error: should have worker recycle a total of 20 times");
+        }
+
+        time.Sleep(5 * time.Second)
+        fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
+        count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
+        if (count < 20) {
+            t.Fatalf ("Error: expected 20 new_worker_child events");
+        }
+        count = testutil.RegexCountFile ("E.*SERVER_INFO.*worker-go-start", "cal.log");
+        if (count < 20) {
+            t.Fatalf ("Error: expected 20 occworker-go-start events");
+        }
 
 	cancel()
 	conn.Close()
