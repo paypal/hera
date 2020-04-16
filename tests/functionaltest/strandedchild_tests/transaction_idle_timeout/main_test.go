@@ -14,7 +14,7 @@ import (
 
 /*
 
-The test will start Mysql server docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -81,9 +81,6 @@ func TestTransactionIdleTimeout(t *testing.T) {
         wait_second = 8
 	fmt.Println ("Verify idle timeout will not kick in, but tnx timeout will kick in for DML transaction")
 	testutil.RunDMLCommitLater("/*cmd*/insert into test_simple_table_2 (accountID, Name, Status) VALUES (12345, 'Linda Smith' , '111')", wait_second)
-        /*if err != nil {
-                t.Fatalf("Error inserting row %s\n", err.Error())
-        }*/
 
         fmt.Println ("Open new connection to check fetch result");
         ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
