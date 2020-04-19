@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	//"github.com/paypal/hera/client/gosqldriver"
         _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -14,7 +13,7 @@ import (
 
 /*
 
-The test will start Mysql server docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -115,6 +114,7 @@ func TestMaxRequestPerChildDML(t *testing.T) {
 	if (count < 2) {
 	    t.Fatalf ("Error: expected occworker-go-start event");
 	}
+	testutil.DoDefaultValidation(t)
 	
 	logger.GetLogger().Log(logger.Debug, "TestMaxRequestPerChildDML done  -------------------------------------------------------------")
 }

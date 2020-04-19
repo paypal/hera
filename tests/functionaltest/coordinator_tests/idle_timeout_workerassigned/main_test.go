@@ -13,7 +13,7 @@ import (
 
 /*
 
-The test will start Mysql server docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -99,6 +99,7 @@ func TestIdleTimeoutWorkerAssigned(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
+	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestIdleTimeoutWorkerAssigned done  -------------------------------------------------------------")
 }
 

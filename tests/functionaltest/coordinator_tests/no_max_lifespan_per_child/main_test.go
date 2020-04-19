@@ -31,7 +31,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-        appcfg["opscfg.default.server.max_lifespan_per_child"] = "5"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
 
@@ -53,11 +52,11 @@ func TestMain(m *testing.M) {
 }
 
 /*******************
- **  Validate workers are restared when  max_lifespan_per_child is reached
+ **  Validate workers are NOT restared when  max_lifespan_per_child is not specified
  *******************/
 
-func TestMaxLifespanDML(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestMaxLifespanDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestNoMaxLifespan(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestNoMaxLifespan begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -76,6 +75,7 @@ func TestMaxLifespanDML(t *testing.T) {
                 t.Fatalf("Error getting connection %s\n", err.Error())
         }
 
+        s_count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
 	fmt.Println ("Set autocommit to false")
         tx, _ := conn.BeginTx(ctx, nil)
         stmt, _ := tx.PrepareContext(ctx, "set autocommit=0")
@@ -84,7 +84,7 @@ func TestMaxLifespanDML(t *testing.T) {
                 t.Fatalf("Error setting autocommit to false %s\n", err.Error())
         }
 
-        fmt.Println ("Inserting a row and wait for long time for max_lifespan to kick in");
+        fmt.Println ("Inserting a row and wait for long time, max_lifespan should not kick in");
         stmt, _ = tx.PrepareContext(ctx, "/*cmd*/insert into test_simple_table_2 (accountID, Name, Status) VALUES(:AccountID, :Name, :Status)")
          _, err = stmt.Exec(sql.Named("AccountID", "12346"), sql.Named("Name", "Steve"), sql.Named("Status", "done"))
         if err != nil {
@@ -107,22 +107,18 @@ func TestMaxLifespanDML(t *testing.T) {
         cancel()
         conn.Close()
 
-	fmt.Println ("Verify worker is recycled due to max_lifespan setting");
-        if ( testutil.RegexCount("PROXY.*Lifespan exceeded, terminate worker") < 1) {
+	fmt.Println ("Verify worker is NOT recycled because max_lifespan is not set");
+        if ( testutil.RegexCount("PROXY.*Lifespan exceeded, terminate worker") > 0) {
 	   t.Fatalf ("Error: should have worker recycle");
 	}
 
         time.Sleep(10 * time.Second)
         fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
         count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
-	if (count < 2) {
-	    t.Fatalf ("Error: expected new_worker_child event");
+	if (count > s_count) {
+	    t.Fatalf ("Error: NOT expected new_worker_child event");
 	}
-        count = testutil.RegexCountFile ("E.*SERVER_INFO.*worker-go-start", "cal.log");
-	if (count < 2) {
-	    t.Fatalf ("Error: expected occworker-go-start event");
-	}
-	
 	testutil.DoDefaultValidation(t)
-	logger.GetLogger().Log(logger.Debug, "TestMaxLifespanDML done  -------------------------------------------------------------")
+	
+	logger.GetLogger().Log(logger.Debug, "TestNoMaxLifespan done  -------------------------------------------------------------")
 }
