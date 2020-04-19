@@ -14,7 +14,7 @@ import (
 
 /*
 
-The test will start Mysql server docker. Hera sever connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -36,7 +36,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
-        appcfg["opscfg.default.server.max_requests_per_child"] = "4"
+	appcfg["enable_cache"] = "true"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
 
@@ -58,12 +58,13 @@ func TestMain(m *testing.M) {
 }
 
 /*******************
- ** Validate max_requests_per_child set for the Hera take effect when we send nonDML requests
+ ** Validate max_requests_per_child when not set
  *******************/
 
-func TestMaxRequestsNonDML(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestMaxRequestsNonDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestNoMaxRequestsPerChild(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestNoMaxRequestsPerChild begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
+        count_s := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
@@ -91,7 +92,7 @@ func TestMaxRequestsNonDML(t *testing.T) {
 		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
-	//Send 80 select requests, max_requests_per_child = 4, verify workers are terminated a total of 20 times
+	//Send 80 select requests, max_requests_per_child not set, verify workers are NOT terminated
 	for i := 1; i < 80; i++ {
 		stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select id, name, status from test_simple_table_1 where id=?")
 		rows, _ := stmt.Query(1)
@@ -103,25 +104,20 @@ func TestMaxRequestsNonDML(t *testing.T) {
 		stmt.Close()
 	}
 	time.Sleep(5 * time.Second)
-        fmt.Println ("Verify worker is recycled due to max_request_per_child setting");
-        if ( testutil.RegexCount("PROXY.*Max requests exceeded, terminate worker.*cnt 4 max 4") < 20) {
-           t.Fatalf ("Error: should have worker recycle a total of 20 times");
+        fmt.Println ("Verify workers are NOT recycled because max_request_per_child is not set");
+        if ( testutil.RegexCount("PROXY.*Max requests exceeded, terminate worker") >= 1) {
+           t.Fatalf ("Error: should NOT see worker recycle due to max_requests");
         }
 
         time.Sleep(5 * time.Second)
-        fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
+        fmt.Println ("Check CAL log to ensure no new worker restarted event");
         count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
-        if (count < 20) {
-            t.Fatalf ("Error: expected 20 new_worker_child events");
-        }
-        count = testutil.RegexCountFile ("E.*SERVER_INFO.*worker-go-start", "cal.log");
-        if (count < 20) {
-            t.Fatalf ("Error: expected 20 occworker-go-start events");
+        if (count > count_s) {
+            t.Fatalf ("Error: should not see new_worker_child events");
         }
 
 	cancel()
 	conn.Close()
-	testutil.DoDefaultValidation(t);
-
-	logger.GetLogger().Log(logger.Debug, "TestMaxRequestsNonDML done  -------------------------------------------------------------")
+	testutil.DoDefaultValidation(t)
+	logger.GetLogger().Log(logger.Debug, "TestNoMaxRequestsPerChild done  -------------------------------------------------------------")
 }

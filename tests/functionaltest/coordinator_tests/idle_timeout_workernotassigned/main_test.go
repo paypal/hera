@@ -11,7 +11,7 @@ import (
 
 /*
 
-The test will start Mysql server docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -94,7 +94,6 @@ func TestIdleTimeoutWorkerNotAssigned(t *testing.T) {
 	   t.Fatalf ("Error: should have worker recycle");
 	}
 
-	//Not sure why I don't get these events, this test used to pass in May
         time.Sleep(10 * time.Second)
         fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
         count := testutil.RegexCountFile ("E.*MUX.*idle_timeout_4000", "cal.log");
@@ -105,5 +104,6 @@ func TestIdleTimeoutWorkerNotAssigned(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
+	testutil.DoDefaultValidation(t)
 	fmt.Println ("TestIdleTimeoutWorkerNotAssigned done  -------------------------------------------------------------")
 }
