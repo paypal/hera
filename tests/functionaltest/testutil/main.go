@@ -55,7 +55,7 @@ func saveLogs() {
 }
 
 func DoDefaultValidation (t *testing.T) {
-    fmt.Printf ("At DoDefaultValidation")
+    fmt.Println ("At DoDefaultValidation")
     c1 := RegexCount ( "panic")
     if c1 > 0 {
         t.Fatalf ("Error: PANIC FOUND !!! PLEASE CHECK!!")
@@ -64,6 +64,15 @@ func DoDefaultValidation (t *testing.T) {
     if c2 > 0 {
         t.Fatalf ("Error: SIGNAL 11 FOUND !!! PLEASE CHECK!!")
     }
+    c3 := RegexCount ("unexpected child termination");
+    if c3 > 0 {
+        t.Fatalf ("Error: unexpected child termination! PLEAS CHECK!!")
+    }
+    c4 := RegexCountFile ("ERROR", "cal.log");
+    if c4 > 0 {
+        t.Fatalf ("Error: unexpected ERROR in CAL ! PLEAS CHECK!!")
+    }
+
 
 }
 

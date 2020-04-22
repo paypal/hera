@@ -73,6 +73,8 @@ func TestMaxRequestPerChildDML(t *testing.T) {
 	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// cancel must be called before conn.Close()
+        defer cancel()
         // cleanup and insert one row in the table
         conn, err := db.Conn(ctx)
         if err != nil {
@@ -84,6 +86,7 @@ func TestMaxRequestPerChildDML(t *testing.T) {
 
                 fmt.Println ("Inserting 8 rows for max_requests_per_child to kick in");
                 stmt, _ := tx.PrepareContext(ctx, "/*cmd*/insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
+		defer stmt.Close()
                  _, err = stmt.Exec(sql.Named("ID", i+1), sql.Named("Name", "Lee"), sql.Named("Status", i+1))
                 if err != nil {
                         t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())

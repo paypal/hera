@@ -10,7 +10,7 @@ import (
 )
 
 /*
-The test will start Mysql docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera connects to this Mysql DB docker
 No setup needed
 
 */
@@ -119,6 +119,14 @@ func TestSaturationRecover(t *testing.T) {
         if ( testutil.RegexCount("error to client.*saturation kill") < count) {
 	   t.Fatalf ("Error: should get saturation kill error");
 	}
+	fmt.Println ("Verify sql killing rate is correct")
+        if ( testutil.RegexCount("saturation recover active.*416") < 3) {
+	   t.Fatalf ("Error: saturate recover rate is not 416ms");
+	}
 
+	//Verify correct client is killed
+	testutil.VerifyKilledClient (t, "2");
+	testutil.VerifyKilledClient (t, "3");
+	testutil.VerifyKilledClient (t, "4");
 	logger.GetLogger().Log(logger.Debug, "TestSaturationRecover done  -------------------------------------------------------------")
 }
