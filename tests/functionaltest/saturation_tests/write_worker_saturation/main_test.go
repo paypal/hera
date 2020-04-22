@@ -100,8 +100,9 @@ func TestWriteSaturation(t *testing.T) {
 
 	fmt.Println ("Since we have 4 workers, saturation will be kicked in to kill long running queries")
 
-	fmt.Println ("Verify BKLG & bklg_timeout events")
-	if ( testutil.RegexCountFile ("STRANDED.*SATURATION_RECOVERED", "cal.log") < 4) {
+	fmt.Println ("Verify saturation recover events")
+	count := testutil.RegexCountFile ("STRANDED.*SATURATION_RECOVERED", "cal.log")
+	if ( count < 4) {
             t.Fatalf ("Error: expected at least 2 SATURATION_RECOVERED events");
         }
         /*if ( testutil.RegexCountFile ("WORKER.*recoverworker", "cal.log") < 2) {
@@ -109,8 +110,8 @@ func TestWriteSaturation(t *testing.T) {
         }*/
 
 	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*HERA-101: saturation kill") < 2) {
-	   t.Fatalf ("Error: should get saturation kill error");
+        if ( testutil.RegexCount("error to client.*HERA-101: saturation kill") < count/2) {
+	   t.Fatalf ("Error: should get saturation kill error %d time", count/2);
 	}
 
         fmt.Println ("Since soft_eviction_effective_time = 0, soft eviction will not be kicked in")

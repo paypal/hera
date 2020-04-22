@@ -6,8 +6,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	//"github.com/paypal/hera/client/gosqldriver"
-        //_"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -117,6 +115,7 @@ func TestTransactionIdleTimeout(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
+	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestTransactionIdleTimeout done  -------------------------------------------------------------")
 }
 

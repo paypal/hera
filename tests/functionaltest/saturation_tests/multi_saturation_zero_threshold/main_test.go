@@ -12,7 +12,7 @@ import (
 
 /*
 
-The test will start Mysql server docker and OCC connects to this Mysql DB docker
+The test will start Mysql server docker and Hera server connects to this Mysql DB docker
 No setup needed
 
 */
@@ -100,19 +100,20 @@ func TestSaturationZeroThreshold(t *testing.T) {
 
         time.Sleep(10 * time.Second);
 
-	fmt.Println ("Since we have 4 workers, saturation will be kicked in to kill long running queries")
+	fmt.Println ("Since all workers are busy, saturation will be kicked in to kill long running queries")
 
-	fmt.Println ("Verify BKLG & bklg_timeout events")
-	if ( testutil.RegexCountFile ("STRANDED.*SATURATION_RECOVERED", "cal.log") < 4) {
-            t.Fatalf ("Error: expected at least 2 SATURATION_RECOVERED events");
+	fmt.Println ("Verify worker recovery events after saturation kill")
+	count := testutil.RegexCountFile ("STRANDED.*SATURATION_RECOVERED", "cal.log")
+	if ( count < 4) {
+            t.Fatalf ("Error: expected at least 4 SATURATION_RECOVERED events");
         }
         /*if ( testutil.RegexCountFile ("WORKER.*recoverworker", "cal.log") < 2) {
             t.Fatalf ("Error: expected worker recover  event");
         }*/
 
 	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*HERA-101: saturation kill") < 2) {
-	   t.Fatalf ("Error: should get saturation kill error");
+        if ( testutil.RegexCount("error to client.*HERA-101: saturation kill") < count/2) {
+	   t.Fatalf ("Error: should get saturation kill error %d time", count);
 	}
 
         fmt.Println ("Since soft_eviction_effective_time = 0, soft eviction will not be kicked in")
@@ -125,10 +126,11 @@ func TestSaturationZeroThreshold(t *testing.T) {
            t.Fatalf ("Error: sql killing rate is NOT correct");
         }
 
-        time.Sleep(2 * time.Second);
 	fmt.Println ("Verify correct clients are killed")
         testutil.VerifyKilledClient (t, "2")
         testutil.VerifyKilledClient (t, "3")
+        testutil.VerifyKilledClient (t, "4")
+        testutil.VerifyKilledClient (t, "5")
 
         fmt.Println ("Verify next requests are fine");
         row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = 12346");

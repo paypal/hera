@@ -365,9 +365,12 @@ func RegexCountFile(regex string, filename string) int {
 	return count
 }
 
+/**
+* Method to extract client ID
+**/
 func ExtractClientId (logfile string, client_num string) string {
     cmd := "grep 'server: accepted from' " +  " " + runFolder + "/" + logfile + " | awk -F\":\" '{print $7}' | awk 'NR==" + client_num + "'"
-    fmt.Println ("Grep command in ExtractClientId: ", cmd)
+    //fmt.Println ("Grep command in ExtractClientId: ", cmd)
     out, err := BashCmd(cmd)
     if (err != nil) {
         fmt.Errorf("Error occur when extracting client id: %s", out)
@@ -376,6 +379,9 @@ func ExtractClientId (logfile string, client_num string) string {
     return client
 }
 
+/**
+* Method to verify if correct client is killed 
+**/
 func VerifyKilledClient (t *testing.T, client_num string){
     client_id := ExtractClientId ("hera.log", client_num)
     search_str := "'" + client_id + ".*use of closed network connection" + "'";
@@ -386,3 +392,40 @@ func VerifyKilledClient (t *testing.T, client_num string){
     }
 }
 
+/**
+* Method to check if worker is assigned as LIFO
+**/
+func IsLifoUsed (t *testing.T, logfile string) bool {
+    cmd := "grep 'Pool::SelectWorker' " + runFolder + "/" + logfile + " | awk '{print $6}'  > pids.tmp"
+    //fmt.Println ("Grep command to extract worker Id: ", cmd)
+    out, err := BashCmd(cmd)
+    if (err != nil) {
+        fmt.Errorf("Error occur when extracting worker id: %s", out)
+    }
+    file, err := os.Open("pids.tmp")
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer file.Close()
+
+    lifo_count := 0;
+    scan_count := 0;
+    scanner := bufio.NewScanner(file)
+    scanner.Scan();
+    workerId := scanner.Text();
+    fmt.Println ("workerId: ", workerId);
+    for scanner.Scan() {
+	scan_count++;
+        if !strings.Contains (scanner.Text(),strings.TrimSpace (workerId)) {
+           fmt.Println(scanner.Text())
+           break
+        }
+	lifo_count++;
+    }
+    fmt.Println ("lifo count: ", lifo_count)
+    if err := scanner.Err(); err != nil {
+        t.Fatal(err)
+    }
+
+    return (lifo_count == scan_count) 
+}
