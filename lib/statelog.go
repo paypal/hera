@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -400,7 +401,17 @@ func (sl *StateLog) init() error {
 	//
 	// filelog to state.log
 	//
-	file, err := os.OpenFile("state.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+
+	currentDir, absperr := filepath.Abs(filepath.Dir(os.Args[0]))
+	if absperr != nil {
+		currentDir = "./"
+	} else {
+		currentDir = currentDir + "/"
+	}
+
+	filename := currentDir + "state.log"
+
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
