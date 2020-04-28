@@ -101,20 +101,19 @@ func TestWriteSaturation(t *testing.T) {
 	fmt.Println ("Since we have 4 workers, saturation will be kicked in to kill long running queries")
 
 	fmt.Println ("Verify saturation recover events")
-	count := testutil.RegexCountFile ("STRANDED.*SATURATION_RECOVERED", "cal.log")
-	if ( count < 4) {
-            t.Fatalf ("Error: expected at least 2 SATURATION_RECOVERED events");
+	if ( testutil.RegexCountFile ("HARD_EVICTION.*1629405935", "cal.log")  < 2){
+            t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-        /*if ( testutil.RegexCountFile ("WORKER.*recoverworker", "cal.log") < 2) {
-            t.Fatalf ("Error: expected worker recover  event");
-        }*/
+	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	if ( count < 2) {
+            t.Fatalf ("Error: expected at least 2 SATURATION_RECOVERED events")
+        }
 
 	fmt.Println ("Verify saturation error is returned to client")
         if ( testutil.RegexCount("error to client.*HERA-101: saturation kill") < count/2) {
 	   t.Fatalf ("Error: should get saturation kill error %d time", count/2);
 	}
 
-        fmt.Println ("Since soft_eviction_effective_time = 0, soft eviction will not be kicked in")
 	if ( testutil.RegexCount("occproxy saturation recover: sql will be terminated.*close client connection") < 0) {
            t.Fatalf ("Error: should get message in log for saturation recover");
         }
@@ -126,11 +125,21 @@ func TestWriteSaturation(t *testing.T) {
 
         time.Sleep(2 * time.Second);
 	fmt.Println ("Verify correct clients are killed")
-        //testutil.VerifyKilledClient (t, "2")
-        //testutil.VerifyKilledClient (t, "3")
+        testutil.VerifyKilledClient (t, "2")
+        testutil.VerifyKilledClient (t, "3")
+
+        fmt.Println ("Verify killing SQLs are NOT in DB");
+        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = 124");
+        if (row_count >  0) {
+            t.Fatalf ("Error: Row should NOT be in DB");
+	}
+        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where ID = 125");
+        if (row_count >  0) {
+            t.Fatalf ("Error: Row should NOT be in DB");
+	}
 
         fmt.Println ("Verify next requests are fine");
-        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = 12346");
+        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where ID = 12346");
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is there");
 	}
