@@ -21,7 +21,8 @@ import (
 	"errors"
 	"strings"
 	"sync/atomic"
-
+	"path/filepath"
+	"os"
 	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -188,7 +189,17 @@ func parseMapStrStr(encoded string) map[string]string {
 
 // InitConfig initializes the configuration, both the static configuration (from hera.txt) and the dynamic configuration
 func InitConfig() error {
-	cdb, err := config.NewTxtConfig("hera.txt")
+	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
+
+	if (abserr != nil) {
+		currentDir = "./" 
+	} else {
+		currentDir = currentDir + "/"
+	}
+
+	filename := currentDir + "hera.txt" 
+
+	cdb, err := config.NewTxtConfig(filename)
 	if err != nil {
 		return err
 	}
@@ -196,7 +207,9 @@ func InitConfig() error {
 	gAppConfig = &Config{numWorkersCh: make(chan int, 1)}
 
 	logFile := cdb.GetOrDefaultString("log_file", "hera.log")
+	logFile = currentDir + logFile 
 	logLevel := cdb.GetOrDefaultInt("log_level", logger.Info)
+	
 	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel))
 	if err != nil {
 		FullShutdown()
