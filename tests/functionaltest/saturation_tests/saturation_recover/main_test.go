@@ -16,7 +16,6 @@ No setup needed
 */
 
 var mx testutil.Mux
-var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
@@ -57,7 +56,7 @@ func insert_row_delay_commit (id string, wait_second int) {
 --------------------------------------------*/
 func update_row_delay_commit (id string, wait_second int) {
         fmt.Println ("Update a row, commit later")
-        testutil.RunDMLCommitLater("update test_simple_table_1 set Name='Steve' where ID=123", wait_second)
+        testutil.RunDMLCommitLater("update test_simple_table_1 set Name='Steve' where ID=" + id, wait_second)
 }
 
 
@@ -86,12 +85,11 @@ func TestSaturationRecover(t *testing.T) {
 
 	testutil.RunDML1("insert into test_simple_table_1 (ID, Name, Status) VALUES (12346, 'Jack', 100)")
 
-	fmt.Println ("First thread to insert a row, but not commit");
+	fmt.Println ("First thread to insert a row, but commit later");
         id := "123"
         go insert_row_delay_commit(id, 5)
 
-        fmt.Println ("Having 5 threads to update same row.")
-        fmt.Println ("Since first thread does not commit, they will have long query running")
+        fmt.Println ("Having 5 threads to update same row, so all workers are busy")
         for i := 0; i < 5; i++ {
                 time.Sleep(200 * time.Millisecond);
                 go update_row_delay_commit(id, 3)
@@ -106,17 +104,21 @@ func TestSaturationRecover(t *testing.T) {
 	}
 	fmt.Println ("Since we have only 3 workers, saturation will be kicked in to kill long running queries")
 
-	fmt.Println ("Verify BKLG & bklg_timeout events")
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
-	if ( count < 2) {
-            t.Fatalf ("Error: expected 2 RECOVERED_SATURATION_RECOVERED events");
+	fmt.Println ("Verify SATURATION events")
+	hcount := testutil.RegexCountFile ("HARD_EVICTION", "cal.log")
+	if ( hcount < 2) {
+            t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < count ) {
-            t.Fatalf ("Error: expected recover  event");
+	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	if ( count < hcount) {
+            t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+        }
+        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
+            t.Fatalf ("Error: expected %d recover  event", hcount);
         }
 
 	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*saturation kill") < count) {
+        if ( testutil.RegexCount("error to client.*saturation kill") < hcount) {
 	   t.Fatalf ("Error: should get saturation kill error");
 	}
 	fmt.Println ("Verify sql killing rate is correct")
@@ -128,5 +130,6 @@ func TestSaturationRecover(t *testing.T) {
 	testutil.VerifyKilledClient (t, "2");
 	testutil.VerifyKilledClient (t, "3");
 	testutil.VerifyKilledClient (t, "4");
+	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestSaturationRecover done  -------------------------------------------------------------")
 }
