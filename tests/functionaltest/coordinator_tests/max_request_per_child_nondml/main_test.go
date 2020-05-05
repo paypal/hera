@@ -93,7 +93,10 @@ func TestMaxRequestsNonDML(t *testing.T) {
 
 	//Send 80 select requests, max_requests_per_child = 4, verify workers are terminated a total of 20 times
 	for i := 1; i < 80; i++ {
-		stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select id, name, status from test_simple_table_1 where id=?")
+		stmt, err = conn.PrepareContext(ctx, "/*cmd*/Select id, name, status from test_simple_table_1 where id=?")
+		if err != nil { 
+			t.Fatalf("could not prepare statement %s", err.Error()) 
+		}
 		rows, _ := stmt.Query(1)
 		if !rows.Next() {
 			t.Fatalf("Expected 1 row")
@@ -109,7 +112,7 @@ func TestMaxRequestsNonDML(t *testing.T) {
         }
 
         time.Sleep(5 * time.Second)
-        fmt.Println ("Check CAL log for worker restarted event, 1 event from the beginning and 1 due to max_lifespan");
+        fmt.Println ("Check CAL log for worker restarted events");
         count := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
         if (count < 20) {
             t.Fatalf ("Error: expected 20 new_worker_child events");
