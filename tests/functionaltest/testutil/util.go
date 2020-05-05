@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"io/ioutil"
 	"errors"
 	"fmt"
 	"os"
@@ -70,7 +71,8 @@ func RunSelect(query string) {
         defer cancel()
         stmt, _ := conn.PrepareContext(ctx, query)
         defer stmt.Close()
-        stmt.Query()
+        rows, _ := stmt.Query()
+        defer rows.Close()
 }
 
 
@@ -428,4 +430,28 @@ func IsLifoUsed (t *testing.T, logfile string) bool {
     }
 
     return (lifo_count == scan_count) 
+}
+
+/**
+* Method to modify an opscfg entry in hera.txt
+**/
+func ModifyOpscfgParam (t *testing.T, logfile string, opscfg_param string, opscfg_value string) {
+    //Read file
+    data, err := ioutil.ReadFile(runFolder + "/" + logfile)
+    if err != nil {
+        t.Fatal(err)
+    }
+    lines := strings.Split(string(data), "\n")
+    //Modify the opcfg value
+    for i, line := range lines {
+        if strings.Contains(line, opscfg_param) {
+            lines[i] = "opscfg.default.server." + opscfg_param + "=" + opscfg_value
+        }
+    }
+    output := strings.Join(lines, "\n")
+    // write to file
+    err = ioutil.WriteFile(runFolder + "/" + logfile, []byte(output), 0644)
+        if err != nil {
+               t.Fatal(err)
+        }
 }

@@ -137,6 +137,13 @@ func (m *mux) setupConfig() error {
 	return nil
 }
 
+func (m *mux) changeConfig() {
+        // opscfg
+        for k,v := range m.opscfg {
+                m.appcfg[k] = v
+        }
+}
+
 func findNextChar(pos int, str string, ch byte) int {
 	for {
 		if pos < 0 || pos >= len(str) {
@@ -150,7 +157,7 @@ func findNextChar(pos int, str string, ch byte) int {
 }
 
 func (m *mux) cleanupConfig() error {
-	os.Remove("hera.txt")
+	//os.Remove("hera.txt")
 	os.Remove("secret.txt")
 	os.Remove("cal_client.txt")
 	os.Remove("oracleworker")
