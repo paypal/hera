@@ -57,18 +57,18 @@ func TestMain(m *testing.M) {
 }
 
 /* #####################################################################################
- #  Testing RAC change to status 'F'
- # (1)Run a dml query without commit (so the one occworker remains dedicated)
- # (2)Update the hera_maint table in DB to F state
+ #  Testing RAC change to status 'R' for dedicated worker
+ # (1)Run a dml query without commit (so the occworker remains dedicated)
+ # (2)Update the hera_maint table in DB to R state
  # (3)Check that the occworker should not restart  
  # (4)Commit the changes
  # (5)Check that the occworker gets restarted
  # (6)Run a non-dml query and expect it to run successfully
  #######################################################################################*/
 
-func TestStatusFDedicatedWorker(t *testing.T) {
-	fmt.Println ("TestStatusFDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	logger.GetLogger().Log(logger.Debug, "TestStatusFDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestStatusRDedicatedWorker(t *testing.T) {
+	fmt.Println ("TestStatusRDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	logger.GetLogger().Log(logger.Debug, "TestStatusRDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -105,11 +105,11 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 
         }
 
-        err = testutil.SetRacNodeStatus ("F", "hera-test",  1)
+        err = testutil.SetRacNodeStatus ("R", "hera-test",  1)
         if err != nil {
                 t.Fatalf("Error inserting RAC maint row  %s\n", err.Error())
         }
-        time.Sleep(2500 * time.Millisecond)
+        time.Sleep(3500 * time.Millisecond)
 
 	fmt.Println ("Verify mux detects RAC status change")
         if ( testutil.RegexCount ("Rac maint activating, worker 0") < 1) {
@@ -119,10 +119,10 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 		 t.Fatalf ("Error: should have Rac maint activating");
         }
 
-        fmt.Println ("Verify CAL log for RACMAINT events when F command is detected");
-	count := testutil.RegexCountFile ( "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:F.*module:HERA-TEST", "cal.log")
+        fmt.Println ("Verify CAL log for RACMAINT events when R command is detected");
+	count := testutil.RegexCountFile ( "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:R.*module:HERA-TEST", "cal.log")
         if (count != 1 ) {
-		t.Fatalf ("Error: should have Rac maint event");
+		t.Fatalf ("Error: should have RACMAINT_INFO_CHANGE event");
         }
 
 	fmt.Println ("Since the transaction is not completed, only 1 worker is restarted")
@@ -140,13 +140,16 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 
         time.Sleep(2000 * time.Millisecond)
         fmt.Println ("Verify worker retarted")
-        if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 2) {
-		 t.Fatalf ("Error: should have 2 'Lifespan exceeded, terminate' in log");
+        if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 1) {
+		 t.Fatalf ("Error: should have 1 'Lifespan exceeded, terminate' in log");
         }
 
         fmt.Println ("Verify RAC_ID and DB_UNAME cal event")
         if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") != 2) {
-           t.Fatalf ("Error: should have 2 RAC_ID event");
+           t.Fatalf ("Error: should have 2 RAC_ID events");
+        }
+	if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") != 2) {
+            t.Fatalf ("Error: should see 2 DB_UNAME events");
         }
 
         fmt.Println ("Verify request works fine after restarting")
@@ -161,6 +164,6 @@ func TestStatusFDedicatedWorker(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
-	logger.GetLogger().Log(logger.Debug, "TestStatusFDedicatedWorker done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestStatusRDedicatedWorker done  -------------------------------------------------------------")
 }
 
