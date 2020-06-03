@@ -12,7 +12,7 @@ import (
 
 /*
 
-The test will start Mysql docker and OCC connects to this Mysql DB docker
+The test will start Mysql docker and Hera connects to this Mysql DB docker
 No setup needed
 
 */
@@ -59,12 +59,12 @@ func TestMain(m *testing.M) {
 /* #####################################################################################
  #  Testing RAC change to status 'R'
  #  Verify mux detects status change and restart workers
- #  After workers restated, run a non-dml query and expect to run without any exception
+ #  After workers restated, run a non-dml query and expect it to run without any exception
  #######################################################################################*/
 
-func TestStatusU_to_R(t *testing.T) {
-	fmt.Println ("TestStatusU_to_R begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_R begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func InitialDB_RState(t *testing.T) {
+	fmt.Println ("InitialDB_RState begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	logger.GetLogger().Log(logger.Debug, "InitialDB_RState begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -97,15 +97,16 @@ func TestStatusU_to_R(t *testing.T) {
         }
 
         if ( testutil.RegexCount ("Rac maint activating, worker 0") < 1) {
-		 t.Fatalf ("Error: should have Rac maint activating");
+		 t.Fatalf ("Error: should have Rac maint activating for worker 0");
         }
 
         fmt.Println ("Verify CAL log for RAC events");
-        if (testutil.RegexCountFile ( "E.*RACMAINT.*R.*0", "cal.log") == 0 ) {
+	count := testutil.RegexCountFile (  "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:R.*module:HERA-TEST", "cal.log")
+        if ( count < 1 ) {
 		t.Fatalf ("Error: should have Rac maint event");
         }
 
-        time.Sleep(2500 * time.Millisecond)
+        time.Sleep(4500 * time.Millisecond)
         fmt.Printf ("Verify worker retarted")
         if ( testutil.RegexCount ("Lifespan exceeded, terminate") < 1) {
 		 t.Fatalf ("Error: should have 'Lifespan exceeded, terminate' in log");
@@ -127,16 +128,16 @@ func TestStatusU_to_R(t *testing.T) {
         }
 
  	fmt.Println ("Verify no more  RACMAINT event after worker restart");
-	if ( testutil.RegexCountFile("E.*RACMAINT.*R.*0", "cal.log") < 1) {
-           t.Fatalf ("Error: should have RACMAINT event");
+	if ( testutil.RegexCountFile( "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:F.*module:HERA-TEST", "cal.log") > count) {
+           t.Fatalf ("Error: should NOT have RACMAINT event after worker restarted");
         }
 
  	fmt.Printf ("Verify RAC_ID and DB_UNAME cal event")
-	if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") < 1) {
+	if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") < count) {
            t.Fatalf ("Error: should have RAC_ID event");
         }
 
-        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") < 1) {
+        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") < count) {
 	    t.Fatalf ("Error: should see DB_UNAME event");
 	}
 
@@ -144,6 +145,8 @@ func TestStatusU_to_R(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
-	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_R done  -------------------------------------------------------------")
+
+	testutil.DoDefaultValidation(t);
+	logger.GetLogger().Log(logger.Debug, "InitialDB_RState done  -------------------------------------------------------------")
 }
 

@@ -14,7 +14,7 @@ import (
 
 /*
 
-The test will start Mysql docker and OCC connects to this Mysql DB docker
+The test will start Mysql docker and Hera connects to this Mysql DB docker
 No setup needed
 
 */
@@ -97,7 +97,8 @@ func TestStatusU_to_F(t *testing.T) {
         }
 
         fmt.Println ("Verify CAL log for RAC events");
-        if (testutil.RegexCountFile ( "E.*RACMAINT.*F.*0", "cal.log") == 0 ) {
+	count := testutil.RegexCountFile ( "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:F.*module:HERA-TEST", "cal.log");
+        if ( count == 0 ) {
 		t.Fatalf ("Error: should have Rac maint event");
         }
 
@@ -123,8 +124,8 @@ func TestStatusU_to_F(t *testing.T) {
         }
 
  	fmt.Println ("Verify no more  RACMAINT event after worker restart");
-	if ( testutil.RegexCountFile("E.*RACMAINT.*F.*0", "cal.log") < 1) {
-           t.Fatalf ("Error: should have RACMAINT event");
+	if ( testutil.RegexCountFile("E.*RACMAINT_INFO_CHANGE.*F.*0", "cal.log") > count) {
+           t.Fatalf ("Error: should NOT have RACMAINT event after worker restarted");
         }
 
  	fmt.Printf ("Verify RAC_ID and DB_UNAME cal event")
@@ -140,6 +141,7 @@ func TestStatusU_to_F(t *testing.T) {
         stmt.Close()
         cancel()
         conn.Close()
+	testutil.DoDefaultValidation(t);
 	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_F done  -------------------------------------------------------------")
 }
 
