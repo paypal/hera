@@ -277,10 +277,14 @@ func SetRacNodeStatus (status string, module string, diff_time int64)  error {
                 return err
         }
 
-        //Insert a rac maintenenace row
+        //Insert a rac maintenance row
         txn, _ := conn.BeginTx(ctx, nil)
         stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
          _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+        if err != nil {
+        	fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+                return err
+        }
 
 	err = txn.Commit()
         if err != nil {
@@ -295,10 +299,10 @@ func SetRacNodeStatus (status string, module string, diff_time int64)  error {
 
 }
 
-func SetRacNodeStatus1 (status string, module string, diff_time int64)  error {
+func InsertRacEmptyTime (status string, module string, diff_time int64)  error {
         hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
-        db, err := sql.Open("occ", hostname + ":31002")
+        db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
                 fmt.Errorf ("Error connection to go mux: %s", err)
                 return err
@@ -306,28 +310,90 @@ func SetRacNodeStatus1 (status string, module string, diff_time int64)  error {
         db.SetMaxIdleConns(0)
         defer db.Close()
 
+        err = RunDML("DELETE from hera_maint")
+        if err != nil {
+                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+                return err
+        }
+
         ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
         conn, err := db.Conn(ctx)
         if err != nil {
                 fmt.Errorf ("Error getting connection %s\n", err.Error())
                 return err
         }
-
-        //Insert a rac maintenenace row
+	 //Insert a rac maintenance row with no time
         txn, _ := conn.BeginTx(ctx, nil)
-        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/ DELETE from occ_maint")
-        _, err = stmt.Exec()
+        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, module, machine) values (?,?,?,?)")
+         _, err = stmt.Exec(0, status, module , hostname)
         if err != nil {
-                fmt.Errorf ("Error DELETE from occ_maint %s\n", err.Error())
+                fmt.Errorf ("Error executing sql rac insert statement with empty time %s\n", err.Error())
                 return err
         }
-        stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into occ_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+
+	//Insert a rac maintenance row
+	stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
          _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+        if err != nil {
+                fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+                return err
+        }
+        err = txn.Commit()
+        if err != nil {
+                return err
+        }
         stmt.Close()
         cancel()
         conn.Close()
         return nil
+}
 
+func InsertRacEmptyTime2 (status string, module string, diff_time int64)  error {
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
+        if err != nil {
+                fmt.Errorf ("Error connection to go mux: %s", err)
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        err = RunDML("DELETE from hera_maint")
+        if err != nil {
+                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+                return err
+        }
+
+        //Insert a rac maintenance row
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                fmt.Errorf ("Error getting connection %s\n", err.Error())
+                return err
+        }
+        txn, _ := conn.BeginTx(ctx, nil)
+        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+        if err != nil {
+                fmt.Errorf ("Error executing sql rac insert statement with empty time %s\n", err.Error())
+                return err
+        }
+        //Insert a rac maintenance row with no time
+        stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, module, machine) values (?,?,?,?)")
+         _, err = stmt.Exec(0, status, module , hostname)
+        if err != nil {
+                fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+                return err
+        }
+        err = txn.Commit()
+        if err != nil {
+                return err
+        }
+        stmt.Close()
+        cancel()
+        conn.Close()
+        return nil
 }
 
 
@@ -428,7 +494,6 @@ func IsLifoUsed (t *testing.T, logfile string) bool {
     if err := scanner.Err(); err != nil {
         t.Fatal(err)
     }
-
     return (lifo_count == scan_count) 
 }
 

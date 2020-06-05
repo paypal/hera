@@ -57,14 +57,13 @@ func TestMain(m *testing.M) {
 }
 
 /* #####################################################################################
- #  Testing RAC change to status 'F'
- #  Verify mux detects status change and restart workers
- #  Run a non-dml query and expect to run without any exceptios
+ #  In hera_maint table, insert first row with empty time and second row with time 
+ #  Verify Hera mux ignores the first row and processes successfully the second row in hera_main 
  #######################################################################################*/
 
-func TestStatusU_to_F(t *testing.T) {
-	fmt.Println ("TestStatusU_to_F begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_F begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestEmptyTime(t *testing.T) {
+	fmt.Println ("TestEmptyTime begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	logger.GetLogger().Log(logger.Debug, "TestEmptyTime begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -85,7 +84,7 @@ func TestStatusU_to_F(t *testing.T) {
 
         }
 
-        err = testutil.SetRacNodeStatus ("F", "hera-test",  1)
+        err = testutil.InsertRacEmptyTime ("F", "hera-test",  1)
         if err != nil {
                 t.Fatalf("Error inserting RAC maint row  %s\n", err.Error())
         }
@@ -103,7 +102,7 @@ func TestStatusU_to_F(t *testing.T) {
         }
 
         time.Sleep(1500 * time.Millisecond)
-        fmt.Printf ("Verify worker retarted")
+        fmt.Println ("Verify worker retarted")
         if ( testutil.RegexCount ("Lifespan exceeded, terminate") < 1) {
 		 t.Fatalf ("Error: should have 'Lifespan exceeded, terminate' in log");
         }
@@ -115,6 +114,11 @@ func TestStatusU_to_F(t *testing.T) {
         if err != nil {
                 t.Fatalf ("Error getting connection %s\n", err.Error())
         }
+	fmt.Println ("Verify no more  RACMAINT event after worker restart");
+	count2  := testutil.RegexCountFile("E.*RACMAINT_INFO_CHANGE.*F.*0", "cal.log")
+        if ( count2 > count) {
+           t.Fatalf ("Error: should NOT have extra %d RACMAINT event after worker restarted", count2 - count);
+        }
 
 	fmt.Println ("Send a fetch request, verify row is returned successfully ")
         stmt, _ := conn.PrepareContext(ctx, "/*cmd*/Select accountID, status from test_simple_table_2 where Name=?")
@@ -123,17 +127,12 @@ func TestStatusU_to_F(t *testing.T) {
                 t.Fatalf("Expected 1 row")
         }
 
- 	fmt.Println ("Verify no more  RACMAINT event after worker restart");
-	if ( testutil.RegexCountFile("E.*RACMAINT_INFO_CHANGE.*F.*0", "cal.log") > count) {
-           t.Fatalf ("Error: should NOT have RACMAINT event after worker restarted");
-        }
-
  	fmt.Printf ("Verify RAC_ID and DB_UNAME cal event")
-	if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") < 1) {
+	if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") != 1) {
            t.Fatalf ("Error: should have RAC_ID event");
         }
 
-        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") < 1) {
+        if ( testutil.RegexCountFile ("E.*DB_UNAME.*MyDB.*0", "cal.log") != 1) {
 	    t.Fatalf ("Error: should see DB_UNAME event");
 	}
 
@@ -142,6 +141,6 @@ func TestStatusU_to_F(t *testing.T) {
         cancel()
         conn.Close()
 	testutil.DoDefaultValidation(t);
-	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_F done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestEmptyTime done  -------------------------------------------------------------")
 }
 
