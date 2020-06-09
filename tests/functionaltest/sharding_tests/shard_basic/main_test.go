@@ -29,7 +29,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         appcfg["num_shards"] = "5"
         appcfg["max_scuttle"] = "128"
         appcfg["shard_key_name"] = "accountID"
-        //appcfg["sharding_algo"] = "mod" => does not work, always sent to shard 0
+        appcfg["sharding_algo"] = "mod" 
 
         opscfg := make(map[string]string)
         opscfg["opscfg.default.server.max_connections"] = "3"
@@ -188,7 +188,6 @@ func TestShardBasic(t *testing.T) {
 	if (count1 < 1) {
             t.Fatalf ("Error: Select Query does NOT go to shd3");
         }
-
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic done  -------------------------------------------------------------")
 }

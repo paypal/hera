@@ -30,6 +30,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         appcfg["num_shards"] = "5"
         appcfg["max_scuttle"] = "128"
         appcfg["shard_key_name"] = "accountID"
+ 	appcfg["sharding_algo"] = "mod" 
 
         opscfg := make(map[string]string)
         opscfg["opscfg.default.server.max_connections"] = "3"
