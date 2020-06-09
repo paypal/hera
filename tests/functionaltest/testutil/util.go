@@ -69,10 +69,15 @@ func RunSelect(query string) {
         defer conn.Close()
         // cancel must be called before conn.Close()
         defer cancel()
-        stmt, _ := conn.PrepareContext(ctx, query)
+        stmt, err := conn.PrepareContext(ctx, query)
+	if err != nil {
+                fmt.Println("Error Pereparing context:", err)
+        }
         defer stmt.Close()
-        rows, _ := stmt.Query()
-        defer rows.Close()
+        _, err = stmt.Query()
+	if err != nil {
+                fmt.Println("Error fetching row:", err)
+        }
 }
 
 

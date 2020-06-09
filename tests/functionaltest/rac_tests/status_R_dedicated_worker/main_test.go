@@ -24,12 +24,13 @@ var tableName string
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg := make(map[string]string)
-	// best to chose an "unique" port in case golang runs tests in paralel
+	// best to choose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "1"
+	appcfg["rac_restart_window"] = "10"
         appcfg["lifespan_check_interval"] = "1"
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -83,7 +84,7 @@ func TestStatusRDedicatedWorker(t *testing.T) {
 
 	fmt.Println ("Insert a row to table")
         testutil.RunDML("DELETE from test_simple_table_2")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
         conn, err := db.Conn(ctx)
         if err != nil {
                 t.Fatalf ("Error getting connection %s\n", err.Error())
@@ -105,6 +106,9 @@ func TestStatusRDedicatedWorker(t *testing.T) {
 
         }
 
+        if ( testutil.RegexCountFile("E.*FETCH_MGMT.*MAINT_0.*", "cal.log") < 1) {
+           t.Fatalf ("Error: should have FETCH_MGMT events");
+        }
         err = testutil.SetRacNodeStatus ("R", "hera-test",  1)
         if err != nil {
                 t.Fatalf("Error inserting RAC maint row  %s\n", err.Error())
@@ -125,25 +129,18 @@ func TestStatusRDedicatedWorker(t *testing.T) {
 		t.Fatalf ("Error: should have RACMAINT_INFO_CHANGE event");
         }
 
+        /*time.Sleep(8000 * time.Millisecond)
 	fmt.Println ("Since the transaction is not completed, only 1 worker is restarted")
 	if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 1) {
                  t.Fatalf ("Error: should have 1 'Lifespan exceeded, terminate' in log");
-        }
+        }*/
 
 
         fmt.Println ("Now commit the changes, expected 2 workers to be restarted");
 	err = tx.Commit()
-        time.Sleep(2000 * time.Millisecond)
         if err != nil {
                 t.Fatalf("Error commit %s\n", err.Error())
         }
-
-        time.Sleep(2000 * time.Millisecond)
-        fmt.Println ("Verify worker retarted")
-        if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 1) {
-		 t.Fatalf ("Error: should have 1 'Lifespan exceeded, terminate' in log");
-        }
-
         fmt.Println ("Verify RAC_ID and DB_UNAME cal event")
         if ( testutil.RegexCountFile("E.*RAC_ID.*0.*0", "cal.log") != 2) {
            t.Fatalf ("Error: should have 2 RAC_ID events");
@@ -152,9 +149,18 @@ func TestStatusRDedicatedWorker(t *testing.T) {
             t.Fatalf ("Error: should see 2 DB_UNAME events");
         }
 
+        time.Sleep(15 * time.Second)
+        fmt.Println ("Verify worker retarted")
+        if ( testutil.RegexCount ("Lifespan exceeded, terminate") != 2) {
+		 t.Fatalf ("Error: should have 2 'Lifespan exceeded, terminate' in log");
+        }
+
         fmt.Println ("Verify request works fine after restarting")
 	fmt.Println ("Send a fetch request, verify row is returned successfully ")
-        stmt, _ = conn.PrepareContext(ctx, "/*cmd*/Select accountID, status from test_simple_table_2 where Name=?")
+        stmt, err = conn.PrepareContext(ctx, "/*cmd*/Select accountID, status from test_simple_table_2 where Name=?")
+        if err != nil {
+                t.Fatalf("Error PrepareContext %s\n", err.Error())
+        }
         rows, _ := stmt.Query("Linda Plump")
         if !rows.Next() {
                 t.Fatalf("Expected 1 row")
