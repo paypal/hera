@@ -66,11 +66,13 @@ func DoDefaultValidation (t *testing.T) {
     }
     c3 := RegexCount ("unexpected child termination");
     if c3 > 0 {
-        t.Fatalf ("Error: unexpected child termination! PLEAS CHECK!!")
+        t.Fatalf ("Error: unexpected child termination! PLEASE CHECK!!")
     }
     c4 := RegexCountFile ("ERROR", "cal.log");
     if c4 > 0 {
-        t.Fatalf ("Error: unexpected ERROR in CAL ! PLEAS CHECK!!")
+	if RegexCountFile ("no_shard_map", "cal.log") < 1 {
+           t.Fatalf ("Error: unexpected ERROR in CAL ! PLEASE CHECK!!")
+	}
     }
 
 
