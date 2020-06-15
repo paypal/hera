@@ -1,6 +1,4 @@
-package com.paypal.hera.dal.jdbc.rt; 
-
-import com.ebay.kernel.util.UnsynchronizedStringBuffer;
+package com.paypal.hera.dal.jdbc.rt;
 
 /**
  * JdbcDriverInfo acts as a container for JDBC driver information
@@ -68,7 +66,7 @@ public class JdbcDriverInfo {
 	}
 
 	public String toString() {
-		UnsynchronizedStringBuffer sb = new UnsynchronizedStringBuffer(200);
+		StringBuilder sb = new StringBuilder(200);
 
 		sb.append("JdbcDriverInfo[driverName = ");
 		sb.append(m_driverName);

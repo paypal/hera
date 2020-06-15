@@ -1,15 +1,10 @@
 package com.paypal.hera.dal.jdbc.rt;
 
-import java.util.ListIterator;
-
-import com.ebay.kernel.BaseEnum;
-import com.ebay.kernel.util.JdkUtil;
-
 /**
  * Defines type of database operation intercepted by CM Proxy
  * 
  */
-public final class JdbcOperationType extends BaseEnum {
+public final class JdbcOperationType {
 
 	private static final long serialVersionUID = -3454117283389670364L;
 	public static final JdbcOperationType CONN_MISC =
@@ -81,25 +76,25 @@ public final class JdbcOperationType extends BaseEnum {
 	private JdbcOperationType(String name, int intValue,
 		boolean isDmlOperation)
 	{
-		super(intValue, name);
+		//super(intValue, name);
 		m_isDmlOperation = isDmlOperation;
 	}   
 
-	public static JdbcOperationType get(int key) {
-		return (JdbcOperationType)getEnum(
-			JdkUtil.forceInit(JdbcOperationType.class), key);
-	}   
-
-	public static JdbcOperationType getElseReturn(
-		int key, JdbcOperationType elseEnum)
-	{  
-		return (JdbcOperationType)getElseReturnEnum(
-			JdkUtil.forceInit(JdbcOperationType.class), key, elseEnum);
-	}   
-
-	public static ListIterator iterator() {
-		return getIterator(JdkUtil.forceInit(JdbcOperationType.class));
-	}                         
+//	public static JdbcOperationType get(int key) {
+//		return (JdbcOperationType)getEnum(
+//			JdkUtil.forceInit(JdbcOperationType.class), key);
+//	}   
+//
+//	public static JdbcOperationType getElseReturn(
+//		int key, JdbcOperationType elseEnum)
+//	{  
+//		return (JdbcOperationType)getElseReturnEnum(
+//			JdkUtil.forceInit(JdbcOperationType.class), key, elseEnum);
+//	}   
+//
+//	public static ListIterator iterator() {
+//		return getIterator(JdkUtil.forceInit(JdbcOperationType.class));
+//	}                         
 
 	/**
 	 * Checks whether operation could potentially modify the data

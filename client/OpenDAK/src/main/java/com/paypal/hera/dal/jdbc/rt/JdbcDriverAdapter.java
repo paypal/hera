@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Properties;
 
 import com.paypal.hera.cal.CalTransaction;
-import com.paypal.hera.dal.DalRuntimeException;
 
 public interface JdbcDriverAdapter {
 
@@ -29,7 +28,7 @@ public interface JdbcDriverAdapter {
 	 * @return
 	 * @throws DalRuntimeException
 	 */
-	public int getRecordSize(Statement realStmt) throws DalRuntimeException;
+	public int getRecordSize(Statement realStmt) throws RuntimeException;
 
 	/**
 	 * Performs a dummy SQL on the backend database to test reacheability.
