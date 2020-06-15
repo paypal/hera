@@ -13,9 +13,9 @@ public class DalTransactionManagerFactory
 	 * 
 	 * @return
 	 */
-	public static DalTransactionManager getDalTransactionManager()
+	public static DalTransactionManagerImpl getDalTransactionManager()
 	{
-		return DalTransactionManagerImpl.getInstance();
+		return new DalTransactionManagerImpl();
 	}
 }
 
