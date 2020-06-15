@@ -1,4 +1,4 @@
 # OpenDAK
-Open Data Access Kernel for Hera
+Open Data Access Kernel for Hera. Currently available for Java clients.
 
 
