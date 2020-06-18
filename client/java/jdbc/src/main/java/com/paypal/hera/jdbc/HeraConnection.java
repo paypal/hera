@@ -67,6 +67,7 @@ public class HeraConnection implements Connection {
 	private int shardID;
 	private static final String SERVER_LOGICAL_NAME = "host";
 	private static final String CAL_LOGGING_OPTIONS = "calLogOption";
+	public static final String OCC_CLIENT_CONN_ID = "OccClientConnID";
 
 	public HeraConnection(Properties _props, String _address, String _port, String _url) throws HeraIOException, HeraConfigException {
 		if (LOGGER.isDebugEnabled()) {
@@ -651,5 +652,9 @@ public class HeraConnection implements Connection {
 
 	public E_DATASOURCE_TYPE getDataSource() {
 		return datasource;
+	}
+	
+	public void setFirstSQL(boolean isFirstSQL) {
+		getHeraClient().setFirstSQL(isFirstSQL);
 	}
 }
