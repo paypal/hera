@@ -40,4 +40,5 @@ public interface HeraClient {
 	public void setServerLogicalName(String name);
 	public void setCalLogOption(String isCalEnabled);
 	public void setHeraHostName(String heraBoxName);
+	public void setFirstSQL(boolean isFirstSQL);
 }
