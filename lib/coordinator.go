@@ -521,6 +521,55 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	ticket := crd.ticket
 	xShardRead := false
 
+	// check bind throttle
+	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+	if ok {
+		wType := wtypeRW
+		cfg := GetNumWorkers(crd.shard.shardID)
+		if GetConfig().ReadonlyPct > 0 {
+			if crd.isRead {
+				wType = wtypeRO
+				cfg = int( float64(cfg)*float64(GetConfig().ReadonlyPct)/100.0 );
+			} else {
+				cfg = int( float64(cfg)*float64(100-GetConfig().ReadonlyPct)/100.0 );
+			}
+		}
+		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
+		heavyUsage := false
+		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
+		if numFree < int(thres) {
+			heavyUsage = true
+		}
+		if logger.GetLogger().V(logger.Verbose) {
+			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
+				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
+			logger.GetLogger().Log(logger.Verbose, msg)
+		}
+		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
+		if needBlock {
+			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
+				throttleEntry.Name,
+				throttleEntry.Value,
+				throttleEntry.AllowEveryX,
+				1.0/float64(throttleEntry.AllowEveryX),
+				crd.conn.RemoteAddr().String())
+			sqlhashStr := fmt.Sprintf("%d",uint32(crd.sqlhash))
+			evt := cal.NewCalEvent("BIND_THROTTLE", sqlhashStr, "1", msg)
+			evt.Completed()
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "bind throttle", sqlhashStr, msg)
+			}
+			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrBindThrottle.Error()))
+			crd.respond(ns.Serialized)
+			crd.conn.Close()
+			return fmt.Errorf("bind throttle block")
+		} else {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "bind throttle allow",uint32(crd.sqlhash))
+			}
+		}
+	}
+
 	if worker == nil {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
 			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
@@ -655,6 +704,41 @@ var (
 	ErrCanceled   = errors.New("Canceled")
 )
 
+
+/* does not return all values from array binds */
+func parseBinds(request *netstring.Netstring) (map[string]string) {
+    out := make(map[string]string)
+
+    requests, err := netstring.SubNetstrings(request)
+    if err != nil {
+	return out
+    }
+
+    sz := len(requests)
+    for i := 0; i < sz; i++ {
+        if requests[i].Cmd == common.CmdBindName {
+            bindName := string(requests[i].Payload)
+            for j:=1; i+j<sz; j++ {
+                if requests[i+j].Cmd == common.CmdBindNum {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindType {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindValue {
+                    out[bindName] = string(requests[i+j].Payload)
+                } else {
+                    // i=3 i+j=5 ---- 3:name 4:value 5:name
+                    i += j-2
+                    break
+                }
+            }
+        } // end if bind name
+    }
+
+    return out
+}
+
 /**
  * performs a SQL, which is a communication of request & responses until EOR_... is received, or some
  * exception happens (client disconnects, worker exits, timeout)
@@ -716,6 +800,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	// dosession.
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+	worker.sqlBindNs.Store(request)
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
