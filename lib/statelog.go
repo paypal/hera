@@ -328,6 +328,24 @@ func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
 	return (wbacklog <= _wlimit) && ((rbacklog <= _rlimit) || (readerCnt == 0)), wbacklog + rbacklog
 }
 
+func (sl *StateLog) numFreeWorker(shardId int, wType HeraWorkerType) int {
+	out := 0
+	instCnt := len(sl.mWorkerStates[shardId][wType])
+	for n := 0; n < instCnt; n++ {
+		workerCnt := len(sl.mWorkerStates[shardId][wType][n])
+		if workerCnt == 0 {
+			continue
+		}
+		for w := 0; w < workerCnt; w++ {
+			workerState := sl.mWorkerStates[shardId][wType][n][w].state
+			if workerState == wsAcpt {
+				out++
+			}
+		}
+	}
+	return out
+}
+
 func (sl *StateLog) hasFreeWorker(shdCnt int) bool {
 	for s := 0; s < shdCnt; s++ {
 		instCnt := len(sl.mWorkerStates[s][wtypeRW])
