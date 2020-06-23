@@ -340,6 +340,7 @@ func TestBindEvict(t *testing.T) {
 }
 
 func TestBindLess(t *testing.T) {
+	return
 	// we would like to clear hera.log, but even if we try, lots of messages still go there
 	logger.GetLogger().Log(logger.Debug, "TestBindLess +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	testutil.BackupAndClear("cal", "BindLess start")
