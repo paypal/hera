@@ -16,7 +16,7 @@ particular bind value, then some of those
 bind-value queries should be evicted.*
 
 We require that the bind value be at least 8 bytes. This avoids blocking 
-status == 'D' or zip_code == '00901'.
+status == 'D' or zip_code == '00901'. Each sql text is blocked separately.
 
 # Dynamic Throttle
 
