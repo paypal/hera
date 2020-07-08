@@ -52,6 +52,13 @@ func GetBindEvict() *BindEvict {
 	}
 	return cfg.(*BindEvict)
 }
+func (this *BindEvict) Copy() *BindEvict {
+	out := BindEvict{BindThrottle:make(map[uint32]map[string]*BindThrottle)}
+	for k,v := range this.BindThrottle {
+		out.BindThrottle[k] = v
+	}
+	return &out
+}
 
 var nbnEndingNum *regexp.Regexp
 
@@ -77,10 +84,20 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 	}
 	entry.AllowEveryX = 0
 
-	bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
-	delete(GetBindEvict().BindThrottle[entry.Sqlhash], bindKV)
-	if len(GetBindEvict().BindThrottle[entry.Sqlhash]) == 0 {
-		delete(GetBindEvict().BindThrottle, entry.Sqlhash)
+	if len(GetBindEvict().BindThrottle[entry.Sqlhash]) == 1 {
+		updateCopy := GetBindEvict().Copy()
+		delete(updateCopy.BindThrottle, entry.Sqlhash)
+		gBindEvict.Store(updateCopy)
+	} else {
+		bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
+		updateCopy := make(map[string]*BindThrottle)
+		for k,v := range GetBindEvict().BindThrottle[entry.Sqlhash] {
+			if k == bindKV {
+				continue
+			}
+			updateCopy[k] = v
+		}
+		GetBindEvict().BindThrottle[entry.Sqlhash] = updateCopy
 	}
 }
 func (entry *BindThrottle) incrAllowEveryX() {
