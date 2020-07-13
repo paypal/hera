@@ -84,8 +84,9 @@ func (m *mux) setupWorkdir() {
 
 func (m *mux) setupConfig() error {
 	// opscfg
-	m.appcfg["opscfg.hera.server.max_connections"] = m.opscfg["opscfg.default.server.max_connections"]
-	m.appcfg["opscfg.hera.server.log_level"] = m.opscfg["opscfg.default.server.log_level"]
+	for k,v := range m.opscfg {
+		m.appcfg[k] = v
+	}
 	if m.wType != OracleWorker {
 		m.appcfg["child.executable"] = "mysqlworker"
 	}
@@ -197,6 +198,7 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 	} else {
 		os.Setenv("username", "appuser")
 	}
+	os.Setenv("mysql_ip", ipBuf.String())
 
 	return ipBuf.String()
 }
@@ -334,7 +336,7 @@ func (m *mux) StopServer() {
 		m.dbStop()
 		syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
 	}
-	CleanMysql("mysql22")
+	//CleanMysql("mysql22")
 
 	timer := time.NewTimer(time.Second * 5)
 	go func() {

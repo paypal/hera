@@ -80,6 +80,11 @@ func (msg *workerMsg) GetNetstring() *netstring.Netstring {
 	return msg.ns
 }
 
+type BindPair struct {
+	name string
+	value string
+}
+
 // WorkerClient represents a worker process
 type WorkerClient struct {
 	ID            int              // the worker identifier, from 0 to max worker count
@@ -115,6 +120,9 @@ type WorkerClient struct {
 	// hashcode of the sql that is currently being executed.
 	//
 	sqlHash int32
+	//
+	// for bind eviction
+	sqlBindNs atomic.Value // *netstring.Netstring
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.
 	// reset to 0 after eor meaning no sql running (same as start_time_offset_ms in c++).

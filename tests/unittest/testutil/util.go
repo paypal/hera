@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"bytes"
 	"bufio"
 	"context"
 	"database/sql"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/paypal/hera/utility/logger"
@@ -46,6 +48,69 @@ func statelogGetField(pos int) (int, error) {
 
 func BashCmd(cmd string) ([]byte, error) {
 	return exec.Command("/bin/bash", "-c", cmd).Output()
+}
+
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	buf := make([]byte, 1024*1024)
+	for {
+		numBytes, _ := in.Read(buf)
+		out.Write(buf[:numBytes])
+		if numBytes < len(buf) {
+			break
+		}
+	}
+	return out.Close()
+}
+
+func BackupAndClear(logbasename, grpName string) {
+	num := 2
+	bakname := ""
+	for {
+		bakname = fmt.Sprintf("%s%d.log", logbasename, num)
+		_, err := os.Stat(bakname)
+		if os.IsNotExist(err) {
+			break
+		}
+	}
+	logname := logbasename+".log"
+	/* nowStr := time.Now().Format("15:04:05.000000")
+	f, err := os.OpenFile(logname, os.O_APPEND, 0666)
+	if err == nil {
+		msg := fmt.Sprintf("%s %s BackupAndClear() %s %d=oldFileNum\n", nowStr, grpName, logbasename, num)
+		f.WriteString(msg)
+		f.Close()
+	}
+	time.Sleep(10 * time.Millisecond) // */
+	Copy(logname, bakname)
+	os.Truncate(logname, 0)
+	/* time.Sleep(10 * time.Millisecond)
+	fh, err := os.OpenFile(logname, os.O_APPEND, 0666)
+	if err == nil {
+		msg := fmt.Sprintf("%s %s BackupAndClear() %s %d=oldFileNum, now newFile\n", nowStr, grpName, logbasename, num)
+		fh.WriteString(msg)
+		fh.Close()
+	} // */
+}
+
+func RunMysql(sql string) (string, error) {
+        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
+        cmd.Stdin = strings.NewReader(sql)
+        var cmdOutBuf bytes.Buffer
+        cmd.Stdout = &cmdOutBuf
+        cmd.Run()
+	return cmdOutBuf.String(), nil
 }
 
 func RunDML(dml string) error {
