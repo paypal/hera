@@ -51,6 +51,7 @@ type Config struct {
 	BindEvictionTargetConnPct   int
 	BindEvictionThresholdPct    int
 	BindEvictionDecrPerSec      float64
+	BindEvictionMaxThrottle     int
 	//
 	//
 	//
@@ -364,6 +365,7 @@ func InitConfig() error {
 	gAppConfig.SoftEvictionEffectiveTimeMs = cdb.GetOrDefaultInt("soft_eviction_effective_time", 10000)
 	gAppConfig.SoftEvictionProbability = cdb.GetOrDefaultInt("soft_eviction_probability", 50)
 	gAppConfig.BindEvictionTargetConnPct = cdb.GetOrDefaultInt("bind_eviction_target_conn_pct", 50)
+	gAppConfig.BindEvictionMaxThrottle = cdb.GetOrDefaultInt("bind_eviction_max_throttle", 20)
 	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 25)
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "1.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)

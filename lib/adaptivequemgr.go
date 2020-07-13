@@ -120,6 +120,14 @@ type BindCount struct {
 /* A bad query with multiple binds will add independent bind throttles to all
 bind name and values */
 func (mgr *adaptiveQueueManager) doBindEviction() (int) {
+	throttleCount := 0
+	for _,keyValues := range GetBindEvict().BindThrottle {
+		throttleCount += len(keyValues)
+	}
+	if throttleCount > GetConfig().BindEvictionMaxThrottle {
+		return 0
+	}
+
 	bindCounts := make(map[string]*BindCount)
 	for worker, ticket := range mgr.dispatchedWorkers {
 		if worker == nil {
