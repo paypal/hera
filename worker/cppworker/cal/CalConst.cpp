@@ -1,3 +1,19 @@
+// Copyright 2020 PayPal Inc.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include "CalConst.h"
 
 /**
@@ -45,45 +61,17 @@ const std::string CAL::ERR_ACTION = std::string("ERR_ACTION");
 
 // Module names
 const std::string CAL::MOD_NONE = std::string("");
-const std::string CAL::MOD_ADMIN = std::string("ADMIN");
 const std::string CAL::MOD_OCC = std::string("OCC");
-const std::string CAL::MOD_PIMP = std::string("PIMP");
 const std::string CAL::MOD_GENERIC_CLIENT = std::string("CLIENT");
 const std::string CAL::MOD_GENERIC_SERVER = std::string("SERVER");
-const std::string CAL::MOD_TH = std::string("TH");
-const std::string CAL::MOD_TRANSUTIL = std::string("TRANSUTIL");
-const std::string CAL::MOD_WEBSCR = std::string("WEBSCR");
-const std::string CAL::MOD_CRYPTO = std::string("CRYPTO");
-const std::string CAL::MOD_BATCH = std::string("BATCH");
-const std::string CAL::MOD_FRAUDUTIL = std::string("FRAUDUTIL");
-const std::string CAL::MOD_XML_INTERFACE_EBAY = std::string("XML_INTERFACE_EBAY");
 
-// Transaction names
-const std::string CAL::TRANS_NAME_DCC_REGISTER = std::string("Register");
-const std::string CAL::TRANS_NAME_DCC_REGISTER_CHECK = std::string("RegisterCheck");
-const std::string CAL::TRANS_NAME_WAX_REGISTER = std::string("WAXRegister");
-
-// System error codes
 const std::string CAL::SYS_ERR_NONE = std::string("");
-const std::string CAL::SYS_ERR_2PC = std::string("2PC");
-const std::string CAL::SYS_ERR_ACCESS_DENIED = std::string("ACCESS DENIED");
-const std::string CAL::SYS_ERR_ATTACKSERV = std::string("ATTACKSERV");
 const std::string CAL::SYS_ERR_CONFIG = std::string("CONFIG");
-const std::string CAL::SYS_ERR_CONNECTION_FAILED = std::string("CONNECTION_FAILED");
-const std::string CAL::SYS_ERR_CRYPTOSERV = std::string("CRYPTOSERV");
-const std::string CAL::SYS_ERR_DATA = std::string("DATA");
-const std::string CAL::SYS_ERR_EMAIL = std::string("EMAIL");
-const std::string CAL::SYS_ERR_HANDSHAKE = std::string("HANDSHAKE");
-const std::string CAL::SYS_ERR_INQUIRA = std::string("INQUIRA");
 const std::string CAL::SYS_ERR_INTERNAL = std::string("INTERNAL");
-const std::string CAL::SYS_ERR_IPN = std::string("IPN");
 const std::string CAL::SYS_ERR_MARKED_DOWN = std::string("MARKED DOWN");
 const std::string CAL::SYS_ERR_OCC = std::string("OCC");
 const std::string CAL::SYS_ERR_ORACLE = std::string("ORACLE");
-const std::string CAL::SYS_ERR_RT_RECON = std::string("REALTIME_RECON");
 const std::string CAL::SYS_ERR_SQL = std::string("SQL");
-const std::string CAL::SYS_ERR_AMQ = std::string("AMQ");
-const std::string CAL::SYS_ERR_UNKNOWN = std::string("UNKNOWN");
 
 // Event types
 const std::string CAL::EVENT_TYPE_FATAL = std::string("FATAL");

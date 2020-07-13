@@ -1,3 +1,19 @@
+// Copyright 2020 PayPal Inc.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //-----------------------------------------------------------------------------
 //
 // WORKER CHILD
@@ -31,29 +47,6 @@
 //   called if prepare_connection() fails.
 //
 //-----------------------------------------------------------------------------
-//
-// SERVER CHILD FACTORY
-//
-// After defining a class D derived from Worker, you need to define a
-// class DFactory, derived from ServerChildFactory.  For most servers, this is
-// fairly trivial.  The methods to be overridden are:
-//
-// - virtual Worker* create(const InitParams& _params) const = 0;
-//   This is the important method.  DFactory::create() should return an instance
-//   of D.  The Worker constructor requires a number of parameters which
-//   will likely be required in turn by the D constructor.  Most of these are
-//   provided as parameters to create(), and the last (config filename) can be
-//   taken from DFactory::config_filename().
-//
-// - virtual const char* get_config_filename()
-//   This returns the filename of the config used by the server.  e.g.
-//   "finserv.cdb".
-//
-// - virtual const char* get_server_name()
-//   This returns the name of the server, e.g. "finserv".  This server name is
-//   used in some log messages.  It is also used to determine the protected
-//   config filename and possibly some certificate filenames.
-//
 
 #ifndef _SERVERCHILD_H_
 #define _SERVERCHILD_H_

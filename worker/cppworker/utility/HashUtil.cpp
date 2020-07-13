@@ -1,3 +1,4 @@
+// On 2020-07, https://github.com/aappleby/smhasher notes that MurmurHash is public domain
 #include "HashUtil.h"
 
 // just in this file
