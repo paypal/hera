@@ -69,6 +69,8 @@ var (
 	ErrBklgEviction                = errors.New("HERA-102: backlog eviction")
 	ErrRejectDbDown                = errors.New("HERA-103: request rejected, database down")
 	ErrSaturationSoftSQLEviction   = errors.New("HERA-104: saturation soft sql eviction")
+	ErrBindThrottle                = errors.New("HERA-105: bind throttle")
+	ErrBindEviction                = errors.New("HERA-106: bind eviction")
 	ErrNoShardKey                  = errors.New("HERA-373: no shard key or more than one or bad logical db")
 	ErrAutodiscoverWhileSetShardID = errors.New("HERA-374: autodiscover while set shard id")
 	ErrCrossKeysDML                = errors.New("HERA-206: cross key dml")

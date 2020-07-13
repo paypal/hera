@@ -19,11 +19,13 @@ package lib
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync/atomic"
 	"time"
 
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -107,6 +109,130 @@ func (mgr *adaptiveQueueManager) init(wpool *WorkerPool) error {
 	return nil
 }
 
+// used in doBindEviction() to find hot bind values
+type BindCount struct {
+	Sqlhash uint32
+	Name    string
+	Value   string                   // should be long enough >=6-9 to avoid status fields
+	Workers map[string]*WorkerClient // lookup by ticket
+}
+
+/* A bad query with multiple binds will add independent bind throttles to all
+bind name and values */
+func (mgr *adaptiveQueueManager) doBindEviction() (int) {
+	throttleCount := 0
+	for _,keyValues := range GetBindEvict().BindThrottle {
+		throttleCount += len(keyValues)
+	}
+	if throttleCount > GetConfig().BindEvictionMaxThrottle {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "already too many bind throttles, skipping bind eviction and throttle")
+		}
+		return 0
+	}
+
+	bindCounts := make(map[string]*BindCount)
+	for worker, ticket := range mgr.dispatchedWorkers {
+		if worker == nil {
+			continue
+		}
+		usqlhash := uint32(worker.sqlHash)
+		sqlhash := atomic.LoadUint32(&(usqlhash))
+		request := worker.sqlBindNs.Load().(*netstring.Netstring)
+		contextBinds := parseBinds(request)
+		for bindName0, bindValue := range contextBinds {
+			/* avoid too short status values
+			D=deleted, P=pending, C=confirmed
+			US Zip Codes: 90210, 95131
+			we want account id's, phone number, or full emails
+			easiest just to check length */
+			if len(bindValue) <= 7 {
+				continue
+			}
+
+			/* select * from .. where id in ( :bn1, :bn2, bn3.. )
+			bind names are all normalized to bn#
+			bind values may repeat */
+			bindName := NormalizeBindName(bindName0)
+			concatKey := fmt.Sprintf("%u|%s|%s", sqlhash, bindName, bindValue)
+
+			entry, ok := bindCounts[concatKey]
+			if !ok {
+				entry = &BindCount{
+					Sqlhash: sqlhash,
+					Name:    bindName,
+					Value:   bindValue,
+					Workers: make(map[string]*WorkerClient),
+					}
+				bindCounts[concatKey] = entry
+			}
+
+			entry.Workers[ticket] = worker
+		}
+	} // end for worker search
+
+	evictedTicket := make(map[string]string)
+
+	evictCount := 0
+	for _, entry := range bindCounts {
+		sqlhash := entry.Sqlhash
+		bindName := entry.Name
+		bindValue := entry.Value
+
+		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(len(mgr.dispatchedWorkers)) ) {
+			continue
+		}
+		// evict sqlhash, bindvalue
+		//for idx := 0; idx < len(entry.Workers); idx++  {
+		for ticket, worker := range entry.Workers {
+			_, ok := evictedTicket[ticket]
+			if ok {
+				continue
+			}
+			evictedTicket[ticket] = ticket
+
+			if mgr.dispatchedWorkers[worker] != ticket {
+				continue
+			}
+			// do eviction
+			select {
+			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true}:
+			default:
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (bind eviction)", worker.pid)
+				}
+			}
+			et := cal.NewCalEvent("BIND_EVICT", fmt.Sprintf("%d", entry.Sqlhash),
+				"1", fmt.Sprintf("pid=%d&k=%s&v=%s", worker.pid, entry.Name, entry.Value))
+			et.Completed()
+			evictCount++
+		}
+
+		// setup allow-every-x
+		sqlBind, ok := GetBindEvict().BindThrottle[sqlhash]
+		if !ok {
+			sqlBind = make(map[string]*BindThrottle)
+			GetBindEvict().BindThrottle[sqlhash] = sqlBind
+		}
+		concatKey := fmt.Sprintf("%s|%s", bindName, bindValue)
+		throttle, ok := sqlBind[concatKey]
+		if ok {
+			throttle.incrAllowEveryX()
+		} else {
+			throttle := BindThrottle{
+				Name:          bindName,
+				Value:         bindValue,
+				Sqlhash:       sqlhash,
+				AllowEveryX:   3*len(entry.Workers) + 1,
+			}
+			now := time.Now()
+			throttle.RecentAttempt.Store(&now)
+			sqlBind[concatKey] = &throttle
+		}
+	}
+	return evictCount
+}
+
 /**
  * saturation recovery loop wake up every second (default).
  */
@@ -139,7 +265,7 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "saturation recover active (ms)", sleep)
 		}
-		if mgr.shouldRecover() {
+		if mgr.shouldRecover() && mgr.doBindEviction() == 0 {
 			//
 			// once we decided to recover a worker and send an abort msg through worker.ctrlCh,
 			// one of three things could happen
