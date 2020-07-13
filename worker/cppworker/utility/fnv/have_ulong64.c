@@ -39,7 +39,6 @@
 
 unsigned long long val = 1099511628211ULL;
 
-// pvoicu - rename main
 int
 main_have_ulong64(void)
 {

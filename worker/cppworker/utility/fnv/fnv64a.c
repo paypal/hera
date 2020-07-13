@@ -76,7 +76,6 @@
 
 #define BUF_SIZE (32*1024)	/* number of bytes to hash at a time */
 
-//pvoicu
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wwrite-strings"
 
@@ -116,7 +115,6 @@ print_fnv(Fnv64_t hval, Fnv64_t mask, int verbose, char *arg)
 #endif
 }
 
-// pvoicu - rename
 /*
  * main - the main function
  *
@@ -267,5 +265,4 @@ main_fnv64a(int argc, char *argv[])
     return 0;	/* exit(0); */
 }
 
-//pvoicu
 #pragma GCC diagnostic pop

@@ -1,3 +1,19 @@
+// Copyright 2020 PayPal Inc.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #include <dirent.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -2092,7 +2108,6 @@ int OCCChild::send_heartbeat_ping()
 
 //-----------------------------------------------------------------------------
 
-// 08/16/06 kasingh
 // asynch large payload insert requires a large socket send buffer size 
 // This is especially critical for amq that may have payload of the order
 // of several kilobytes 
@@ -5128,11 +5143,6 @@ int OCCChild::check_markdowns(MarkdownEnum type, const std::string &_src) {
 
 bool OCCChild::cal_log_command(int _cmd)
 {
-	// As part of the CPU load reduction efforts in 28.0, we developed
-	// this list of commands that don't need explicit CAL logging at the
-	// time the command is received (see Worker::handle_connection()).
-	// KC okayed this list.
-
 	switch (_cmd)
 	{
 	case OCC_BIND_NAME:

@@ -1,3 +1,19 @@
+// Copyright 2020 PayPal Inc.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 #ifndef CAL_CONST_H
 #define CAL_CONST_H
 
@@ -40,43 +56,17 @@ namespace CAL
 	extern const std::string ERR_ACTION;
 
 	extern const std::string MOD_NONE;
-	extern const std::string MOD_ADMIN;
 	extern const std::string MOD_OCC;
-	extern const std::string MOD_PIMP;
 	extern const std::string MOD_GENERIC_CLIENT;
 	extern const std::string MOD_GENERIC_SERVER;
-	extern const std::string MOD_TH;
-	extern const std::string MOD_TRANSUTIL;
-	extern const std::string MOD_WEBSCR;
-	extern const std::string MOD_CRYPTO;
-	extern const std::string MOD_BATCH;
-	extern const std::string MOD_FRAUDUTIL;
-	extern const std::string MOD_XML_INTERFACE_EBAY;
-
-	extern const std::string TRANS_NAME_DCC_REGISTER;
-	extern const std::string TRANS_NAME_DCC_REGISTER_CHECK;
-	extern const std::string TRANS_NAME_WAX_REGISTER;
 
 	extern const std::string SYS_ERR_NONE;
-	extern const std::string SYS_ERR_2PC;
-	extern const std::string SYS_ERR_ACCESS_DENIED;
-	extern const std::string SYS_ERR_ATTACKSERV;
 	extern const std::string SYS_ERR_CONFIG;
-	extern const std::string SYS_ERR_CONNECTION_FAILED;
-	extern const std::string SYS_ERR_CRYPTOSERV;
-	extern const std::string SYS_ERR_DATA;
-	extern const std::string SYS_ERR_EMAIL;
-	extern const std::string SYS_ERR_HANDSHAKE;
-	extern const std::string SYS_ERR_INQUIRA;
 	extern const std::string SYS_ERR_INTERNAL;
-	extern const std::string SYS_ERR_IPN;
 	extern const std::string SYS_ERR_MARKED_DOWN;
 	extern const std::string SYS_ERR_OCC;
 	extern const std::string SYS_ERR_ORACLE;
-	extern const std::string SYS_ERR_RT_RECON;
 	extern const std::string SYS_ERR_SQL;
-	extern const std::string SYS_ERR_AMQ;
-	extern const std::string SYS_ERR_UNKNOWN;
 
 	extern const std::string EVENT_TYPE_FATAL;
 	extern const std::string EVENT_TYPE_ERROR;

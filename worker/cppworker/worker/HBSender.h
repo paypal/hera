@@ -1,13 +1,24 @@
+// Copyright 2020 PayPal Inc.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /* HBSender is used by OCC child worker to send heartbeat to client at regular interval
  * while a blocking SQL in pending on Oracle. Most SQLs do not take very long (heartbeat interval
  * is typically 90 seconds), so no heartbeat will go out. 
- *
- * Due to a bug in Oracle when we have version 8 client talking to 10g server, async/non-blocking
- * SQL fails intermittently. However, sync/blocking SQL work just fine.
- * In order to work around this problem, OCC spins off HBSender to send heartbeat to client in a separate
- * thread. In order not to expose this to 8i client/8i server, this feature can be enabled/disabled through 
- * an OCC cdb (enable_hearbeat_fix)
-*/
+ */
 
 #ifndef _HBSender_H
 #define _HBSender_H
