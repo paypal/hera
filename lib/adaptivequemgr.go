@@ -125,6 +125,9 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		throttleCount += len(keyValues)
 	}
 	if throttleCount > GetConfig().BindEvictionMaxThrottle {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "already too many bind throttles, skipping bind eviction and throttle")
+		}
 		return 0
 	}
 
