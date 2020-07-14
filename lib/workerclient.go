@@ -202,15 +202,21 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 func (worker *WorkerClient) StartWorker() (err error) {
 	attr := syscall.ProcAttr{Dir: "./", Env: os.Environ(), Files: nil, Sys: nil}
 	var dbHostName string
-	if len(worker.moduleName) > 4 {
-		dbHostName = strings.ToUpper(worker.moduleName[4:])
-		pos := strings.Index(dbHostName, "-")
-		if pos != -1 {
-			dbHostName = dbHostName[:pos]
-		}
+	logDbHostName := os.Getenv("LOG_DB_HOST_NAME")
+	if len(logDbHostName) > 0 {
+		dbHostName = logDbHostName
 	} else {
-		return errors.New("Invalid module name, must be like hera-<name> ")
+		if len(worker.moduleName) > 4 {
+			dbHostName = strings.ToUpper(worker.moduleName[4:])
+			pos := strings.Index(dbHostName, "-")
+			if pos != -1 {
+				dbHostName = dbHostName[:pos]
+			}
+		} else {
+			return errors.New("Invalid module name, must be like hera-<name> ")
+		}
 	}
+
 
 	var twoTask string
 	switch worker.Type {
