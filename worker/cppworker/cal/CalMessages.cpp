@@ -89,9 +89,9 @@ ulong CalActivity::SendSQLData ( const std::string& sql_query )
 	// will always be zero -- and then fnv_64a_str would think the string was
 	// only a single byte long!
 	unsigned long long hash64 = fnv_64a_str(sql_query.c_str(), FNV1_64A_INIT);
-	ulong hi = (ulong) (hash64 >> 32);
-	ulong lo = (ulong) hash64;
-	ulong hash32 = lo ^ hi;
+	unsigned hi = (unsigned) (hash64 >> 32);
+	unsigned lo = (unsigned) hash64;
+	unsigned hash32 = lo ^ hi;
 
 	std::ostringstream os;
 	os << kCALDollar << hash32 << kCALTab << sql_query << kCALEndOfLine;

@@ -182,6 +182,9 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 	if lifespan >= 4 {
 		worker.exitTime = worker.startTime + int64(lifespan) - int64(rand.Intn(int(lifespan/4)))
 	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
+	}
 	// TODO
 	worker.racID = -1
 	worker.isUnderRecovery = 0
@@ -406,7 +409,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		buf.WriteString("_shard_")
 		buf.WriteString(strconv.Itoa(worker.shardID))
 	}
-	evt := cal.NewCalEvent("MUX", buf.String(), cal.TransOK, "")
+	evt := cal.NewCalEvent(EvtTypeMux, buf.String(), cal.TransOK, "")
 	evt.Completed()
 
 	// TODO: change to use "exec"
@@ -763,7 +766,7 @@ outer:
 			}
 
 			if len(calMsg) > 0 {
-				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
+				e := cal.NewCalEvent(EvtTypeMux, "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
 				e.Completed()
 			}
 			return
