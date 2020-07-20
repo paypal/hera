@@ -124,6 +124,7 @@ type Config struct {
 	// to use OpenSSL (for testing) or crypto/tls
 	UseOpenSSL bool
 
+	ErrorCodePrefix string
 	StateLogPrefix string
 	ManagementTablePrefix string
 	// RAC maint reload config interval
@@ -392,6 +393,7 @@ func InitConfig() error {
 	gAppConfig.UseOpenSSL = cdb.GetOrDefaultBool("openssl", false)
 	gAppConfig.MuxPidFile = cdb.GetOrDefaultString("mux_pid_file", "mux.pid")
 
+	gAppConfig.ErrorCodePrefix = cdb.GetOrDefaultString("error_code_prefix", "HERA")
 	gAppConfig.StateLogPrefix = cdb.GetOrDefaultString("state_log_prefix", "hera")
 	gAppConfig.ManagementTablePrefix = cdb.GetOrDefaultString("management_table_prefix", "hera")
 	gAppConfig.RacMaintReloadInterval = cdb.GetOrDefaultInt("rac_sql_interval", 10)

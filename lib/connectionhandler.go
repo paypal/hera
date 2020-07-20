@@ -47,7 +47,7 @@ func wrapNewNetstring(conn net.Conn) <-chan *netstring.Netstring {
 			ch <- nil
 		} else {
 			if ns.Serialized != nil && len(ns.Serialized) > 64*1024 {
-				evt := cal.NewCalEvent("MUX", "large_payload_in", cal.TransOK, "")
+				evt := cal.NewCalEvent(EvtTypeMux, "large_payload_in", cal.TransOK, "")
 				evt.AddDataInt("len", int64(len(ns.Serialized)))
 				evt.Completed()
 			}
@@ -98,7 +98,7 @@ func HandleConnection(conn net.Conn) {
 			if logger.GetLogger().V(logger.Info) {
 				logger.GetLogger().Log(logger.Info, "Connection handler idle timeout", addr)
 			}
-			evt := cal.NewCalEvent("MUX", "idle_timeout_"+strconv.Itoa(int(timeout)), cal.TransOK, "")
+			evt := cal.NewCalEvent(EvtTypeMux, "idle_timeout_"+strconv.Itoa(int(timeout)), cal.TransOK, "")
 			evt.Completed()
 
 			conn.Close() // this forces netstring.NewNetstring() conn.Read to exit with err=read tcp 127.0.0.1:8081->127.0.0.1:57968: use of closed network connection
