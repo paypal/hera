@@ -74,7 +74,8 @@ var (
 	ErrNoShardKey,
 	ErrAutodiscoverWhileSetShardID,
 	ErrCrossKeysDML,
-	ErrOther error )
+	ErrOther,
+	ErrReqParseFail error )
 // Initializes error strings with a prefix like "HERA"
 // HERA-100, HERA-101..
 func MkErr(prefix string) {
@@ -98,6 +99,7 @@ func MkErr(prefix string) {
 	ErrAutodiscoverWhileSetShardID = errors.New(prefix+"-374: autodiscover while set shard id")
 	ErrCrossKeysDML                = errors.New(prefix+"-206: cross key dml")
 	ErrOther                       = errors.New(prefix+"-1000: unknown error")
+	ErrReqParseFail                = errors.New("Request error")
 }
 
 
