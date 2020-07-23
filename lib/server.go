@@ -297,7 +297,7 @@ func (srv *server) canAccept() (bool, BouncerReasonCode, string) {
 	}
 	if backlogCheck {
 		if bsize > 0 {
-			evt := cal.NewCalEvent("MUX", "bklg_on_acpt", cal.TransOK, "")
+			evt := cal.NewCalEvent(EvtTypeMux, "bklg_on_acpt", cal.TransOK, "")
 			evt.Completed()
 		}
 		return backlogCheck, BRCUnknown, ""

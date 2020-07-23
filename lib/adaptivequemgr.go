@@ -283,7 +283,7 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 			mgr.wpool.poolCond.L.Lock()
 			workerclient, ok := mgr.getWorkerToRecover()
 			if ok {
-				if workerclient != nil {
+				if workerclient != nil && workerclient.Status != wsFnsh { // Dont recover the worker which has already completed the work
 					//
 					// can not use worker.outCh since doRead thread could close outCha anytime.
 					// ctrlCh is destroyed in RestartWorker, which requies lock. so we will not
@@ -303,11 +303,15 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 						logger.GetLogger().Log(logger.Warning, "heraproxy saturation recover: sql will be terminated in child", workerclient.pid, "while assigned to client, close client connection", workerclient.Type)
 					}
 				} else {
-					//
-					// should not happen since getTicketToRecover already checks nil worker
-					//
-					et := cal.NewCalEvent(cal.EventTypeMessage, "SatRecoverNilWorker", cal.TransOK, "sqltime within threshold, ignore sat recover")
-					et.Completed()
+					if workerclient != nil && workerclient.Status == wsFnsh {
+						logger.GetLogger().Log(logger.Warning, "Skipping worker for recovery, pid:", workerclient.pid, " as the state is :", workerclient.Status)
+					} else {
+						//
+						// should not happen since getTicketToRecover already checks nil worker
+						//
+						et := cal.NewCalEvent(cal.EventTypeMessage, "SatRecoverNilWorker", cal.TransOK, "sqltime within threshold, ignore sat recover")
+						et.Completed()
+					}
 					mgr.wpool.poolCond.L.Unlock()
 				}
 			} else {
@@ -378,7 +382,7 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 	var found = false
 	for worker, ticket := range mgr.dispatchedWorkers {
 		var runtime uint32
-		if worker != nil {
+		if worker != nil && worker.Status != wsFnsh { // Dont recover the worker which has already completed the work
 			stime := atomic.LoadUint32(&(worker.sqlStartTimeMs))
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "getWorkerToRecover stime", stime)
@@ -402,6 +406,11 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 				}
 			}
 		} else {
+		if worker != nil && worker.Status == wsFnsh  {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
+			}
+		} else {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "removing nil worker in aq for ticket", ticket)
 			}
@@ -410,6 +419,7 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 			//
 			delete(mgr.dispatchedWorkers, worker)
 		}
+		}
 	}
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "getWorkerToRecover return", outworker, found)
@@ -417,8 +427,17 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 	//
 	// this worker will be recovered anyway, reset sqlstarttime to 0 to prevent recover again.
 	//
-	if outworker != nil {
+	if outworker != nil && outworker.sqlStartTimeMs != 0 { // // Dont recover the worker which has already completed the work
 		atomic.StoreUint32(&(outworker.sqlStartTimeMs), 0)
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "getWorkerToRecover return", outworker, found)
+		}
+	} else {
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "getWorkerToRecover skipping worker :", outworker)
+		}
+		outworker = nil
+		found = false
 	}
 
 	return outworker, found
