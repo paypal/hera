@@ -312,6 +312,45 @@ func (crd *Coordinator) computeSQLHash(request *netstring.Netstring) {
 	}
 }
 
+// Check for multiple command in a given NetString
+func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool, hasCommit bool, hasRollback bool, parseErr error) {
+	foundPrepare := false
+	foundCommit := false
+	foundRollback := false
+	if request == nil {
+		return foundPrepare, foundCommit, foundRollback, ErrReqParseFail
+	}
+
+	if request.IsComposite() {
+		if crd.nss == nil {
+			crd.nss, parseErr = netstring.SubNetstrings(request)
+			if parseErr != nil {
+				return foundPrepare, foundCommit, foundRollback, parseErr
+			}
+		}
+		for _, ns := range crd.nss {
+			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+				foundPrepare = true
+			} else if ns.Cmd == common.CmdCommit {
+				foundCommit = true
+			} else if ns.Cmd == common.CmdRollback {
+				foundRollback = true
+			}
+		}
+		return foundPrepare, foundCommit, foundRollback, nil
+	} else {
+		ns := request
+		if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+			return true, false, false, nil
+		} else if ns.Cmd == common.CmdCommit {
+			return false, true, false, nil
+		} else if ns.Cmd == common.CmdRollback {
+			return false, false, true, nil
+		}
+	}
+	return false, false, false, nil
+}
+
 /*
  * it handles the command if it is the case. if the command is indended for a worker, it will return false.
  * worker commands start with one of the prepare/prepare_v2
@@ -777,6 +816,13 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 		}
 	}
 	if request != nil {
+		_/*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
+		if parseErr != nil {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
+			}
+			return false, ErrReqParseFail
+		}
 		cnt := 1
 		if request.IsComposite() {
 			cnt = len(crd.nss)
@@ -791,6 +837,23 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send the session starter request to worker")
 			}
 			return false, ErrWorkerFail
+		}
+		timesincestart := uint32(0)
+		if isCommit || isRollback { // set the sqlStartTimeMs to 0 to avoid recover routine to pick during saturation for OCC_COMMIT and OCC_ROLLBACK
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+		} else {
+			//
+			// the assumption is each dosession deals with a single sql. if not, uncomment the sqlhash
+			// extraction code in workerclient to reset worker.sqlHash on each prepare inside one
+			// dosession.
+			//
+			atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+			now := time.Now().UnixNano()
+			timesincestart = uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
+		}
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "worker pid:", worker.pid, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
 		}
 	}
 
