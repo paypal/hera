@@ -31,9 +31,9 @@ ulong Util::sql_hash(const char *sql)
 	// will always be zero -- and then fnv_64a_str would think the string was
 	// only a single byte long!
 	unsigned long long hash64 = fnv_64a_str(sql, FNV1_64A_INIT);
-	ulong hi = (ulong) (hash64 >> 32);
-	ulong lo = (ulong) hash64;
-	ulong hash32 = lo ^ hi;
+	unsigned hi = (unsigned) (hash64 >> 32);
+	unsigned lo = (unsigned) hash64;
+	unsigned hash32 = lo ^ hi;
 	return hash32;
 }
 

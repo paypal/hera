@@ -592,7 +592,12 @@ int Worker::handle_command(const int _cmd, std::string &_buffer)
 		{
 			std::string client_info_str = _buffer;
 			m_corr_id.clear();
-			if(StringUtil::tokenize(client_info_str, m_corr_id, '&'))
+			StringUtil::tokenize(client_info_str, m_corr_id, '&');
+			if (m_corr_id.length() == 0)
+			{
+				m_corr_id = _buffer; // we didn't get '&' format client_info_str
+			}
+			if(true)
 			{
 				std::string discard;
 				StringUtil::tokenize(m_corr_id, discard, '=');
