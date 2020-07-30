@@ -109,7 +109,7 @@ func TestBouncerEnableBklgQueueFull(t *testing.T) {
         fmt.Println ("Verify next request is bounced");
         testutil.Fetch ("Select Name from test_simple_table_1 where ID = 12346");
 	
-        time.Sleep(7 * time.Second); //wait for 4 rows to commit successfully
+        time.Sleep(10 * time.Second); //wait for 4 rows to commit successfully
 	id = 123;
         for i := 0; i < 4; i++ {
            id_str := strconv.Itoa (id) 
