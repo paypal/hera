@@ -19,6 +19,7 @@ package shared
 
 import (
 	"fmt"
+	"path/filepath"
 	"os"
 	"os/signal"
 	"strconv"
@@ -57,7 +58,15 @@ type workerConfig struct {
 
 // Start is the initial method, performing the initializations and starting runworker() to wait for requests
 func Start(adapter CmdProcessorAdapter) {
-	cfg, err := config.NewTxtConfig("hera.txt")
+	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
+	if abserr != nil {
+		currentDir = "./"  
+	} else {
+		currentDir = currentDir + "/"
+	}
+
+	cfgfile := currentDir + "hera.txt"
+	cfg, err := config.NewTxtConfig(cfgfile)
 	if err != nil {
 		fmt.Printf("Can't open config hera.txt")
 		return
@@ -71,7 +80,9 @@ func Start(adapter CmdProcessorAdapter) {
 		logPrefix = "WORKER"
 	}
 	logPrefix += fmt.Sprintf(" %d", os.Getpid())
-	err = logger.CreateLogger(cfg.GetOrDefaultString("log_file", "hera.log"), logPrefix, int32(logLevel))
+	
+	logfilename := currentDir + cfg.GetOrDefaultString("log_file", "hera.log")
+	err = logger.CreateLogger(logfilename, logPrefix, int32(logLevel))
 	if err != nil {
 		return
 	}

@@ -64,6 +64,7 @@ func Run() {
 	} else {
 		pidfile.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
 	}
+	MkErr(GetConfig().ErrorCodePrefix)
 
 	os.Setenv("MUX_START_TIME_SEC", fmt.Sprintf("%d", time.Now().Unix()))
 	os.Setenv("MUX_START_TIME_USEC", "0")

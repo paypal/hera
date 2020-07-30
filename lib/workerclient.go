@@ -80,6 +80,11 @@ func (msg *workerMsg) GetNetstring() *netstring.Netstring {
 	return msg.ns
 }
 
+type BindPair struct {
+	name string
+	value string
+}
+
 // WorkerClient represents a worker process
 type WorkerClient struct {
 	ID            int              // the worker identifier, from 0 to max worker count
@@ -115,6 +120,9 @@ type WorkerClient struct {
 	// hashcode of the sql that is currently being executed.
 	//
 	sqlHash int32
+	//
+	// for bind eviction
+	sqlBindNs atomic.Value // *netstring.Netstring
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.
 	// reset to 0 after eor meaning no sql running (same as start_time_offset_ms in c++).
@@ -174,6 +182,9 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 	if lifespan >= 4 {
 		worker.exitTime = worker.startTime + int64(lifespan) - int64(rand.Intn(int(lifespan/4)))
 	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
+	}
 	// TODO
 	worker.racID = -1
 	worker.isUnderRecovery = 0
@@ -194,15 +205,21 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 func (worker *WorkerClient) StartWorker() (err error) {
 	attr := syscall.ProcAttr{Dir: "./", Env: os.Environ(), Files: nil, Sys: nil}
 	var dbHostName string
-	if len(worker.moduleName) > 4 {
-		dbHostName = strings.ToUpper(worker.moduleName[4:])
-		pos := strings.Index(dbHostName, "-")
-		if pos != -1 {
-			dbHostName = dbHostName[:pos]
-		}
+	logDbHostName := os.Getenv("LOG_DB_HOST_NAME")
+	if len(logDbHostName) > 0 {
+		dbHostName = logDbHostName
 	} else {
-		return errors.New("Invalid module name, must be like hera-<name> ")
+		if len(worker.moduleName) > 4 {
+			dbHostName = strings.ToUpper(worker.moduleName[4:])
+			pos := strings.Index(dbHostName, "-")
+			if pos != -1 {
+				dbHostName = dbHostName[:pos]
+			}
+		} else {
+			return errors.New("Invalid module name, must be like hera-<name> ")
+		}
 	}
+
 
 	var twoTask string
 	switch worker.Type {
@@ -392,7 +409,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		buf.WriteString("_shard_")
 		buf.WriteString(strconv.Itoa(worker.shardID))
 	}
-	evt := cal.NewCalEvent("MUX", buf.String(), cal.TransOK, "")
+	evt := cal.NewCalEvent(EvtTypeMux, buf.String(), cal.TransOK, "")
 	evt.Completed()
 
 	// TODO: change to use "exec"
@@ -587,6 +604,7 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 	for {
 		select {
 		case <-workerRecoverTimeout:
+			worker.setState(wsInit) // Set the worker state to INIT when we decide to Terminate the worker
 			worker.Terminate()
 			worker.callogStranded("RECYCLED", info)
 			return
@@ -749,7 +767,7 @@ outer:
 			}
 
 			if len(calMsg) > 0 {
-				e := cal.NewCalEvent("MUX", "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
+				e := cal.NewCalEvent(EvtTypeMux, "data_late", cal.TransOK, fmt.Sprintf("pid=%d&id=%d&pkts=", worker.pid, worker.ID)+calMsg)
 				e.Completed()
 			}
 			return

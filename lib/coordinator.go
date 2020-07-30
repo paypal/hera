@@ -312,6 +312,45 @@ func (crd *Coordinator) computeSQLHash(request *netstring.Netstring) {
 	}
 }
 
+// Check for multiple command in a given NetString
+func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool, hasCommit bool, hasRollback bool, parseErr error) {
+	foundPrepare := false
+	foundCommit := false
+	foundRollback := false
+	if request == nil {
+		return foundPrepare, foundCommit, foundRollback, ErrReqParseFail
+	}
+
+	if request.IsComposite() {
+		if crd.nss == nil {
+			crd.nss, parseErr = netstring.SubNetstrings(request)
+			if parseErr != nil {
+				return foundPrepare, foundCommit, foundRollback, parseErr
+			}
+		}
+		for _, ns := range crd.nss {
+			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+				foundPrepare = true
+			} else if ns.Cmd == common.CmdCommit {
+				foundCommit = true
+			} else if ns.Cmd == common.CmdRollback {
+				foundRollback = true
+			}
+		}
+		return foundPrepare, foundCommit, foundRollback, nil
+	} else {
+		ns := request
+		if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+			return true, false, false, nil
+		} else if ns.Cmd == common.CmdCommit {
+			return false, true, false, nil
+		} else if ns.Cmd == common.CmdRollback {
+			return false, false, true, nil
+		}
+	}
+	return false, false, false, nil
+}
+
 /*
  * it handles the command if it is the case. if the command is indended for a worker, it will return false.
  * worker commands start with one of the prepare/prepare_v2
@@ -521,6 +560,55 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	ticket := crd.ticket
 	xShardRead := false
 
+	// check bind throttle
+	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+	if ok {
+		wType := wtypeRW
+		cfg := GetNumWorkers(crd.shard.shardID)
+		if GetConfig().ReadonlyPct > 0 {
+			if crd.isRead {
+				wType = wtypeRO
+				cfg = int( float64(cfg)*float64(GetConfig().ReadonlyPct)/100.0 );
+			} else {
+				cfg = int( float64(cfg)*float64(100-GetConfig().ReadonlyPct)/100.0 );
+			}
+		}
+		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
+		heavyUsage := false
+		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
+		if numFree < int(thres) {
+			heavyUsage = true
+		}
+		if logger.GetLogger().V(logger.Verbose) {
+			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
+				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
+			logger.GetLogger().Log(logger.Verbose, msg)
+		}
+		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
+		if needBlock {
+			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
+				throttleEntry.Name,
+				throttleEntry.Value,
+				throttleEntry.AllowEveryX,
+				1.0/float64(throttleEntry.AllowEveryX),
+				crd.conn.RemoteAddr().String())
+			sqlhashStr := fmt.Sprintf("%d",uint32(crd.sqlhash))
+			evt := cal.NewCalEvent("BIND_THROTTLE", sqlhashStr, "1", msg)
+			evt.Completed()
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, crd.id, "bind throttle", sqlhashStr, msg)
+			}
+			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrBindThrottle.Error()))
+			crd.respond(ns.Serialized)
+			crd.conn.Close()
+			return fmt.Errorf("bind throttle block")
+		} else {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "bind throttle allow",uint32(crd.sqlhash))
+			}
+		}
+	}
+
 	if worker == nil {
 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
 			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
@@ -655,6 +743,41 @@ var (
 	ErrCanceled   = errors.New("Canceled")
 )
 
+
+/* does not return all values from array binds */
+func parseBinds(request *netstring.Netstring) (map[string]string) {
+    out := make(map[string]string)
+
+    requests, err := netstring.SubNetstrings(request)
+    if err != nil {
+	return out
+    }
+
+    sz := len(requests)
+    for i := 0; i < sz; i++ {
+        if requests[i].Cmd == common.CmdBindName {
+            bindName := string(requests[i].Payload)
+            for j:=1; i+j<sz; j++ {
+                if requests[i+j].Cmd == common.CmdBindNum {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindType {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
+                    continue
+                } else if requests[i+j].Cmd == common.CmdBindValue {
+                    out[bindName] = string(requests[i+j].Payload)
+                } else {
+                    // i=3 i+j=5 ---- 3:name 4:value 5:name
+                    i += j-2
+                    break
+                }
+            }
+        } // end if bind name
+    }
+
+    return out
+}
+
 /**
  * performs a SQL, which is a communication of request & responses until EOR_... is received, or some
  * exception happens (client disconnects, worker exits, timeout)
@@ -693,6 +816,13 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 		}
 	}
 	if request != nil {
+		_/*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
+		if parseErr != nil {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
+			}
+			return false, ErrReqParseFail
+		}
 		cnt := 1
 		if request.IsComposite() {
 			cnt = len(crd.nss)
@@ -708,6 +838,23 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			}
 			return false, ErrWorkerFail
 		}
+		timesincestart := uint32(0)
+		if isCommit || isRollback { // set the sqlStartTimeMs to 0 to avoid recover routine to pick during saturation for OCC_COMMIT and OCC_ROLLBACK
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+		} else {
+			//
+			// the assumption is each dosession deals with a single sql. if not, uncomment the sqlhash
+			// extraction code in workerclient to reset worker.sqlHash on each prepare inside one
+			// dosession.
+			//
+			atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+			now := time.Now().UnixNano()
+			timesincestart = uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
+		}
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "worker pid:", worker.pid, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
+		}
 	}
 
 	//
@@ -716,6 +863,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	// dosession.
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+	worker.sqlBindNs.Store(request)
 	now := time.Now().UnixNano()
 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)

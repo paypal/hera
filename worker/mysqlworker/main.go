@@ -25,13 +25,22 @@ import (
 	"log"
 	"os"
 	"strings"
-
+	"path/filepath"
 	"github.com/go-sql-driver/mysql"
 	workerservice "github.com/paypal/hera/worker/shared"
 )
 
 func main() {
+	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
+	
+	if abserr != nil {
+		currentDir = "./"
+	} else {
+		currentDir = currentDir + "/"
+	}
+
 	certdir := os.Getenv("certdir")
+	certdir = currentDir + certdir
 	finfos, err := ioutil.ReadDir(certdir)
 	if err != nil {
 		log.Print("could not read dir " + certdir)

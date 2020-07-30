@@ -30,6 +30,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["num_shards"] = "2"
 
 	opscfg := make(map[string]string)
+	opscfg["opscfg.default.server.max_requests_per_child"] = "333"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "555"
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
