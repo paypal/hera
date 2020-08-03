@@ -161,28 +161,68 @@ func TestShardingSh0Def(t *testing.T) {
 	defer conn.Close()
 
 	tx, _ := conn.BeginTx(ctx, nil)
-	// create table test_str_sk (email_addr varchar(64), note varchar(64));
 	sqlDesc := "ins|test_str_sk"
-	//stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (email_addr, note) VALUES ( :email_addr, :note)")
-	stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (note) VALUES ( :note)")
+	if false {
+		// create table test_str_sk (email_addr varchar(64), note varchar(64));
+		//stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (email_addr, note) VALUES ( :email_addr, :note)")
+		stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (note) VALUES ( :note)")
+		if err != nil {
+			t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
+		}
+		//_, err = stmt.Exec("FutureString", "not an email", sql.Named("email_addr", ")
+		_, err = stmt.Exec(sql.Named("note", "not an email"))
+		if err != nil {
+			t.Fatalf("Error exec %s %s\n", sqlDesc, err.Error())
+		}
+		if testutil.RegexCountFile("shd0.*:note", "occ.log") == 0 {
+			t.Fatalf("insert without shard key did not land on sh0")
+		}
+		if testutil.RegexCountFile("shd[^0].*:note", "occ.log") != 0 {
+			t.Fatalf("insert without shard key landed on wrong shard, not the expected sh0")
+		}
+		err = tx.Commit()
+		if err != nil {
+			t.Fatalf("Error commit %s %s\n", sqlDesc, err.Error())
+		}
+	}
+
+	stmt, err := tx.PrepareContext(ctx, "/*sel:str_sk1*/ select email_addr from test_str_sk where email_addr= :email_addr")
 	if err != nil {
 		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
 	}
-	//_, err = stmt.Exec("FutureString", "not an email", sql.Named("email_addr", ")
-	_, err = stmt.Exec(sql.Named("note", "not an email"))
+	_, err = stmt.Query(sql.Named("email_addr", "NOTemail"))
 	if err != nil {
-		t.Fatalf("Error exec %s %s\n", sqlDesc, err.Error())
+		t.Fatalf("Error q %s %s\n", sqlDesc, err.Error())
 	}
-	if testutil.RegexCountFile("shd0.*:note", "occ.log") == 0 {
-		t.Fatalf("insert without shard key did not land on sh0")
-	}
-	if testutil.RegexCountFile("shd[^0].*:note", "occ.log") != 0 {
-		t.Fatalf("insert without shard key landed on wrong shard, not the expected sh0")
-	}
-	err = tx.Commit()
+
+	stmt, err = tx.PrepareContext(ctx, "/*sel:str_sk*/ select email_addr from test_str_sk where email_addr= :email_addr")
 	if err != nil {
-		t.Fatalf("Error commit %s %s\n", sqlDesc, err.Error())
+		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
 	}
+	_, err = stmt.Query(sql.Named("email_addr", "NOTemail"))
+	if err != nil {
+		t.Fatalf("Error q %s %s\n", sqlDesc, err.Error())
+	}
+
+	stmt, err = tx.PrepareContext(ctx, "/*sel:str_sk*/ select note from test_str_sk where note= :note")
+	if err != nil {
+		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
+	}
+	pre0note := testutil.RegexCountFile("shd0.*:note", "occ.log")
+	preNote := testutil.RegexCountFile("shd[^0].*:note", "occ.log")
+	_, err = stmt.Query(sql.Named("note", "DAnote"))
+	if err != nil {
+		t.Fatalf("Error q %s %s\n", sqlDesc, err.Error())
+	}
+	post0note := testutil.RegexCountFile("shd0.*:note", "occ.log")
+	postNote := testutil.RegexCountFile("shd[^0].*:note", "occ.log")
+	if pre0note == post0note {
+		t.Fatalf("non shard key query did not go to sh0 even with whitelist-sh0-default")
+	}
+	if preNote != postNote {
+		t.Fatalf("non shard key query went to non-sh0 with whitelist-sh0-default")
+	}
+
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingSh0Def done  -------------------------------------------------------------")
 }
