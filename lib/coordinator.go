@@ -492,6 +492,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 	}
 
 	et := cal.NewCalEvent(cal.EventTypeClientInfo, poolName, cal.TransOK, "mux")
+	et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 	// TODO: cal pool stack stuff
 	calInstance := cal.GetCalClientInstance()
 	if calInstance.IsPoolstackEnabled() {
