@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"bytes"
 	"bufio"
 	"context"
 	"database/sql"
@@ -107,10 +108,24 @@ func Fetch (query string) (int) {
         stmt, _ := conn.PrepareContext(ctx, query)
         defer stmt.Close()
         rows, _ := stmt.Query()
+	if err != nil {
+                fmt.Println("Error while querying: ", err)
+                return count;
+        }
         for rows.Next() {
                 count++;
         }
         return count;
+}
+
+//Run mysql command line
+func RunMysql(sql string) (string, error) {
+        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
+        cmd.Stdin = strings.NewReader(sql)
+        var cmdOutBuf bytes.Buffer
+        cmd.Stdout = &cmdOutBuf
+        cmd.Run()
+        return cmdOutBuf.String(), nil
 }
 
 
