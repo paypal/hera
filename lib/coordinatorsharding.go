@@ -406,6 +406,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 		if GetConfig().EnableWhitelistTest || !GetConfig().UseShardMap {
 			shardRec := &ShardMapRecord{logical: 0}
 			crd.shard.shardRecs = []*ShardMapRecord{shardRec}
+			crd.shard.shardID = 0
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "Sharding whitelist enabled or no shard map, defaulting to shard 0")
 			}
@@ -518,6 +519,7 @@ func (crd *Coordinator) verifyXShard(oldShardValues []string, oldShardID int, ol
 				evt.AddDataStr("shard_key2", crd.shard.shardValues[0])
 				evt.AddDataInt("sql1", int64(uint32(oldSQLhash)))
 				evt.AddDataInt("sql2", int64(uint32(crd.sqlhash)))
+				evt.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 				if crd.corrID != nil {
 					evt.AddDataStr("corr_id", string(crd.corrID.Payload))
 				}
