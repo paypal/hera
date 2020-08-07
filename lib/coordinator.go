@@ -799,23 +799,6 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: exiting")
 		}
 	}()
-	//
-	// proxy sends "18:2006 CorrId=NotSet," to worker if not getting one from client.
-	//
-	if crd.preppendCorrID {
-		var err error
-		if crd.corrID == nil {
-			err = worker.Write(netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet")), 1)
-		} else {
-			err = worker.Write(crd.corrID, 1)
-		}
-		if err != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send the corr_id to worker", err)
-			}
-			return false, ErrWorkerFail
-		}
-	}
 	if request != nil {
 		_/*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
 		if parseErr != nil {
@@ -831,8 +814,29 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				logger.GetLogger().Log(logger.Alert, crd.id, "Unexpected embedded ns length")
 			}
 		}
-
-		err := worker.Write(request, uint16(cnt))
+		plusAnyCorrId := request
+		if crd.preppendCorrID {
+			corrID := crd.corrID
+			if corrID == nil {
+				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
+			}
+			var ns []*netstring.Netstring;
+			if !request.IsComposite() {
+				ns = make([]*netstring.Netstring, 2)
+				ns[0] = corrID
+				ns[1] = request
+			} else { // composite
+				rnss, _ := netstring.SubNetstrings(request)
+				ns = make([]*netstring.Netstring, len(rnss)+1)
+				ns[0] = corrID
+				for i:=0; i<len(rnss); i++ {
+					ns[i+1] = rnss[i]
+				}
+			}
+			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
+			cnt++
+		}
+		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send the session starter request to worker")

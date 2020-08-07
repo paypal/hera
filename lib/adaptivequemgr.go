@@ -138,6 +138,10 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		}
 		usqlhash := uint32(worker.sqlHash)
 		sqlhash := atomic.LoadUint32(&(usqlhash))
+		_, ok := GetBindEvict().BindThrottle[sqlhash]
+		if ok {
+			continue // don't repeatedly bind evict something already evicted
+		}
 		request := worker.sqlBindNs.Load().(*netstring.Netstring)
 		contextBinds := parseBinds(request)
 		for bindName0, bindValue := range contextBinds {
@@ -298,6 +302,10 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 					}
 					mgr.addEvictedSqlhash(atomic.LoadInt32(&(workerclient.sqlHash)))
 					mgr.wpool.poolCond.L.Unlock()
+
+					et := cal.NewCalEvent("HARD_EVICTION", fmt.Sprintf("%d", workerclient.sqlHash),
+						"1", fmt.Sprintf("pid=%d", workerclient.pid))
+					et.Completed()
 
 					if logger.GetLogger().V(logger.Warning) {
 						logger.GetLogger().Log(logger.Warning, "heraproxy saturation recover: sql will be terminated in child", workerclient.pid, "while assigned to client, close client connection", workerclient.Type)
