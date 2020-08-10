@@ -29,7 +29,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["rac_sql_interval"] = "0"
         appcfg["request_backlog_timeout"] = "6000"
-        appcfg["soft_eviction_effective_time"] = "500"
         appcfg["soft_eviction_probability"] = "100"
 	appcfg["opscfg.default.server.saturation_recover_threshold"] = "10" 
         appcfg["opscfg.default.server.saturation_recover_throttle_rate"] = "80"
@@ -51,7 +50,8 @@ func TestMain(m *testing.M) {
 }
 
 /*
- *  Bind Eviction should not happen when bind_eviction_threshold_pct < 25% (default)
+ *  Bind Eviction should not happen when queries with same bind value use 20% of connection i
+ *  (default bind_eviction_threshold_pct = 25%)
  *
  */
 

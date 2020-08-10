@@ -29,6 +29,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["rac_sql_interval"] = "0"
         appcfg["request_backlog_timeout"] = "6000"
+        appcfg["bind_eviction_threshold_pct"] = "50"
         appcfg["soft_eviction_effective_time"] = "500"
         appcfg["soft_eviction_probability"] = "100"
 	appcfg["opscfg.default.server.saturation_recover_threshold"] = "10" 
@@ -51,37 +52,44 @@ func TestMain(m *testing.M) {
 }
 
 /*
- *  Sending queries with bind values and the queries use = 20% 
- *  Bind Eviction should not happen because bind_eviction_threshold_pct = 25% (default)
+ *  Sending queries with bind values and the queries use < 50% of connection
+ *  Bind Eviction should not happen because bind_eviction_threshold_pct = 50% 
  *
  */
 
 
-func TestThresholdNotReach(t *testing.T) {
-	fmt.Println ("TestThresholdNotReach begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-	logger.GetLogger().Log(logger.Debug, "TestThresholdNotReach begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestThresholdConfigNotReach(t *testing.T) {
+	fmt.Println ("TestThresholdConfigNotReach begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+	logger.GetLogger().Log(logger.Debug, "TestThresholdConfigNotReach begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	testutil.RunDML1("insert into test_simple_table_1 (ID, Name, Status) VALUES (12345699, 'Jack', 100)")
 	
         id1 := "11234599"
 	fmt.Println ("Insert a row with id: ", id1);
 	util.InsertBinding (id1, 0)
 
-	fmt.Println ("First thread to insert a row, but commit later");
+	fmt.Println ("Inserts rows, but commit later");
         id := 22345666
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
             go util.InsertBinding (strconv.Itoa(id + i), 5)
         }
 
-        fmt.Println ("Having 6 queries with bind values and the queries use  20% of connections ")
-        for i := 0; i < 5; i++ {
+        fmt.Println ("Having 6 queries with bind values and the queries use  < 50% of connections ")
+        for i := 0; i < 3; i++ {
                 time.Sleep(100 * time.Millisecond);
 		fmt.Println ("Update a row with id: ", id);
-                go util.FetchBinding(strconv.Itoa(id + i), 2, "FOR UPDATE")
+                go util.FetchBinding(strconv.Itoa(id), "FOR UPDATE")
+        }
+
+	fmt.Println ("Having  queries with bind values and the queries use  20% of connections ")
+        for i := 0; i < 3; i++ {
+                time.Sleep(200 * time.Millisecond);
+                fmt.Println ("Update a row with id: ", id);
+                go util.UpdateBinding(strconv.Itoa(id+i), 3 )
         }
 
         time.Sleep(7 * time.Second);
         fmt.Println ("Verify fetch request is fine");
-        row_count := util.FetchBinding (strconv.Itoa(id), "");
+        row_count := util.FetchBinding (id1, "");
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is NOT there");
 	}
@@ -100,5 +108,5 @@ func TestThresholdNotReach(t *testing.T) {
             t.Fatalf ("Error: should not get any BIND_EVICTION event");
 	}
 	testutil.DoDefaultValidation(t)
-	logger.GetLogger().Log(logger.Debug, "TestThresholdNotReach done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestThresholdConfigNotReach done  -------------------------------------------------------------")
 }
