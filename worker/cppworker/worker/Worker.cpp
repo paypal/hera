@@ -503,7 +503,7 @@ bool Worker::recover()
 
 	if (param == ControlMessage::STRANDED_SATURATION_RECOVER)
 	{
-		CalEvent ev("HARD_EVICTION", m_query_hash, CAL::TRANS_OK);
+		CalEvent ev("EVICTION", m_query_hash, CAL::TRANS_OK);
 		ev.Completed();
 	}
 

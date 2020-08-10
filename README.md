@@ -93,6 +93,11 @@ The following sections explain the process for manually building mux without Doc
     ```
 6.  Build Java test client under the client/java directory
 
+7.  Build the C++ oracleworker
+    ```
+    cd worker/cppworker/worker
+    make -f ../build/makefile19
+    ```
 ### Running the server
 
 To run mux there is minimal configuration required. Please see examples for running with [MySQL](https://github.com/paypal/hera/tree/master/tests/e2e/srvmysql) or [Oracle](https://github.com/paypal/hera/tree/master/tests/e2e/srvoracle).
