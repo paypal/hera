@@ -188,7 +188,7 @@ outerloop:
 						logger.GetLogger().Log(logger.Info, sockMux.Name(), "worker recover", flag, ", muxrqid:", rqId, ", wrqid:", cmdprocessor.rqId)
 					}
 					if flag == common.StrandedSaturationRecover {
-						evt := cal.NewCalEvent("HARD_EVICTION", cmdprocessor.queryScope.SqlHash, cal.TransOK, "")
+						evt := cal.NewCalEvent("EVICTION", cmdprocessor.queryScope.SqlHash, cal.TransOK, "")
 						evt.Completed()
 					}
 					var evt cal.Event
