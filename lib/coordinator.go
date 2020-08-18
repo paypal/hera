@@ -276,7 +276,14 @@ func (crd *Coordinator) Run() {
 					// this should not happen, log in case it happens
 					logger.GetLogger().Log(logger.Alert, crd.id, "Abort received from unknown worker")
 				}
-				crd.processError(ErrSaturationKill)
+				if msg.bindEvict {
+					crd.processError(ErrBindEviction)
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "Coordinator sending bind evict err")
+					}
+				} else {
+					crd.processError(ErrSaturationKill)
+				}
 				return
 			}
 		}
@@ -1057,7 +1064,14 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				if logger.GetLogger().V(logger.Debug) {
 					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan abort")
 				}
-				return false, ErrSaturationKill
+				if msg.bindEvict {
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan bind evict")
+					}
+					return false, ErrBindEviction
+				} else {
+					return false, ErrSaturationKill
+				}
 			}
 		}
 	}

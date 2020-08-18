@@ -200,7 +200,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			}
 			// do eviction
 			select {
-			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true}:
+			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: true}:
 			default:
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (bind eviction)", worker.pid)
@@ -303,7 +303,7 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 					mgr.addEvictedSqlhash(atomic.LoadInt32(&(workerclient.sqlHash)))
 					mgr.wpool.poolCond.L.Unlock()
 
-					et := cal.NewCalEvent("HARD_EVICTION", fmt.Sprintf("%d", workerclient.sqlHash),
+					et := cal.NewCalEvent("HARD_EVICTION", fmt.Sprintf("%d", uint32(workerclient.sqlHash)),
 						"1", fmt.Sprintf("pid=%d", workerclient.pid))
 					et.Completed()
 
