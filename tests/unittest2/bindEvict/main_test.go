@@ -344,7 +344,7 @@ func TestBindLess(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestBindLess +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	testutil.BackupAndClear("cal", "BindLess start")
 	testutil.BackupAndClear("hera", "BindLess start")
-	err := partialBadLoad(0.15)
+	err := partialBadLoad(0.10)
 	if err != nil && err != NormCliErr() {
 		t.Fatalf("main step function returned err %s", err.Error())
 	}

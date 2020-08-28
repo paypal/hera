@@ -67,6 +67,7 @@ type workerMsg struct {
 	inTransaction bool
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
 	abort bool
+	bindEvict bool
 	// the request counter / Id
 	rqId uint32
 	// the actual message to be sent to the client
@@ -818,6 +819,7 @@ func (worker *WorkerClient) doRead() {
 			}
 			eor := int(ns.Payload[0] - '0')
 			rqId := (uint32(ns.Payload[1]) << 24) + (uint32(ns.Payload[2]) << 16) + (uint32(ns.Payload[3]) << 8) + uint32(ns.Payload[4])
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)     // Reset the sqlStartTimeMs to avoid being picked up during saturation/recover event
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "workerclient (<<< pid =", worker.pid, ",wrqId:", worker.rqId, "): EOR code:", eor, ", rqId: ", rqId, ", data:", DebugString(payload))
 			}
