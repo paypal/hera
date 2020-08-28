@@ -115,14 +115,13 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 func (pool *WorkerPool) spawnWorker(wid int) error {
 	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName)
 	er := worker.StartWorker()
-	//
-	// @TODO retry instead of stop the whole startup process
-	//
 	if er != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed starting worker: ", er)
 		}
-		panic(er)
+		// called from Init will see error
+		// called from RestartWorkerPool can retry when workers don't come up
+		return er
 	}
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "worker started type ", pool.Type, " id", worker.ID, " instid", pool.InstID, " shardid", pool.ShardID)
@@ -130,6 +129,7 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 	//
 	// after establishing uds with the worker, it will be add to active queue
 	//
+	// oracle connect errors show up in attach worker
 	go worker.AttachToWorker()
 	return nil
 }
