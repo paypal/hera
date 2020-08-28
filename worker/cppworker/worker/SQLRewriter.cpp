@@ -63,6 +63,9 @@ void SQLRewriter::init(const std::string& _shard_key_name, const std::string& _s
 	os.str("");
 	os << ", :" << m_sSCUTTLE_NAME;
 	m_sCOMMA_SCUTTLE_ID = os.str();
+	os.str("");
+	os << ":" << m_sSCUTTLE_NAME;
+	m_sCOLON_SCUTTLE_ID = os.str();
 	
 	
 	m_shard_key_name = _shard_key_name;
@@ -169,7 +172,7 @@ SQLRewriter::SqlType SQLRewriter::get_type(const std::string& _sql) {
 }
 
 bool SQLRewriter::has_scuttle_id(const std::string& _sql) {
-	return (0 != strcasestr(_sql.c_str(), m_sSCUTTLE_NAME.c_str()));
+	return (0 != strcasestr(_sql.c_str(), m_sCOLON_SCUTTLE_ID.c_str()));
 }
 
 void SQLRewriter::rewrite_select(const std::string& _sql)

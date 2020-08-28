@@ -68,6 +68,7 @@ private:
 	std::string m_sDOT_SCUTTLE_ID;
 	std::string m_sSCUTTLE_ID;
 	std::string m_sCOMMA_SCUTTLE_ID;
+	std::string m_sCOLON_SCUTTLE_ID;
 
 	Finder m_query_type_finder, m_select_finder;
 
