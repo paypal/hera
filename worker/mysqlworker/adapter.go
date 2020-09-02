@@ -30,6 +30,7 @@ import (
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/paypal/hera/worker/shared"
+	"github.com/paypal/hera/cal"
 )
 
 type mysqlAdapter struct {
@@ -45,14 +46,28 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	user := os.Getenv("username")
 	pass := os.Getenv("password")
 	ds := os.Getenv("mysql_datasource")
-
+	calTrans := cal.NewCalTransaction(cal.TransTypeURL, "INITDB",cal.TransOK, "", cal.DefaultTGName)
 	if user == "" {
+		calTrans.AddDataStr("m_err", "USERNAME_NOT_FOUND")
+		calTrans.AddDataStr("m_errtype", "CONNECT")
+		calTrans.AddDataStr("m_datasource", ds)
+		calTrans.SetStatus(cal.TransFatal)
+		calTrans.Completed()
 		return nil, errors.New("Can't get 'username' from env")
 	}
 	if pass == "" {
+		calTrans.AddDataStr("m_err", "PASSWORD_NOT_FOUND")
+		calTrans.AddDataStr("m_errtype", "CONNECT")
+		calTrans.AddDataStr("m_datasource", ds)
+		calTrans.SetStatus(cal.TransFatal)
+		calTrans.Completed()
 		return nil, errors.New("Can't get 'password' from env")
 	}
 	if ds == "" {
+		calTrans.AddDataStr("m_err", "DATASOURCE_NOT_FOUND")
+		calTrans.AddDataStr("m_errtype", "CONNECT")
+		calTrans.SetStatus(cal.TransFatal)
+		calTrans.Completed()
 		return nil, errors.New("Can't get 'mysql_datasource' from env")
 	}
 
@@ -65,6 +80,10 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
 			}
+			calTrans.AddDataStr("m_err", err.Error())
+			calTrans.AddDataStr("m_errtype", "CONNECT")
+			calTrans.AddDataStr("m_datasource",curDs+fmt.Sprintf(" %d", idx))
+			calTrans.SetStatus(cal.TransFatal)
 			continue
 		}
 		is_writable = adapter.Heartbeat(db);
@@ -79,10 +98,15 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/)
 			}
+			calTrans.AddDataStr("m_err", "READONLY_CONN")
+			calTrans.AddDataStr("m_errtype", "CONNECT")
+			calTrans.AddDataStr("m_datasource",curDs+fmt.Sprintf(" %d", idx))
+			calTrans.SetStatus(cal.TransFatal)
 			err = errors.New("cannot use read-only conn "+curDs)
 			db.Close()
 		}
 	}
+	calTrans.Completed()
 	return db, err
 }
 
