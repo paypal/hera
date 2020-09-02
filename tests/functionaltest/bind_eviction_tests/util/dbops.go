@@ -135,8 +135,10 @@ func FetchBinding (id string, forUpdate string) (int) {
                 fmt.Println("Error while querying: ", err)
         	return count;
         }
-        for rows.Next() {
+	if rows != nil {
+            for rows.Next() {
                 count++;
-        }
+            }
+	}
         return count;
 }
