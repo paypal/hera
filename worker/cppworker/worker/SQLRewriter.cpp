@@ -336,21 +336,7 @@ void SQLRewriter::rewrite_select(const std::string& _sql)
 						val.sql.append(m_sDOT_SCUTTLE_ID.c_str(), m_sDOT_SCUTTLE_ID.length()); //".scuttle_id"
 						break;
 					}
-					case 0: // select
-						if (inner_select) {
-							int alias_len = 0;
-							const char *alias = 0;
-							get_alias(start, next - m_shard_key_name.length(), alias, alias_len);
-							val.sql.append(start, next - start);
-							val.sql.append(sCOMMA.c_str(), sCOMMA.length()); // ", "
-							if (alias) {
-								val.sql.append(alias, alias_len + 1); // alias + "."
-							}
-							val.sql.append(m_sSCUTTLE_ID.c_str(), m_sSCUTTLE_ID.length()); // "scuttle_id"
-						} else {
-							val.sql.append(start, next - start);
-						}
-						break;
+					case 0: // select // fall thru, needs overhaul for inner select
 					default:
 						val.sql.append(start, next - start);
 						break;
