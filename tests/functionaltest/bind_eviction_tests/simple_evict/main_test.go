@@ -22,7 +22,7 @@ var mx testutil.Mux
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg := make(map[string]string)
-	// best to chose an "unique" port in case golang runs tests in paralel
+	// best to choose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
@@ -161,31 +161,36 @@ func TestSimpleBindEviction(t *testing.T) {
                 go update_row_delay_commit(id, 3)
         }
 
-        time.Sleep(6 * time.Second);
+        time.Sleep(8 * time.Second);
         fmt.Println ("Verify fetch requests are fine");
         row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = 01234599");
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is there");
 	}
-	fmt.Println ("Since we have only 3 workers, saturation will be kicked in to kill long running queries")
 
-	fmt.Println ("Verify SATURATION events")
-	hcount := testutil.RegexCountFile ("HARD_EVICTION", "cal.log")
-	if ( hcount < 2) {
-            t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
+	fmt.Println ("Verify BIND_EVICT events")
+	count := testutil.RegexCountFile ("BIND_EVICT.*4271705786.*v=12345678", "cal.log")
+	if ( count < 0  || count > 1) {
+            t.Fatalf ("Error: expected 1 BIND_EVICT event for insert query");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
-	if ( count < hcount) {
-            t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+
+	hcount := testutil.RegexCountFile ("BIND_EVICT.*3271914668.*v=12345678", "cal.log")
+	if ( hcount < 4) {
+            t.Fatalf ("Error: expected at least 4 BIND_EVICT events for update query");
         }
+	count = testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	//if ( count < hcount) {
+        //    t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+        //}
         if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
             t.Fatalf ("Error: expected %d recover  event", hcount);
         }
 
-	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*saturation kill") < hcount) {
-	   t.Fatalf ("Error: should get saturation kill error");
+	fmt.Println ("Verify bind eviction errors are returned to client")
+        if ( testutil.RegexCount("stranded conn HERA-106: bind eviction") < count + hcount) {
+	   t.Fatalf ("Error: client should get bind eviction error");
 	}
 
+	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestSimpleBindEviction done  -------------------------------------------------------------")
 }
