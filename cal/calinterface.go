@@ -83,6 +83,7 @@ const (
 	TransTypeExec          = "EXEC"
 	TransTypeFetch         = "FETCH"
 	TransTypeAPI           = "API"
+	TransTypeURL           = "URL"
 	TransTypeReplay        = "REPLAY"
 	TransTypeClientSession = "CLIENT_SESSION"
 
