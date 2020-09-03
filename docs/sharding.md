@@ -65,6 +65,9 @@ where r.subordinate_id = e.id and e.id = :employee_id_sk
 *SQL Update to Shard Key*
 Updating of a shard key will initially work, but it will likely be in the wrong shard after the update. This is not detected by Hera.
 
+*Subquery*
+The cpp oracleworker rewrite mechanism is barely aware of subqueries. Please keep your WHERE conditions closer to the actual tables.
+
 Other Unsupported Operations
 * Queries by ROWID will not be supported – When you switch shards, the ROWID no longer applies.
 Sequences are not supported – This is not detected by Hera. Each separate shard of the DB would return its own sequence and might collide.
