@@ -13,9 +13,9 @@ const (
 func TestDempotency(t *testing.T) {
 	gOpsConfig = &OpsConfig{numWorkers: 10}
 	var queue = NewQueue()
-	wa := NewWorker(0, wtypeRW, 0, 0, "cloc")
-	wb := NewWorker(0, wtypeRW, 0, 0, "cloc")
-	wc := NewWorker(0, wtypeRW, 0, 0, "cloc")
+	wa := NewWorker(0, wtypeRW, 0, 0, "cloc", nil)
+	wb := NewWorker(0, wtypeRW, 0, 0, "cloc", nil)
+	wc := NewWorker(0, wtypeRW, 0, 0, "cloc", nil)
 
 	queue.Push(wa) // wa
 	if queue.Len() != 1 {
