@@ -158,7 +158,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			bind names are all normalized to bn#
 			bind values may repeat */
 			bindName := NormalizeBindName(bindName0)
-			concatKey := fmt.Sprintf("%u|%s|%s", sqlhash, bindName, bindValue)
+			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
 
 			entry, ok := bindCounts[concatKey]
 			if !ok {
