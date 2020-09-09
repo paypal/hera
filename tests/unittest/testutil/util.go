@@ -20,7 +20,7 @@ var (
 	INCOMPLETE = errors.New("Incomplete row")
 )
 
-func statelogGetField(pos int) (int, error) {
+func StatelogGetField(pos int) (int, error) {
 	out, err := exec.Command("/bin/bash", "-c", "/usr/bin/tail -n 1 state.log").Output()
 	if err != nil {
 		return -1, err
