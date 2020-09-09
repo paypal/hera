@@ -142,6 +142,9 @@ type WorkerClient struct {
 	// request counter / identifier used when the mux interrupts an executing worker request
 	rqId uint32
 
+	// retry recycle count
+	rtryRecycleCount uint16
+
 	//
 	// under recovery. 0: no; 1: yes. use atomic.CompareAndSwapInt32 to check state.
 	//
@@ -431,7 +434,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Started ", workerPath, ", pid=", pid)
 	}
 	worker.pid = pid
-
 	worker.setState(wsInit)
 	return nil
 }

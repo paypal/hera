@@ -62,6 +62,7 @@ type WorkerPool struct {
 	moduleName string // basically the application name as it comes from the command line
 	// the number of worker not in INIT state, atomically maintained
 	numHealthyWorkers int32
+
 	//
 	// number of requests in the backlog. we could lock operation to publish state event, but
 	// status updates after the publishing call inside state log is not inside lock.
@@ -144,7 +145,7 @@ func (pool *WorkerPool) RestartWorker(worker *WorkerClient) (err error) {
 		return nil
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "RetartWorker(): ", pool.Type, pool.desiredSize, pool.currentSize, worker.pid, worker.ID)
+		logger.GetLogger().Log(logger.Debug, "RestartWorker(): ", pool.Type, pool.desiredSize, pool.currentSize, worker.pid, worker.ID)
 	}
 	pool.poolCond.L.Lock()
 	//
@@ -495,20 +496,26 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		return nil
 	}
 
+	skipRecycle := false
 	// check for the lifespan
 	if (worker.exitTime != 0) && (worker.exitTime <= now) {
-		//
-		// reset exit time to prevent checkWorkerLifespan from terminating this worker again.
-		//
-		worker.exitTime = 0
-		go func(w *WorkerClient) {
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Lifespan exceeded, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
-			}
-			w.Terminate()
-		}(worker)
-		pool.poolCond.L.Unlock()
-		return nil
+		if pool.GetHealthyWorkersCount() == int32(pool.desiredSize) {
+			//
+			// reset exit time to prevent checkWorkerLifespan from terminating this worker again.
+			//
+			worker.rtryRecycleCount = 0
+			worker.exitTime = 0
+			go func(w *WorkerClient) {
+				if logger.GetLogger().V(logger.Info) {
+					logger.GetLogger().Log(logger.Info, "Lifespan exceeded, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
+				}
+				w.Terminate()
+			}(worker)
+			pool.poolCond.L.Unlock()
+			return nil
+		} else {
+			skipRecycle = true
+		}
 	}
 
 	//
@@ -527,15 +534,32 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	if worker.maxReqCount != 0 {
 		//worker.reqCount++	// count in dorequest for each statement instead of for each session.
 		if worker.reqCount >= worker.maxReqCount {
-			go func(w *WorkerClient) {
-				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, "Max requests exceeded, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID, "cnt", worker.reqCount, "max", worker.maxReqCount)
-				}
-				w.Terminate()
-			}(worker)
-			pool.poolCond.L.Unlock()
-			return nil
+			if pool.GetHealthyWorkersCount() == int32(pool.desiredSize) {
+				worker.rtryRecycleCount = 0
+				go func(w *WorkerClient) {
+					if logger.GetLogger().V(logger.Info) {
+						logger.GetLogger().Log(logger.Info, "Max requests exceeded, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID, "cnt", worker.reqCount, "max", worker.maxReqCount)
+					}
+					w.Terminate()
+				}(worker)
+				pool.poolCond.L.Unlock()
+				return nil
+			} else {
+				skipRecycle = true
+			}
 		}
+	}
+	if skipRecycle {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:=", pool.desiredSize)
+		}
+		if(worker.rtryRecycleCount > 10 ) { //Log RECYCLE_WORKER error once in ten occurance per worker
+			calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
+			evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+			evt.Completed()
+			worker.rtryRecycleCount = 0
+		}
+		worker.rtryRecycleCount++ // increment the retry recycle counter
 	}
 
 	var pstatus = false
@@ -664,7 +688,7 @@ func (pool *WorkerPool) DecHealthyWorkers() {
 	atomic.AddInt32(&(pool.numHealthyWorkers), -1)
 }
 
-// GetHealthyWorkersCount creturns the number of workers conected to the database
+// GetHealthyWorkersCount returns the number of workers conected to the database
 func (pool *WorkerPool) GetHealthyWorkersCount() int32 {
 	return atomic.LoadInt32(&(pool.numHealthyWorkers))
 }
@@ -748,12 +772,24 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Lock()
 		for i := 0; i < pool.currentSize; i++ {
 			if (pool.workers[i] != nil) && (pool.workers[i].exitTime != 0) && (pool.workers[i].exitTime <= now) {
+				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize)*90/100) { // Should it be a config value
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
+					}
+					calMsg := fmt.Sprintf("checkworkerlifespan()  module_name=%s,shard_id=%d", pool.moduleName, pool.ShardID)
+					evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+					evt.Completed()
+					break
+				}
 				if pool.activeQ.Remove(pool.workers[i]) {
 					workers = append(workers, pool.workers[i])
 					//
 					// reset exit time to prevent return worker from terminating this worker again.
 					//
 					pool.workers[i].exitTime = 0
+					if len(workers) > pool.desiredSize*10/100 { // Should it be a config value
+						break //Always recycle 10% of workers at a time
+					}
 				} else {
 					if GetConfig().EnableDanglingWorkerRecovery {
 						//
@@ -782,7 +818,7 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Unlock()
 		for _, w := range workers {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID)
+				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID ,"HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
 			}
 			w.Terminate()
 		}
