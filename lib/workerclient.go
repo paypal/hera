@@ -431,7 +431,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Started ", workerPath, ", pid=", pid)
 	}
 	worker.pid = pid
-
 	worker.setState(wsInit)
 	return nil
 }
