@@ -1096,6 +1096,7 @@ func (crd *Coordinator) processError(err error) {
 	//
 	if (err == ErrBklgTimeout) ||
 		(err == ErrBklgEviction) ||
+		(err == ErrBindEviction) ||
 		(err == ErrRejectDbDown) ||
 		(err == ErrSaturationKill) ||
 		(err == ErrSaturationSoftSQLEviction) {
