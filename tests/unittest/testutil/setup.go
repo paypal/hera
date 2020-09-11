@@ -307,7 +307,7 @@ func (m *mux) StartServer() error {
 	// wait 10 seconds for mux to come up
 	toWait := 10
 	for {
-		acpt, err := statelogGetField(2)
+		acpt, err := StatelogGetField(2)
 		if err == nil || err == INCOMPLETE {
 			logger.GetLogger().Log(logger.Debug, "State log acpt:", acpt)
 			if err == nil {
