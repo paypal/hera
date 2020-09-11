@@ -251,12 +251,26 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	if(!constructor_success)
 		return;
 
+	if (m_cal_enabled)
+	{
+		client_session.start_session(CAL::TRANS_TYPE_URL, "INITDB");
+		std::string tmp;
+		StringUtil::fmt_int(tmp, getpid());
+		client_session.get_session_transaction()->AddDataToRoot("m_worker_pid", tmp);
+		client_session.get_session_transaction()->AddDataToRoot("m_dbname", _params.db_hostname);
+	}
+
 	const char* tns_name = getenv("TWO_TASK");
 	if (!tns_name)
 	{
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "TWO_TASK is not defined");
 		CalEvent ev(CAL::EVENT_TYPE_ERROR, "TWO_TASK", CAL::TRANS_OK);
 		ev.Completed();
+		client_session.get_session_transaction()->AddDataToRoot("m_err","TWO_TASK_NOT_DEFINED");
+		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
+		client_session.set_status(CAL::SYSTEM_FAILURE); // internal queries' error overwrite status so reset it.
+		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS); // internal queries' error overwrite status so reset it.
+		client_session.end_session();
 		constructor_success = 0; // ensure flag it
 		return;
 	}
@@ -377,6 +391,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	if(connect(_params.db_username, _params.db_password)) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Child failed to connect to oracle...bailing.");
 		constructor_success = 0;
+		client_session.end_session();
 		return;
 	}
 	memset((void*)_params.db_password.c_str(), 'X', _params.db_password.length());
@@ -463,6 +478,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		m_shardcfg_postfix.clear();
 		m_shardcfg_postfix = config->get_string("sharding_postfix", "");
 	}
+	client_session.set_status(CAL::TRANS_OK); // internal queries' error overwrite status so reset it.
+	client_session.end_session(); // end the CalClientSession
 }
 
 
@@ -1335,7 +1352,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"username not found in the config file.");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
 		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=oracle_username not found in config.");
-		client_session.set_status(CAL::SYSTEM_FAILURE);
+		client_session.get_session_transaction()->AddDataToRoot("m_err", "ORALCE_USERNAME_NOT_FOUND");
+		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
+		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
 		return -1;
 	}
 
@@ -1343,7 +1362,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"password not found in the config file.");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
 		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=password not found in config.");
-		client_session.set_status(CAL::INPUT_FAILURE);
+		client_session.get_session_transaction()->AddDataToRoot("m_err", "PWD_NOT_FOUND");
+		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
+		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
 		return -1;
 	}
 
@@ -2278,6 +2299,13 @@ void OCCChild::log_oracle_error(int status, const char * str, LogLevelEnum level
 	CalTransaction::Status s(*cal_trans_severity, CAL::MOD_OCC, CAL::SYS_ERR_ORACLE, status);
 	CalEvent e(*cal_error_type, ora_event_name, s, msg.str());
 	client_session.set_status(CAL::INPUT_FAILURE);
+	if ( status == OCI_ERROR ) {
+		client_session.get_session_transaction()->AddDataToRoot("m_err", ora_event_name);
+		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
+		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
+	} else  { // CAL Status 2 will be part of PHASE 2 monitoring effort
+		//client_session.set_status(CAL::INPUT_FAILURE,  CalActivity::CAL_SET_ROOT_STATUS);
+	}
 }
 
 //-----------------------------------------------------------------------------
