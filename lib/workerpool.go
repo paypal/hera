@@ -503,7 +503,6 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 			//
 			// reset exit time to prevent checkWorkerLifespan from terminating this worker again.
 			//
-			worker.rtryRecycleCount = 0
 			worker.exitTime = 0
 			go func(w *WorkerClient) {
 				if logger.GetLogger().V(logger.Info) {
@@ -535,7 +534,6 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		//worker.reqCount++	// count in dorequest for each statement instead of for each session.
 		if worker.reqCount >= worker.maxReqCount {
 			if pool.GetHealthyWorkersCount() == int32(pool.desiredSize) {
-				worker.rtryRecycleCount = 0
 				go func(w *WorkerClient) {
 					if logger.GetLogger().V(logger.Info) {
 						logger.GetLogger().Log(logger.Info, "Max requests exceeded, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID, "cnt", worker.reqCount, "max", worker.maxReqCount)
@@ -553,13 +551,9 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:=", pool.desiredSize)
 		}
-		if(worker.rtryRecycleCount > 10 ) { //Log RECYCLE_WORKER error once in ten occurance per worker
-			calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
-			evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
-			evt.Completed()
-			worker.rtryRecycleCount = 0
-		}
-		worker.rtryRecycleCount++ // increment the retry recycle counter
+		calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
+		evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+		evt.Completed()
 	}
 
 	var pstatus = false
