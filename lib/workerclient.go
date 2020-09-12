@@ -608,6 +608,7 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 	for {
 		select {
 		case <-workerRecoverTimeout:
+			worker.thr.CanRun()
 			worker.setState(wsInit) // Set the worker state to INIT when we decide to Terminate the worker
 			worker.Terminate()
 			worker.callogStranded("RECYCLED", info)
