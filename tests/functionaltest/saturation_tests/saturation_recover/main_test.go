@@ -109,9 +109,10 @@ func TestSaturationRecover(t *testing.T) {
 	if ( hcount < 2) {
             t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	//Checked for RECYCLED/RECOVERED event
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count < hcount) {
-            t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+            t.Fatalf ("Error: expected %d RECYCLED/RECOVERED_SATURATION_RECOVERED events", hcount);
         }
         if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
             t.Fatalf ("Error: expected %d recover  event", hcount);

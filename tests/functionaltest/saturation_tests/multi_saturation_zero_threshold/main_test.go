@@ -107,8 +107,8 @@ func TestSaturationZeroThreshold(t *testing.T) {
             t.Fatalf ("Error: expected at least 4 HARD_EVICTION events");
         }
 
-	fmt.Println ("Verify worker recovery events after saturation kill")
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	fmt.Println ("Verify worker recycled/recovered events after saturation kill")
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count < hcount) {
             t.Fatalf ("Error: expected %d SATURATION_RECOVERED events", hcount);
         }

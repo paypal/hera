@@ -91,7 +91,7 @@ func TestSaturationEnabledAtRuntime(t *testing.T) {
 	if ( hcount > 0 ) {
             t.Fatalf ("Error: expected NO HARD_EVICTION events");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count > 0 ) {
             t.Fatalf ("Error: expected 0 RECOVERED_SATURATION_RECOVERED event");
         }
@@ -118,14 +118,15 @@ func TestSaturationEnabledAtRuntime(t *testing.T) {
         if ( hcount < 2) {
             t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-        count = testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	//Validate RECYCLED/RECOVERED_SATURATION_RECOVERED event
+        count = testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
         if ( count < hcount) {
-            t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+            t.Fatalf ("Error: expected %d RECYCLE/RECOVERED_SATURATION_RECOVERED events", hcount);
         }
-        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
+/*        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
             t.Fatalf ("Error: expected %d recover  event", hcount);
         }
-
+*/
         fmt.Println ("Verify saturation error is returned to client")
         if ( testutil.RegexCount("error to client.*saturation kill") < hcount) {
            t.Fatalf ("Error: should get saturation kill error");

@@ -112,9 +112,11 @@ func Fetch (query string) (int) {
                 fmt.Println("Error while querying: ", err)
                 return count;
         }
-        for rows.Next() {
-                count++;
-        }
+	if rows != nil {
+             for rows.Next() {
+                 count++;
+             }
+	}
         return count;
 }
 
