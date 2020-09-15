@@ -54,6 +54,7 @@ func InsertBinding (id string, wait_second int) error {
 	time.Sleep (time.Duration(wait_second) * time.Second)
         err = tx.Commit()
         if err != nil {
+                fmt.Println("Error commiting row insertion:", err)
                 return err
         }
 
@@ -89,11 +90,13 @@ func UpdateBinding (id string, wait_second int) error {
         defer stmt.Close()
         _, err = stmt.Exec(sql.Named("ID", id))
         if err != nil {
+                fmt.Println("***Error executing row update:", err)
                 return err
         }
 	time.Sleep (time.Duration(wait_second) * time.Second)
         err = tx.Commit()
         if err != nil {
+                fmt.Println("***Error commiting row update:", err)
                 return err
         }
 

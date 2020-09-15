@@ -31,6 +31,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["rac_sql_interval"] = "0"
         appcfg["request_backlog_timeout"] = "6000"
+	appcfg["bind_eviction_threshold_pct"] = "40"
         appcfg["soft_eviction_effective_time"] = "500"
         appcfg["soft_eviction_probability"] = "100"
         appcfg["opscfg.default.server.saturation_recover_threshold"] = "10" 
@@ -93,7 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 /*
- *  Testing Simple Bind Eviction
+ *  Testing Bind Eviction with InClause query
  *
  */
 
@@ -107,41 +108,59 @@ func TestInclauseEviction(t *testing.T) {
 	util.InsertBinding(id0, 0)
 
 	fmt.Println ("First thread to insert a row, but commit later");
-        id := "12345678"
-        go  util.InsertBinding(id, 5)
+        id1 := "12345678"
+        go  util.InsertBinding(id1, 5)
 
 
         fmt.Println ("Having 6 threads to update same row, so all workers are busy")
-        id = "66666666"
+        id := "66666666"
         for i := 0; i < 6; i++ {
                 time.Sleep(200 * time.Millisecond);
                 go UpdateInclause(id, 3)
         }
 
-        time.Sleep(6 * time.Second);
+        time.Sleep(8 * time.Second);
         fmt.Println ("Verify fetch requests are fine");
         row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id0);
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is there");
 	}
-	fmt.Println ("Since we have only 3 workers, saturation will be kicked in to kill long running queries")
-
-	fmt.Println ("Verify SATURATION events")
-	hcount := testutil.RegexCountFile ("HARD_EVICTION", "cal.log")
-	if ( hcount < 2) {
-            t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
+	
+        fmt.Println ("Verify insert query is not evicted due to evict thresohold");
+        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id1);
+        if (row_count != 1) {
+            t.Fatalf ("Error: insert row SHOULD  be in DB");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+
+	fmt.Println ("Verify BIND_EVICT events")
+	hcount := testutil.RegexCountFile ("BIND_EVICT.*3182244740", "cal.log")
+	if ( hcount < 4) {
+            t.Fatalf ("Error: expected at least 4 BIND_EVICT events");
+        }
+	fmt.Println ("Verify BIND_THROTTLE event")
+	tcount := testutil.RegexCountFile ("BIND_THROTTLE.*3182244740", "cal.log")
+	if ( tcount < 1) {
+            t.Fatalf ("Error: expected 1 BIND_THROTTLE events");
+        }
+	count := testutil.RegexCountFile ("STRANDED.*RECOVERING", "cal.log")
 	if ( count < hcount) {
-            t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
+            t.Fatalf ("Error: expected %d STRANDED_RECOVERED events", hcount);
         }
         if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
             t.Fatalf ("Error: expected %d recover  event", hcount);
         }
+	fmt.Println ("Verify evicted query is rolled back")
+        if ( testutil.RegexCountFile ("ROLLBACK", "cal.log") < hcount ) {
+            t.Fatalf ("Error: expected %d ROLLBACK  event", hcount);
+        }
 
-	fmt.Println ("Verify saturation error is returned to client")
-        if ( testutil.RegexCount("error to client.*saturation kill") < hcount) {
-	   t.Fatalf ("Error: should get saturation kill error");
+	fmt.Println ("Verify bind eviction error is returned to client")
+        if ( testutil.RegexCount("error to client.*HERA-106: bind eviction") < hcount) {
+	   t.Fatalf ("Error: client should get bind eviction error");
+	}
+	fmt.Println ("Verify bind throttle error is returned to client")
+        if ( testutil.RegexCount("Responded to client.*HERA-105: bind throttle") < tcount) {
+	   t.Fatalf ("Error: client should get bind throttle error");
 	}
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestInclauseEviction done  -------------------------------------------------------------")

@@ -150,9 +150,9 @@ func TestSimpleBindEviction(t *testing.T) {
         id := "12345678"
         go insert_row_delay_commit(id, 5)
 
-        id = "01234599"
-	fmt.Println ("Insert a row with id: ", id);
-	insert_row_delay_commit(id, 0)
+        id1 := "01234599"
+	fmt.Println ("Insert a row with id: ", id1);
+	insert_row_delay_commit(id1, 0)
 
         fmt.Println ("Having 6 threads to update same row, so all workers are busy")
         id = "12345678"
@@ -163,11 +163,16 @@ func TestSimpleBindEviction(t *testing.T) {
 
         time.Sleep(8 * time.Second);
         fmt.Println ("Verify fetch requests are fine");
-        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = 01234599");
+        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id1);
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is there");
 	}
 
+        fmt.Println ("Verify eviction query is not in DB");
+        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id);
+        if (row_count > 0) {
+            t.Fatalf ("Error: row SHOULD NOT be in DB");
+	}
 	fmt.Println ("Verify BIND_EVICT events")
 	count := testutil.RegexCountFile ("BIND_EVICT.*4271705786.*v=12345678", "cal.log")
 	if ( count < 0  || count > 1) {
@@ -178,17 +183,21 @@ func TestSimpleBindEviction(t *testing.T) {
 	if ( hcount < 4) {
             t.Fatalf ("Error: expected at least 4 BIND_EVICT events for update query");
         }
-	count = testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
-	//if ( count < hcount) {
-        //    t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
-        //}
-        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
-            t.Fatalf ("Error: expected %d recover  event", hcount);
+	if ( testutil.RegexCountFile ("STRANDED.*RECOVERING", "cal.log") < count + hcount) {
+            t.Fatalf ("Error: expected %d STRANDED.*RECOVERING events", hcount + count);
+        }
+        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount+count ) {
+            t.Fatalf ("Error: expected %d recover  event", hcount+count);
         }
 
 	fmt.Println ("Verify bind eviction errors are returned to client")
-        if ( testutil.RegexCount("stranded conn HERA-106: bind eviction") < count + hcount) {
-	   t.Fatalf ("Error: client should get bind eviction error");
+        if ( testutil.RegexCount("error to client.*HERA-106") < count + hcount) {
+	   t.Fatalf ("Error: client should get %d bind eviction error", hcount+count);
+	}
+
+	fmt.Println ("Verify requests got rejected by bind evviction are rolled back")
+        if ( testutil.RegexCountFile("ROLLBACK.*Local.*0", "cal.log") < count + hcount) {
+	   t.Fatalf ("Error: client should get %d rollback events", hcount+count);
 	}
 
 	testutil.DoDefaultValidation(t)
