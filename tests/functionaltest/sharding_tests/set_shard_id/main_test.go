@@ -70,8 +70,6 @@ func TestMain (m *testing.M) {
  #
  #############################################################################################*/
 func TestSetShardID(t *testing.T) {
-        twoTask := os.Getenv("TWO_TASK_2")
-        fmt.Println ("TWO_TASK_2: ", twoTask)
 	fmt.Println ("TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
@@ -169,6 +167,12 @@ func TestSetShardID(t *testing.T) {
             t.Fatalf ("Error: Select Query does NOT go to shd4");
         }
 	
+	fmt.Println ("Verify root transaction logging in CAL for all 15 workers of all shards")
+	count = testutil.RegexCountFile ("A.*URL.*INITDB.*0", "cal.log")
+	// max_connections = 3, 5 shards
+        if (count < 15) {
+            t.Fatalf ("Error: Expected 15 CAL log lines, get %d", count);
+        }
 
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID done  -------------------------------------------------------------")
