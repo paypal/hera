@@ -72,8 +72,6 @@ func TestMain (m *testing.M) {
  #############################################################################################*/
 
 func TestSetResetShardID(t *testing.T) {
-        twoTask := os.Getenv("TWO_TASK_2")
-        fmt.Println ("TWO_TASK_2: ", twoTask)
 	fmt.Println ("TestSetResetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestSetResetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 

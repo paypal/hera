@@ -23,12 +23,6 @@ var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
-
-	twoTask := os.Getenv("TWO_TASK")
-        os.Setenv ("TWO_TASK_READ", twoTask)
-        twoTask = os.Getenv("TWO_TASK_READ")
-        fmt.Println ("TWO_TASK_READ: ", twoTask)
-
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
@@ -71,6 +65,11 @@ func TestMaxRequestsNonDML(t *testing.T) {
 		t.Fatal("Error starting Mux:", err)
 		return
 	}
+	fmt.Println ("Check Root Transaction Logging in CAL log - max_connections=2");
+        l1 := testutil.RegexCountFile ("A.*URL.*INITDB.*0", "cal.log");
+        if (l1 < 2) {
+            t.Fatalf ("Error: should see 2 Root Transaction logging lines, but get %d ", l1);
+        }
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
@@ -120,6 +119,13 @@ func TestMaxRequestsNonDML(t *testing.T) {
         count = testutil.RegexCountFile ("E.*SERVER_INFO.*worker-go-start", "cal.log");
         if (count < 20) {
             t.Fatalf ("Error: expected 20 occworker-go-start events");
+        }
+	
+	time.Sleep(1 * time.Second)
+	fmt.Println ("Verify Root Transaction Logging in CAL log after workers are restarted");
+        l2 := testutil.RegexCountFile ("A.*URL.*INITDB.*0", "cal.log");
+        if (l2-l1 < 2) {
+            t.Fatalf ("Error: should see 2 more Root Transaction logging lines, but get %d ", l2);
         }
 
 	cancel()

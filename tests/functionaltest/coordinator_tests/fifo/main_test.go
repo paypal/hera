@@ -21,6 +21,7 @@ var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
+
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
@@ -28,6 +29,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
+	appcfg["lifo_scheduler_enabled"] = "false"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["database_type"] = "mysql"
 
@@ -52,22 +54,21 @@ func TestMain(m *testing.M) {
  ** Validate default lifo configuration, lifo_scheduler_enabled="true"
  *******************/
 
-func TestLIFO(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestLIFO begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestFIFO(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestFIFO begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	testutil.RunDML1("insert into test_simple_table_1 (ID, Name, Status) VALUES (12346, 'Jack', 100)")
-	fmt.Println ("Load the row in test_simple_table_1 4 times")
-	for  i := 0; i < 4; i++ {
-		time.Sleep(2 * time.Second)
+	fmt.Println ("Load the row in test_simple_table_1 2 times")
+	for  i := 0; i < 2; i++ {
         	testutil.Fetch ("Select Name from test_simple_table_1 where ID = 12346");
 	}
 
 	time.Sleep(1 * time.Second)
-	fmt.Println ("Verify default lifo is used when worker is assigned")
-	if ( testutil.IsLifoUsed (t, "hera.log") == false ){
- 		t.Fatalf("***Error: Expect LIFO used")
+	fmt.Println ("Verify fifo worker assign algorithm is used")
+	if ( testutil.IsLifoUsed (t, "hera.log") == true ){
+ 		t.Fatalf("***Error: Expected FIFO used")
         }
 	testutil.DoDefaultValidation(t);
 
-	logger.GetLogger().Log(logger.Debug, "TestLIFO done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Debug, "TestFIFO done  -------------------------------------------------------------")
 }
