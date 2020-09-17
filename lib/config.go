@@ -151,6 +151,9 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
+
+	// The max number of database connections to be established per second
+	MaxDbConnectsPerSec int
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -405,6 +408,11 @@ func InitConfig() error {
 	gAppConfig.EnableDanglingWorkerRecovery = cdb.GetOrDefaultBool("enable_danglingworker_recovery", false)
 
 	gAppConfig.GoStatsInterval = cdb.GetOrDefaultInt("go_stats_interval", 10)
+	defaultConns := 10000 // disable by default
+	if gAppConfig.EnableTAF {
+		defaultConns = 5
+	}
+	gAppConfig.MaxDbConnectsPerSec = cdb.GetOrDefaultInt("max_db_connects_per_sec", defaultConns)
 
 	return nil
 }
