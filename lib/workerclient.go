@@ -146,6 +146,9 @@ type WorkerClient struct {
 	// under recovery. 0: no; 1: yes. use atomic.CompareAndSwapInt32 to check state.
 	//
 	isUnderRecovery int32
+
+	// Throtle workers lifecycle
+	thr Throttler
 }
 
 type strandedCalInfo struct {
@@ -172,8 +175,8 @@ func envUpsert(attr *syscall.ProcAttr, key string, val string) {
 }
 
 // NewWorker creates a new workerclient instance (pointer)
-func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleName string) *WorkerClient {
-	worker := &WorkerClient{ID: wid, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName}
+func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
+	worker := &WorkerClient{ID: wid, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
 	maxReqs := GetMaxRequestsPerChild()
 	if maxReqs >= 4 {
 		worker.maxReqCount = maxReqs - uint32(rand.Intn(int(maxReqs/4)))
@@ -604,6 +607,7 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 	for {
 		select {
 		case <-workerRecoverTimeout:
+			worker.thr.CanRun()
 			worker.setState(wsInit) // Set the worker state to INIT when we decide to Terminate the worker
 			worker.Terminate()
 			worker.callogStranded("RECYCLED", info)
