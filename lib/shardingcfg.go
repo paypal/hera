@@ -332,7 +332,7 @@ func InitShardingCfg() error {
 					if err == nil {
 						err = loadMap(ctx, db)
 						if err == nil {
-							if GetConfig().EnableWhitelistTest {
+							if shard == 0 && GetConfig().EnableWhitelistTest {
 								loadWhitelist(ctx, db)
 							}
 							break
