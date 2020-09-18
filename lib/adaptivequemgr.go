@@ -142,7 +142,13 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		if ok {
 			continue // don't repeatedly bind evict something already evicted
 		}
-		request := worker.sqlBindNs.Load().(*netstring.Netstring)
+		request, ok := worker.sqlBindNs.Load().(*netstring.Netstring)
+		if !ok {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "bad req netstring, skipping bind evict eval, pid", worker.pid)
+			}
+			continue
+		}
 		contextBinds := parseBinds(request)
 		for bindName0, bindValue := range contextBinds {
 			/* avoid too short status values
@@ -177,13 +183,14 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 
 	evictedTicket := make(map[string]string)
 
+	numDispatchedWorkers := len(mgr.dispatchedWorkers)
 	evictCount := 0
 	for _, entry := range bindCounts {
 		sqlhash := entry.Sqlhash
 		bindName := entry.Name
 		bindValue := entry.Value
 
-		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(len(mgr.dispatchedWorkers)) ) {
+		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(numDispatchedWorkers) ) {
 			continue
 		}
 		// evict sqlhash, bindvalue
