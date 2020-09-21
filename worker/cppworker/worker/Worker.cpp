@@ -811,6 +811,7 @@ void Worker::eor(int _status, const std::string& _buffer)
 		if (m_eor_free_sent) {
 			// CAL event
 			CalEvent ev("WARNING", "EOR_FREE_AGAIN", "0");
+			ev.AddData("LOG_PREFIX", getenv("LOG_PREFIX"));
 			ev.Completed();
 			// overrite the status to re-start. This case should not happen, and there is the possibility of a
 			// condition where mux and worker are not in sync, if data from mux to worker is comming after the
