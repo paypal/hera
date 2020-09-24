@@ -769,7 +769,7 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Lock()
 		for i := 0; i < pool.currentSize; i++ {
 			if (pool.workers[i] != nil) && (pool.workers[i].exitTime != 0) && (pool.workers[i].exitTime <= now) {
-				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize)*90/100) { // Should it be a config value
+				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize*GetConfig().MaxDesiredHealthyWorkerPct/100)) { // Should it be a config value
 					if logger.GetLogger().V(logger.Alert) {
 						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
 					}
