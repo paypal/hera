@@ -20,7 +20,7 @@ cppsrc = $(wildcard ../utility/encoding/*.cpp) $(wildcard ../utility/*.cpp) $(wi
 obj = $(csrc:.c=.o) $(cppsrc:.cpp=.o) 
 dep = $(obj:.o=.d)
 
-DEBUGFLAGS=-g
+DEBUGFLAGS=-g -O2
 ORACLE_HOME=/opt/instantclient_11_2/
 CPPFLAGS=-std=c++11 -I../ -I$(ORACLE_HOME)/sdk/include $(DEBUGFLAGS)
 CFLAGS=$(DEBUGFLAGS)

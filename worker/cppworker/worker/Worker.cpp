@@ -472,7 +472,7 @@ void Worker::run()
 			break;
 		}
 		
-		check_buffer();
+		//check_buffer();
 		if (!dedicated)
 		{
 			end_session();
