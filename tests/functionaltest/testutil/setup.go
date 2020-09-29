@@ -43,7 +43,7 @@ type mux struct {
 	opscfg  map[string]string
 	wType   WorkerType
 	wg      sync.WaitGroup
-	dbServ	*exec.Cmd
+	dbServ  *exec.Cmd
 	dbStop  context.CancelFunc
 	// dbIp    string
 }
@@ -84,10 +84,9 @@ func (m *mux) setupWorkdir() {
 
 func (m *mux) setupConfig() error {
 	// opscfg
-        for k,v := range m.opscfg {
+	for k,v := range m.opscfg {
 		m.appcfg[k] = v
- 	}
-
+	}
 	if m.wType != OracleWorker {
 		m.appcfg["child.executable"] = "mysqlworker"
 	}
@@ -137,13 +136,6 @@ func (m *mux) setupConfig() error {
 	return nil
 }
 
-func (m *mux) changeConfig() {
-        // opscfg
-        for k,v := range m.opscfg {
-                m.appcfg[k] = v
-        }
-}
-
 func findNextChar(pos int, str string, ch byte) int {
 	for {
 		if pos < 0 || pos >= len(str) {
@@ -157,7 +149,7 @@ func findNextChar(pos int, str string, ch byte) int {
 }
 
 func (m *mux) cleanupConfig() error {
-	//os.Remove("hera.txt")
+	os.Remove("hera.txt")
 	os.Remove("secret.txt")
 	os.Remove("cal_client.txt")
 	os.Remove("oracleworker")
@@ -168,45 +160,45 @@ func (m *mux) cleanupConfig() error {
 func MakeMysql(dockerName string, dbName string) (ip string) {
 	CleanMysql(dockerName)
 
-	//Commented out temporarily so we don't have to run docker all the time
-	cmd:=exec.Command("docker","run","--name",dockerName,"-e","MYSQL_ROOT_PASSWORD=1-testDb","-e","MYSQL_DATABASE="+dbName,"-d","mysql:latest")
+	cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
 	cmd.Run()
 
 	// find its IP
-	cmd=exec.Command("docker","inspect","--format","{{ .NetworkSettings.IPAddress }}",dockerName)
+	cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
 	var ipBuf bytes.Buffer
 	cmd.Stdout = &ipBuf
 	cmd.Run()
-	ipBuf.Truncate(ipBuf.Len()-1)
+	ipBuf.Truncate(ipBuf.Len() - 1)
 
-        for {
-                conn, err := net.Dial("tcp", ipBuf.String()+":3306")
-                if err != nil {
-                        time.Sleep(1 * time.Second)
-                        logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-                        continue
-                } else {
-                        conn.Close()
-                        break
-                }
-        }
+	for {
+		conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+		if err != nil {
+			time.Sleep(1 * time.Second)
+			logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
+			continue
+		} else {
+			conn.Close()
+			break
+		}
+	}
 
 	os.Setenv("username", "root")
 	os.Setenv("password", "1-testDb")
 	q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
-	logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+	//logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
 	err := MysqlDirect(q, ipBuf.String(), dbName)
 	if err != nil {
 		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
 	}
-	q = "GRANT ALL PRIVILEGES ON "+dbName+" . * TO 'appuser'@'%';"
-	logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
+	q = "GRANT ALL PRIVILEGES ON " + dbName + " . * TO 'appuser'@'%';"
+	//logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
 	err = MysqlDirect(q, ipBuf.String(), dbName)
 	if err != nil {
 		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
 	} else {
 		os.Setenv("username", "appuser")
 	}
+	os.Setenv("mysql_ip", ipBuf.String())
 
 	return ipBuf.String()
 }
@@ -218,13 +210,14 @@ func CleanMysql(dockerName string) {
 }
 
 var dbs map[string]*sql.DB
-func MysqlDirect(query string, ip string, dbName string) (error)  {
+
+func MysqlDirect(query string, ip string, dbName string) error {
 	if dbs == nil {
 		dbs = make(map[string]*sql.DB)
 	}
 	db0, ok := dbs[ip+dbName]
 	if !ok {
-		fullDsn:=fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+		fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
 			os.Getenv("username"),
 			os.Getenv("password"),
 			ip,
@@ -239,21 +232,21 @@ func MysqlDirect(query string, ip string, dbName string) (error)  {
 		// defer db0.Close()
 		dbs[ip+dbName] = db0
 	}
-        ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-        conn0, err := db0.Conn(ctx)
-        if err != nil {
-                return err
-        }
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	conn0, err := db0.Conn(ctx)
+	if err != nil {
+		return err
+	}
 	defer conn0.Close()
-        stmt0, err := conn0.PrepareContext(ctx, query)
-        if err != nil {
-                return err
-        }
+	stmt0, err := conn0.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
 	defer stmt0.Close()
-        _, err = stmt0.Exec()
-        if err != nil {
-                return err
-        }
+	_, err = stmt0.Exec()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -275,32 +268,37 @@ func (m *mux) StartServer() error {
 			cleanCmd.Run()
 
 			// spawn test db
-			ctx,cancelF := context.WithCancel(context.Background())
+			ctx, cancelF := context.WithCancel(context.Background())
 			m.dbStop = cancelF
 			m.dbServ = exec.CommandContext(ctx, os.Getenv("GOPATH")+"/bin/runserver", "2121", "0.0")
 			err := m.dbServ.Start()
 			if err != nil {
-				logger.GetLogger().Log(logger.Warning, "test mock mysql dbserv did not spawn " + err.Error())
+				logger.GetLogger().Log(logger.Warning, "test mock mysql dbserv did not spawn "+err.Error())
 			}
 
 			os.Setenv("username", "herausertest")
 			os.Setenv("password", "Hera-User-Test-9")
 			os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
-			os.Setenv("TWO_TASK_READ", "tcp(127.0.0.1:2121)/heratestdb")
-			os.Setenv("TWO_TASK_STANDBY0", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_1", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_2", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_3", "tcp(127.0.0.1:2121)/heratestdb")
+			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
 			ip := MakeMysql("mysql22", "heratestdb")
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
-			twoTask := os.Getenv("TWO_TASK")
-        		os.Setenv ("TWO_TASK_0", twoTask)
-        		os.Setenv ("TWO_TASK_1", twoTask)
-			twoTask1 := os.Getenv("TWO_TASK")
-			fmt.Println ("TWO_TASK_1: ", twoTask1)
-        		os.Setenv ("TWO_TASK_2", twoTask)
-        		os.Setenv ("TWO_TASK_3", twoTask)
-        		os.Setenv ("TWO_TASK_4", twoTask)
-			os.Setenv("TWO_TASK_READ", "tcp("+ip+":3306)/heratestdb")
-			os.Setenv("TWO_TASK_STANDBY0", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_3", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_4", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("MYSQL_IP", ip)
+			// Set up the rac_maint table
+			pfx := os.Getenv("MGMT_TABLE_PREFIX")
+			if pfx == "" {
+				pfx = "hera"
+			}
+			tableName := pfx + "_maint"
+			tableString := "create table " + tableName + " ( INST_ID INT,  MACHINE VARCHAR(512),  STATUS VARCHAR(8),  STATUS_TIME INT,  MODULE VARCHAR(64) );"
+			MysqlDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb")
 		}
 	}
 
@@ -315,7 +313,7 @@ func (m *mux) StartServer() error {
 	// wait 10 seconds for mux to come up
 	toWait := 10
 	for {
-		acpt, err := statelogGetField(2)
+		acpt, err := StatelogGetField(2)
 		if err == nil || err == INCOMPLETE {
 			logger.GetLogger().Log(logger.Debug, "State log acpt:", acpt)
 			if err == nil {
