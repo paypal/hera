@@ -55,11 +55,10 @@ func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_2")
 	testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
 	testutil.RunMysql("DROP TABLE IF EXISTS hera_shard_map;")
-	out,err2 := testutil.RunMysql("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500));");
-	testutil.RunMysql (`DELIMITER $$
+	testutil.RunMysql("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500));");
+	out,err2 := testutil.RunMysql (`DELIMITER $$
  DROP PROCEDURE IF EXISTS populate_shard_map$$
  CREATE PROCEDURE populate_shard_map(IN num INT)
-
 BEGIN
    DECLARE x INT;
    SET x = 0;
@@ -83,15 +82,15 @@ DELIMITER ;`);
 		return err3
 	}
 
-	//max_scuttle := 128;
-	///err3  := testutil.PopulateShardMap(max_scuttle);
-	/*if err2 != nil {
+	max_scuttle := 128;
+	err3  = testutil.PopulateShardMap(max_scuttle);
+	if err2 != nil {
 	    return err2
 	}
 	if err3 != nil {
             return err3
-        }*/
-	return err3
+        }
+	return err2
 }
 
 
@@ -114,7 +113,8 @@ func TestMain (m *testing.M) {
 func TestShardBasic(t *testing.T) {
 	fmt.Println ("TestShardBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
+	time.Sleep(8 * time.Second);
+	
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
