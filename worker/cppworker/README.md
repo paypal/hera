@@ -4,4 +4,3 @@ This builds the Oracle worker for Hera (https://github.com/paypal/hera) in C++ f
 
 To build use build/makefile. The only dependencies needed are boost_regex devel package and the Oracle instant client 11 or 19.
 
-
