@@ -432,7 +432,7 @@ void Worker::run()
 		}
 //		WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "worker rq_ID = %d", m_reader->get_count());
 
-		if (!dedicated)
+		if (!dedicated && cmd != CLIENT_CAL_CORRELATION_ID)
 		{
 			m_eor_free_sent = false;
 			set_dedicated(true);
@@ -473,7 +473,7 @@ void Worker::run()
 		}
 		
 		//check_buffer();
-		if (!dedicated)
+		if (!dedicated && cmd != CLIENT_CAL_CORRELATION_ID)
 		{
 			end_session();
 		}
