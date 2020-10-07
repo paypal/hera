@@ -295,6 +295,11 @@ func (crd *Coordinator) Run() {
 	// if coordinator has to bail out, we need to inform requesthandler the same
 	// by close the client connection. this way requesthandler gets EOF from client
 	//
+	if crd.worker != nil { // for a client disconn
+		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
+		go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+		crd.resetWorkerInfo()
+	}
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "Coordinator exiting ...")
 	}
