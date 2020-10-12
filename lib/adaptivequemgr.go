@@ -132,6 +132,8 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 	}
 
 	bindCounts := make(map[string]*BindCount)
+	mgr.wpool.poolCond.L.Lock()
+	defer mgr.wpool.poolCond.L.Unlock()
 	for worker, ticket := range mgr.dispatchedWorkers {
 		if worker == nil {
 			continue
