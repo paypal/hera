@@ -83,7 +83,7 @@ public class ClientTest {
 	@BeforeClass
 	public static void setUp() throws Exception {
 		Util.makeAndStartHeraMux(null);
-		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
 		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
 		HeraClientConfigHolder.clear();
 		Properties props = new Properties();
@@ -1000,7 +1000,8 @@ public class ClientTest {
 
 		ResultSet rs = st.executeQuery("select float_val from " + table + " where id=" + iID_START);
 		rs.next();
-		Assert.assertTrue("rs", rs.getInt(1) == iINT_VAL1);
+		Assert.assertEquals("rs=" + rs.getDouble(1),
+				(int) rs.getDouble(1), iINT_VAL1.intValue());
 		cleanTable(st, sID_START, 20, true);
 	}
 
