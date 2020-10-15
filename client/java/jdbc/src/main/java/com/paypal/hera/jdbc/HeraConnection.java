@@ -605,7 +605,7 @@ public class HeraConnection implements Connection {
 				}
 				setShardKeyPayload((_key + "=" + _value).getBytes());
 			}
-		} catch(HeraIOException ex) {
+		} catch(Exception ex) {
 			hardClose();
 			throw ex;
 		}
