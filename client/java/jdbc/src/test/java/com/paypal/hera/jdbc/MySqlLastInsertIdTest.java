@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 
+import com.paypal.hera.conf.HeraConnectionConfig;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -60,6 +61,21 @@ public class MySqlLastInsertIdTest {
 	@After
 	public void cleanUp() throws SQLException {
 		dbConn.close();
+	}
+
+	@Test
+	public void testSetShardHintAsShardIDFail() throws Exception{
+
+		Properties props = new Properties();
+		props.setProperty(HeraConnectionConfig.CONNECTION_TIMEOUT_MSECS_PROPERTY, "3000");
+		HeraConnection hera = (HeraConnection)dbConn;
+		try {
+			hera.setShardHint("shardid", "100");
+			Assert.fail("should have thrown exception");
+		}catch (HeraClientException ex){
+			Assert.assertTrue(ex.getMessage(), ex.getMessage().contains("2: HERA-201: shard id out of range"));
+		}
+		Assert.assertTrue(dbConn.isClosed());
 	}
 
 	public int rowCount(Connection dbConn, String msg) throws SQLException {
