@@ -296,6 +296,10 @@ func (crd *Coordinator) Run() {
 	// by close the client connection. this way requesthandler gets EOF from client
 	//
 	if crd.worker != nil { // for a client disconn
+		et := cal.NewCalEvent("HERAMUX", "CATCH_CLIENT_DROP_FREE_WORKER", cal.TransOK, "")
+		et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
+		et.AddDataStr("worker_pid", fmt.Sprintf("%d",crd.worker.pid))
+
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
 		go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 		crd.resetWorkerInfo()
