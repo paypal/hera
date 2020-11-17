@@ -204,7 +204,10 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			}
 			evictedTicket[ticket] = ticket
 
-			if mgr.dispatchedWorkers[worker] != ticket {
+			if mgr.dispatchedWorkers[worker] != ticket ||
+				worker.Status == wsFnsh ||
+				worker.isUnderRecovery == 1 /* Recover() uses compare & swap */ {
+
 				continue
 			}
 			// do eviction
