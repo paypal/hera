@@ -20,12 +20,12 @@ package lib
 import (
 	"errors"
 	"fmt"
-	"strings"
-	"sync/atomic"
-	"path/filepath"
-	"os"
 	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
 )
 
 //The Config contains all the static configuration
@@ -84,14 +84,14 @@ type Config struct {
 	//
 	// @TODO need a function for cdb boolean
 	//
-	DatabaseType      dbtype
-	EnableSharding    bool
-	UseShardMap       bool
-	NumOfShards       int
-	ShardKeyName      string
-	MaxScuttleBuckets int
-	ScuttleColName    string
-	ShardingAlgoHash  bool
+	DatabaseType              dbtype
+	EnableSharding            bool
+	UseShardMap               bool
+	NumOfShards               int
+	ShardKeyName              string
+	MaxScuttleBuckets         int
+	ScuttleColName            string
+	ShardingAlgoHash          bool
 	ShardKeyValueTypeIsString bool
 
 	EnableWhitelistTest       bool
@@ -124,8 +124,8 @@ type Config struct {
 	// to use OpenSSL (for testing) or crypto/tls
 	UseOpenSSL bool
 
-	ErrorCodePrefix string
-	StateLogPrefix string
+	ErrorCodePrefix       string
+	StateLogPrefix        string
 	ManagementTablePrefix string
 	// RAC maint reload config interval
 	RacMaintReloadInterval int
@@ -200,13 +200,13 @@ func parseMapStrStr(encoded string) map[string]string {
 func InitConfig() error {
 	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
 
-	if (abserr != nil) {
-		currentDir = "./" 
+	if abserr != nil {
+		currentDir = "./"
 	} else {
 		currentDir = currentDir + "/"
 	}
 
-	filename := currentDir + "hera.txt" 
+	filename := currentDir + "hera.txt"
 
 	cdb, err := config.NewTxtConfig(filename)
 	if err != nil {
@@ -216,9 +216,9 @@ func InitConfig() error {
 	gAppConfig = &Config{numWorkersCh: make(chan int, 1)}
 
 	logFile := cdb.GetOrDefaultString("log_file", "hera.log")
-	logFile = currentDir + logFile 
+	logFile = currentDir + logFile
 	logLevel := cdb.GetOrDefaultInt("log_level", logger.Info)
-	
+
 	err = logger.CreateLogger(logFile, "PROXY", int32(logLevel))
 	if err != nil {
 		FullShutdown()
