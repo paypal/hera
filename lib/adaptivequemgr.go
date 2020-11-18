@@ -210,6 +210,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 
 				continue
 			}
+
 			// do eviction
 			select {
 			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: true}:
