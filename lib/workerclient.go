@@ -352,8 +352,14 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 	}
 
-	envUpsert(&attr, "username", dbUserName)
-	envUpsert(&attr, "password", dbPassword)
+	_, ok := os.LookupEnv("username")
+	if !ok {
+		envUpsert(&attr, "username", dbUserName)
+	}
+	_, ok = os.LookupEnv("password")
+	if !ok {
+		envUpsert(&attr, "password", dbPassword)
+	}
 	envUpsert(&attr, "password2", dbPassword2)
 	envUpsert(&attr, "password3", dbPassword3)
 	envUpsert(&attr, "mysql_datasource", twoTask)
