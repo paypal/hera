@@ -66,7 +66,7 @@ type workerMsg struct {
 	// EOR IN_TRANSACTION or EOR IN_CURSOR_IN_TRANSACTION is received
 	inTransaction bool
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
-	abort bool
+	abort     bool
 	bindEvict bool
 	// the request counter / Id
 	rqId uint32
@@ -82,7 +82,7 @@ func (msg *workerMsg) GetNetstring() *netstring.Netstring {
 }
 
 type BindPair struct {
-	name string
+	name  string
 	value string
 }
 
@@ -158,6 +158,11 @@ type strandedCalInfo struct {
 	//TODO: Add prefix later; for now we only recover because of tmo, so no need of prefix
 }
 
+var dbUserName string
+var dbPassword string
+var dbPassword2 string
+var dbPassword3 string
+
 /**
  * Update or insert into the environment
  */
@@ -223,7 +228,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			return errors.New("Invalid module name, must be like hera-<name> ")
 		}
 	}
-
 
 	var twoTask string
 	switch worker.Type {
@@ -347,6 +351,17 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			return errors.New("TWO_TASK is not defined")
 		}
 	}
+
+	_, ok := os.LookupEnv("username")
+	if !ok {
+		envUpsert(&attr, "username", dbUserName)
+	}
+	_, ok = os.LookupEnv("password")
+	if !ok {
+		envUpsert(&attr, "password", dbPassword)
+	}
+	envUpsert(&attr, "password2", dbPassword2)
+	envUpsert(&attr, "password3", dbPassword3)
 	envUpsert(&attr, "mysql_datasource", twoTask)
 
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
@@ -822,7 +837,7 @@ func (worker *WorkerClient) doRead() {
 			}
 			eor := int(ns.Payload[0] - '0')
 			rqId := (uint32(ns.Payload[1]) << 24) + (uint32(ns.Payload[2]) << 16) + (uint32(ns.Payload[3]) << 8) + uint32(ns.Payload[4])
-			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)     // Reset the sqlStartTimeMs to avoid being picked up during saturation/recover event
+			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0) // Reset the sqlStartTimeMs to avoid being picked up during saturation/recover event
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "workerclient (<<< pid =", worker.pid, ",wrqId:", worker.rqId, "): EOR code:", eor, ", rqId: ", rqId, ", data:", DebugString(payload))
 			}
