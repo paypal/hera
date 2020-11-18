@@ -154,6 +154,9 @@ type Config struct {
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
+
+	// Max desired percentage of healthy workers for the worker pool
+	MaxDesiredHealthyWorkerPct int
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -413,6 +416,10 @@ func InitConfig() error {
 		defaultConns = 5
 	}
 	gAppConfig.MaxDbConnectsPerSec = cdb.GetOrDefaultInt("max_db_connects_per_sec", defaultConns)
+	gAppConfig.MaxDesiredHealthyWorkerPct = cdb.GetOrDefaultInt("max_desire_healthy_worker_pct", 90)
+	if gAppConfig.MaxDesiredHealthyWorkerPct > 100 {
+		gAppConfig.MaxDesiredHealthyWorkerPct = 90
+	}
 
 	return nil
 }
