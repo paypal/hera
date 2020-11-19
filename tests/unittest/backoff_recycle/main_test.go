@@ -25,6 +25,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "2"
 	appcfg["db_heartbeat_interval"] = "3"
+	appcfg["max_desire_healthy_worker_pct"] = "90"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "100"
@@ -67,13 +68,13 @@ func TestBackOffRecycle(t *testing.T) {
 	pwd :=os.Getenv("password")
 // Incorrect TWO_TASK
 	os.Setenv("TWO_TASK", "tcp(dummy:3306)/"+"test"+"?timeout=11s")
-	time.Sleep(30*time.Second)
+	time.Sleep(40*time.Second)
 	if testutil.RegexCountFile("[A|T].*INITDB.*1.*m_err.*", "cal.log") < 1 {
 		t.Fatalf("Error: should have INITDB as error ")
 	}
 	os.Setenv("TWO_TASK", twotask)
 	os.Truncate("cal.log",0)
-	time.Sleep(10*time.Second)
+	time.Sleep(20*time.Second)
 	if testutil.RegexCountFile("[A|T].*INITDB.*1.*m_err..*", "cal.log") > 1 {
 		t.Fatalf("Error: should have INITDB as error ")
 	}

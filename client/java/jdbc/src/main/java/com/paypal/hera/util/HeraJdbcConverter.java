@@ -37,22 +37,12 @@ public class HeraJdbcConverter {
 	}
 	
 	public static int hera2int(byte[] bytes) {
-		 try {
-	            try {
-					return Integer.parseInt(new String(bytes, "UTF-8"));
-				} catch (UnsupportedEncodingException e) {
-					throw new NumberFormatException();
-				}
-	          } catch (NumberFormatException ex) {
-	               double d;
-				try {
-					d = Double.parseDouble( new String(bytes, "UTF-8"));
-				} catch (UnsupportedEncodingException e) {
-					throw new NumberFormatException();
-				}
-	               return (int)d;
-	          }
+		try {
+			return Integer.parseInt(new String(bytes, "UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			throw new NumberFormatException();
 		}
+	}
 	
 	// like String InfraCharsetUtil::detect_and_convert ( const Buffer &_src )
 	// try UTF8, fallback to latin-1
@@ -70,20 +60,10 @@ public class HeraJdbcConverter {
 
 	public static long hera2long(byte[] bs) {
 		try {
-			try {
-				return Long.parseLong(new String(bs, "UTF-8"));
-			} catch (UnsupportedEncodingException e) {
-				throw new NumberFormatException();
-			}
-        } catch (NumberFormatException ex) {
-             double d;
-			try {
-				d = Double.parseDouble( new String(bs, "UTF-8"));
-			} catch (UnsupportedEncodingException e) {
-				throw new NumberFormatException();
-			}
-            return (long)d;
-        }
+			return Long.parseLong(new String(bs, "UTF-8"));
+		} catch (UnsupportedEncodingException e) {
+			throw new NumberFormatException();
+		}
 	}
 
 	public static float hera2float(byte[] bs) {
@@ -103,22 +83,12 @@ public class HeraJdbcConverter {
 	}
 
 	public static short hera2short(byte[] bs) {
-		   try {
-	           try {
-				return Short.parseShort(new String(bs, "UTF-8"));
-	           } catch (UnsupportedEncodingException e) {
-	        	   throw new NumberFormatException();
-	           }
-	       } catch (NumberFormatException ex) {
-	           double d;
-			try {
-				d = Double.parseDouble( new String(bs, "UTF-8"));
-			} catch (UnsupportedEncodingException e) {
-				throw new NumberFormatException();
-			}
-	           return (short)d;
-	       }	
-		}
+	   try {
+		return Short.parseShort(new String(bs, "UTF-8"));
+	   } catch (UnsupportedEncodingException e) {
+		   throw new NumberFormatException();
+	   }
+	}
 
 	@SuppressWarnings("deprecation")
 	public Date hera2date(byte[] bs) throws ParseException {
