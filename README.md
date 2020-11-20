@@ -101,8 +101,8 @@ The following sections explain the process for manually building mux without Doc
 ### Running the server
 
 To run mux there is minimal configuration required. Please see examples for running with [MySQL](https://github.com/paypal/hera/tree/master/tests/e2e/srvmysql) or [Oracle](https://github.com/paypal/hera/tree/master/tests/e2e/srvoracle).
-The main configuration file is hera.txt, which must contain the TCP port where the server listens and the number of workers. The user name, password and the data source are passsed via environment parameters.
-```    
+The main configuration file is hera.txt, which must contain the TCP port where the server listens and the number of workers. The user name, password and the data source are passed via environment parameters.
+```bash
     # the proxy executable
     ln -s $GOPATH/bin/mux .
     # the MySQL worker
