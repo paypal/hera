@@ -299,6 +299,7 @@ func (crd *Coordinator) Run() {
 		et := cal.NewCalEvent("HERAMUX", "CATCH_CLIENT_DROP_FREE_WORKER", cal.TransOK, "")
 		et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 		et.AddDataStr("worker_pid", fmt.Sprintf("%d",crd.worker.pid))
+		et.Completed()
 
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
 		go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
