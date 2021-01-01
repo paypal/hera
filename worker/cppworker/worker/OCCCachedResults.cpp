@@ -47,7 +47,7 @@ OCCCachedResults::get_cache_entry(uint _query_id, Config * _config, LogWriterBas
 		
 	std::ostringstream oss;
 	oss << "special_query_" << _query_id << "_max_age";
-	if (_config->get_value(oss.str(), max_age_buf))
+	if (!_config->get_value(oss.str(), max_age_buf))
 	{
 		_logfile->write_entry(LOG_WARNING, "%s undefined or invalid", oss.str().c_str());
 		return NULL;
