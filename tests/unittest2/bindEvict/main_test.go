@@ -31,6 +31,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
+	appcfg["bind_eviction_names"] = "p"
 
 	appcfg["request_backlog_timeout"]="1000";
 	appcfg["soft_eviction_probability"]="100";
