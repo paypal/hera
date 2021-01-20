@@ -119,11 +119,14 @@ type BindCount struct {
 }
 
 func bindEvictNameOk(bindName string) (bool) {
-	if len(GetConfig().BindEvictionNames) == 0 {
+	commaNames := GetConfig().BindEvictionNames
+	if len(commaNames) == 0 {
 		// for tests, allow all names to be subject to bind eviction
 		return true
 	}
-	for _, okSubname := range strings.Split(GetConfig().BindEvictionNames,",") {
+	commaNames = strings.ToLower(commaNames)
+	bindName = strings.ToLower(bindName)
+	for _, okSubname := range strings.Split(commaNames,",") {
 		if strings.Contains(bindName, okSubname) {
 			return true
 		}
