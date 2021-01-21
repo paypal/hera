@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync/atomic"
+	"strings"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -117,6 +118,22 @@ type BindCount struct {
 	Workers map[string]*WorkerClient // lookup by ticket
 }
 
+func bindEvictNameOk(bindName string) (bool) {
+	commaNames := GetConfig().BindEvictionNames
+	if len(commaNames) == 0 {
+		// for tests, allow all names to be subject to bind eviction
+		return true
+	}
+	commaNames = strings.ToLower(commaNames)
+	bindName = strings.ToLower(bindName)
+	for _, okSubname := range strings.Split(commaNames,",") {
+		if strings.Contains(bindName, okSubname) {
+			return true
+		}
+	}
+	return false
+}
+
 /* A bad query with multiple binds will add independent bind throttles to all
 bind name and values */
 func (mgr *adaptiveQueueManager) doBindEviction() (int) {
@@ -166,6 +183,9 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			bind names are all normalized to bn#
 			bind values may repeat */
 			bindName := NormalizeBindName(bindName0)
+			if !bindEvictNameOk(bindName) {
+				continue
+			}
 			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
 
 			entry, ok := bindCounts[concatKey]
