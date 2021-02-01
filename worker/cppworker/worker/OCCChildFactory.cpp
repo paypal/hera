@@ -54,7 +54,8 @@ std::unique_ptr<Worker> OCCChildFactory::create(const InitParams& _params) const
 	std::string charset;
 	if (0 == ((OCCChild*)(worker.get()))->get_db_charset(charset))
 	{
-		if (charset.compare(std::string(lang_env + 1)) == 0)
+		if (charset.compare(std::string(lang_env + 1)) == 0 ||
+			lang_env == ("." ORA_CHARSET_UTF8) && charset.compare(std::string("." ORA_CHARSET_AL32UTF8)) == 0)
 			return worker;
 		else
 		{
