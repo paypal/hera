@@ -311,6 +311,19 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 	sz := len(requests)
 	autodisc := false /* ShardKey can overwrite the autodiscovery */
 	for i := 1; i < sz; i++ {
+		if requests[i].Cmd == common.CmdPrepare {
+			lowerSql := strings.ToLower(string(requests[i].Payload))
+			scuttle_idx := strings.LastIndex(lowerSql, strings.ToLower(GetConfig().ScuttleColName))
+			if scuttle_idx < 0 || scuttle_idx > strings.Index(lowerSql," from ") {
+				continue
+			}
+			evt := cal.NewCalEvent(EvtTypeSharding, "RM_SCUTTLE_ID_FETCH_COL", cal.TransOK, "")
+			evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+			evt.Completed()
+			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoScuttleIdPredicate.Error()))
+			crd.respond(ns.Serialized)
+			return true, ErrNoScuttleIdPredicate
+		}
 		if (requests[i].Cmd == common.CmdBindName) && crd.isShardKey(string(requests[i].Payload)) {
 			if crd.shard.sessionShardID != -1 {
 				evt := cal.NewCalEvent(EvtTypeSharding, EvtNameAutodiscSetShardID, cal.TransOK, "")
