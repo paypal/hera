@@ -53,7 +53,7 @@ The following sections explain the process for manually building mux without Doc
 ### Install Dependencies
 
 1.  [Install Go 1.10+](http://golang.org/doc/install).
-2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or Oracle(https://www.oracle.com/index.html).
+2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or [Oracle](https://www.oracle.com/index.html).
 3.  Install the [MySQL driver](https://github.com/go-sql-driver/mysql) and the [Oracle driver](https://github.com/go-goracle/goracle)
 3.  Install Oracle instant client     
 
