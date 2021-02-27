@@ -54,14 +54,14 @@ std::unique_ptr<Worker> OCCChildFactory::create(const InitParams& _params) const
 	std::string charset;
 	if (0 == ((OCCChild*)(worker.get()))->get_db_charset(charset))
 	{
-		if (charset.compare(std::string(lang_env + 1)) == 0)
-			return worker;
-		else
-		{
-			std::ostringstream os;
-			os << "DB charset mismatch: expected " << lang_env + 1 << " but found " << charset;
-			throw WorkerCreationException(os.str());
+		if (charset.compare(std::string(lang_env + 1)) != 0) {
+			LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_WARNING, "%s db character set ok", charset.c_str());
 		}
+		if (charset.compare(std::string(ORA_CHARSET_AL32UTF8)) == 0)
+			return worker;
+		if (charset.compare(std::string(ORA_CHARSET_UTF8)) == 0)
+			return worker;
+		throw WorkerCreationException("Need UTF8 or AL32UTF8");
 	}
 	else
 		throw WorkerCreationException("Could not get DB charset");
