@@ -15,14 +15,14 @@ Oracle databases.  It supports sharding the databases for horizontal scaling.
 
 # What is Hera
 
-     Hera is Data Access Gateway for  databases and is a key enabler for scaling and improving availability databases.
-    - It Protects the database from resource exhaustion by evicting poorly performing queries,
-    - Intelligently routes read/write traffic appropriately for better load balancing,
-    - Improves tolerance to database outages,
-    - Provides high performance secured connections between applications and Hera
-    - Provides domain agnostic database sharding for horizontal database scaling.
-    - Automatic transaction application failover between replica databases
-    - And many more site resiliency features.
+Hera is Data Access Gateway that helps to enable scaling and improving the availability of databases.
+* Protects the database from resource exhaustion by evicting poorly performing queries
+* Intelligently routes read/write traffic appropriately for better load balancing
+* Improves tolerance to database outages
+* Provides high performance secured connections between applications and Hera
+* Provides domain agnostic database sharding for horizontal database scaling
+* Automatic transaction application failover between replica databases
+* And many more site resiliency features
 
 # Getting Started
 
