@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
+	//"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -184,7 +184,7 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 		}
 	}
 	// */
-	ipBuf := []byte("localhost")
+	ipBuf := bytes.NewBufferString("localhost")
 
 	os.Setenv("username", "root")
 	os.Setenv("password", "1-testDb")
