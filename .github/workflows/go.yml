@@ -20,3 +20,6 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+    - name: Test
+      run: go test -v github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/utility/encoding/netstring github.com/paypal/hera/lib github.com/paypal/hera/common github.com/paypal/hera/cal 
+
