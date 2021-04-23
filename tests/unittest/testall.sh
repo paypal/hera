@@ -1,7 +1,7 @@
 for d in `ls -F $GOPATH/src/github.com/paypal/hera/tests/unittest | grep /$ | egrep -v '(testutil|rac_maint|mysql_direct)'`
 do 
     echo ==== $d
-    cd $GOPATH/src/github.com/paypal/hera/tests/unittest/$d 
+    pushd tests/unittest/$d 
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$n 
     ./$n.test 
@@ -10,6 +10,8 @@ do
     if [ 0 != $rv ]
     then
         grep ^ *.log
+        popd
         exit $rv
     fi
+    popd
 done
