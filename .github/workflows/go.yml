@@ -42,4 +42,4 @@ jobs:
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
-      run: go test -v github.com/paypal/hera/tests/unittest/coordinator_basic
+      run: $GOPATH/src/github.com/paypal/hera/tests/unittest/testall.sh
