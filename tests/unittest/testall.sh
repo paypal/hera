@@ -1,4 +1,4 @@
-for d in `ls -F tests/unittest | grep /$ | egrep -v '(testutil|rac_maint|mysql_direct)'`
+for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(testutil|rac_maint|mysql_direct)'`
 do 
     echo ==== $d
     pushd tests/unittest/$d 
