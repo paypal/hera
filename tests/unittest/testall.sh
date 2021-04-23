@@ -2,8 +2,8 @@ for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(testutil|
 do 
     echo ==== $d
     pushd tests/unittest/$d 
-    ln -s /home/runner/go/bin/mysqlworker .
-    cksum mysqlworker
+    cp /home/runner/go/bin/mysqlworker .
+    sha384sum mysqlworker
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
     ./$d.test 
