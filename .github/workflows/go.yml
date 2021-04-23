@@ -31,7 +31,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: 1-testDb
           MYSQL_DATABASE: heratestdb
         ports:
-          3306:3306
+          - 3306:3306
     steps:
     - uses: actions/checkout@v2
 
