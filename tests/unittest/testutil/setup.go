@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net"
+	//"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -120,13 +120,14 @@ func (m *mux) setupConfig() error {
 	}
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
 
+	/* // already setup by testall.sh for Github Actions
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
 	if m.wType == OracleWorker {
 		os.Symlink(os.Getenv("GOPATH")+"/bin/oracleworker", "oracleworker")
 	} else {
 		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
-	}
+	} // */
 
 	os.Remove("hera.log")
 	os.Remove("cal.log")
@@ -158,6 +159,8 @@ func (m *mux) cleanupConfig() error {
 }
 
 func MakeMysql(dockerName string, dbName string) (ip string) {
+	// disable for migration to Github Actions
+	/*
 	CleanMysql(dockerName)
 
 	cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
@@ -181,6 +184,8 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 			break
 		}
 	}
+	// */
+	ipBuf := bytes.NewBufferString("localhost")
 
 	os.Setenv("username", "root")
 	os.Setenv("password", "1-testDb")
