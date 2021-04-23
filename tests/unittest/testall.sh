@@ -1,4 +1,5 @@
-for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(testutil|rac_maint|mysql_direct|failover)'`
+overall=0
+for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
 do 
     echo ==== $d
     pushd tests/unittest/$d 
@@ -10,10 +11,13 @@ do
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
-        grep ^ *.log
+        #grep ^ *.log
         popd
-        exit $rv
+        #exit $rv
+        overall=1
+        continue
     fi
     rm -f *.log 
     popd
 done
+exit $overall
