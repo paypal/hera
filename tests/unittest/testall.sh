@@ -3,11 +3,13 @@ do
     echo ==== $d
     pushd tests/unittest/$d 
     cp /home/runner/go/bin/mysqlworker .
-    sha384sum mysqlworker
+    sha384sum mysqlworker /home/runner/work/hera/hera/tests/unittest/backoff_recycle/mysqlworker
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
+    sha384sum mysqlworker /home/runner/work/hera/hera/tests/unittest/backoff_recycle/mysqlworker
     ./$d.test 
     rv=$?
+    sha384sum mysqlworker /home/runner/work/hera/hera/tests/unittest/backoff_recycle/mysqlworker
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
