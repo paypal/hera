@@ -3,8 +3,8 @@ do
     echo ==== $d
     pushd tests/unittest/$d 
     rm -f *.log 
-    $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$n 
-    ./$n.test 
+    $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
+    ./$d.test 
     rv=$?
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
