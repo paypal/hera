@@ -41,5 +41,7 @@ jobs:
         go-version: 1.15
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
+    - name: List workspace
+      run: find . -ls
     - name: System Test
-      run: $GOPATH/src/github.com/paypal/hera/tests/unittest/testall.sh
+      run: src/github.com/paypal/hera/tests/unittest/testall.sh
