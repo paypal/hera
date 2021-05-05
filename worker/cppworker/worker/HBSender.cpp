@@ -161,8 +161,8 @@ bool HBSender::handle_ctrl()
 	uint32_t rq_id = (uint32_t(uint8_t(data[1])) << 24) + (uint32_t(uint8_t(data[2])) << 16) + (uint32_t(uint8_t(data[3])) << 8) + uint8_t(data[4]);
 	uint32_t my_rq_id = m_rq_id.load();
 	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "Mux asks to abort existing work. mux_rq_ID = %u, wk_rq_ID = %u", rq_id, my_rq_id);
-	if (rq_id != my_rq_id) {
-		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Race interrupting SQL, mux_rq_ID is %u and wk_rq_ID is %u.", rq_id, my_rq_id);
+	if (rq_id != my_rq_id && rq_id != my_rq_id+1) {
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Race interrupting SQL, mux_rq_ID is %u and wk_rq_ID is %u (allow for exec/fetch).", rq_id, my_rq_id);
 		return false;
 	}
 	// capture the req_id which can be used during recover() so as to not recover different req_id due to race condition

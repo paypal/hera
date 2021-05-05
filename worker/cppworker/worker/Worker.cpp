@@ -519,12 +519,13 @@ bool Worker::recover()
 		ev.Completed();
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "Mux asks to abort existing work. Worker prepare to become available. (%d)", param);
 		uint32_t req_id = m_reader->get_count();
-		if (req_id != m_reqid_to_abort) {
+		// mux may have sent fetch, while we're still at exec
+		if (req_id != m_reqid_to_abort && req_id+1 != m_reqid_to_abort) {
 			std::ostringstream os;
 			os <<  "Mux ID is:" << m_reqid_to_abort << ", Worker ID is : " << req_id;
 			CalEvent evt("RECOVER", "REQID_MISMATCH", CAL::TRANS_WARNING, os.str());
 			evt.Completed();
-			WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Race interrupting SQL during recover, wk_rq_ID is %d and mux_rq_ID is %d.", req_id, m_reqid_to_abort);
+			WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Race interrupting SQL during recover, wk_rq_ID is %d (+1 for exec/fetch) and mux_rq_ID is %d.", req_id, m_reqid_to_abort);
 			return false; // If we proceed with end_session, we may end up in ROLLBACK of the new req and client wil not be aware of it (Should we atleast send EOR_FREE)
 		} 
 		eor(EORMessage::FREE);
