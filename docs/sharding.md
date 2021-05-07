@@ -65,9 +65,17 @@ where r.subordinate_id = e.id and e.id = :employee_id_sk
 *SQL Update to Shard Key*
 Updating of a shard key will initially work, but it will likely be in the wrong shard after the update. This is not detected by Hera.
 
+*Merge Upsert - Unsupported for Scuttle_id*
+MERGE INTO aTable USING dual ON ( id=? AND acctNum=? )
+WHEN MATCHED THEN UPDATE SET note=?
+WHEN NOT MATCHED THEN INSERT (id, acctNum, note)
+VALUES ( ?, ?, ? );
+
+At the OCC-JDBC, it's difficult to ensure that acctNum binds are the same. If they differ, then :acctNum and :acctNum2 would need to be used. The occ would need to detect the difference and return an error. Both the acctNum instances in the sql text would need to be rewritten to add scuttle_id.
+
 Other Unsupported Operations
 * Queries by ROWID will not be supported – When you switch shards, the ROWID no longer applies.
 Sequences are not supported – This is not detected by Hera. Each separate shard of the DB would return its own sequence and might collide.
 * PL/SQL will be likely unsupported – This is not detected by Hera. The procedure would run on one shard and might not function as expected.
 * Database transactions must remain in one shard key. The Hera will detect and send error to client.
-
+* Array Binds. These are blocked since they could easily span shard key values and would need to go to different shard DBs.
