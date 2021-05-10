@@ -1,9 +1,23 @@
-for d in `ls -F $GOPATH/src/github.com/paypal/hera/tests/unittest | grep /$ | egrep -v '(testutil|rac_maint|mysql_direct)'`
+overall=0
+for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
 do 
-    $GOROOT/bin/go test github.com/paypal/hera/tests/unittest/$d 
+    echo ==== $d
+    pushd tests/unittest/$d 
+    cp /home/runner/go/bin/mysqlworker .
+    rm -f *.log 
+    $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
+    ./$d.test 
     rv=$?
+    grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
-        exit $rv
+        #grep ^ *.log
+        popd
+        #exit $rv
+        overall=1
+        continue
     fi
+    rm -f *.log 
+    popd
 done
+exit $overall
