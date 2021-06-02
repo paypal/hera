@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <sstream>
 #include <memory>
@@ -79,10 +80,25 @@ int WorkerApp::execute(const WorkerFactory& _factory)
 	// for some reason syscall.ForkExec in workerclient.go leaves more than 5 descriptors open
 	int fd = 5;
 	int fdlimit = sysconf(_SC_OPEN_MAX);
-	while (fd < fdlimit)
-	{
-		close(fd++);
-	}
+
+	// use one sys call [poll] to find fd's to close
+        struct pollfd *fds = (struct pollfd*)malloc(sizeof(struct pollfd) * (fdlimit-fd));
+        for (int i=fd; i<fdlimit; i++) {
+                fds[i-fd].fd = i;
+                fds[i-fd].events = 0;
+                fds[i-fd].revents = 0; // look for POLLNVAL
+        }
+        poll(fds, fdlimit-fd, 0);
+        for (int i=fd; i<fdlimit; i++) {
+                if (fds[i-fd].revents | POLLNVAL) {
+			close(i);
+			LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_DEBUG, "close stray startup fd %d", i);
+                }
+        }
+        free(fds);
+
+
+
 
 	if (instance)
 		return -1;
