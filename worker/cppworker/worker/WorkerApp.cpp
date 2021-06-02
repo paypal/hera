@@ -82,23 +82,23 @@ int WorkerApp::execute(const WorkerFactory& _factory)
 	int fdlimit = sysconf(_SC_OPEN_MAX);
 
 	// use one sys call [poll] to find fd's to close
-        struct pollfd *fds = (struct pollfd*)malloc(sizeof(struct pollfd) * (fdlimit-fd));
-        for (int i=fd; i<fdlimit; i++) {
-	         fds[i-fd].fd = i;
-	         fds[i-fd].events = 0;
-	         fds[i-fd].revents = 0; // look for POLLNVAL
-        }
+	struct pollfd *fds = (struct pollfd*)malloc(sizeof(struct pollfd) * (fdlimit-fd));
+	for (int i=fd; i<fdlimit; i++) {
+		 fds[i-fd].fd = i;
+		 fds[i-fd].events = 0;
+		 fds[i-fd].revents = 0; // look for POLLNVAL == 0
+	}
 	poll(fds, fdlimit-fd, 0);
 	int strayCnt = 0;
 	int strayFd = -1;
-        for (int i=fd; i<fdlimit; i++) {
-                if (0 == fds[i-fd].revents & POLLNVAL) {
+	for (int i=fd; i<fdlimit; i++) {
+		if (0 == fds[i-fd].revents & POLLNVAL) {
 			close(i);
 			strayFd = i; // logs aren't initialized, save value
 			strayCnt++;
-                }
-        }
-        free(fds);
+		}
+	}
+	free(fds);
 
 
 
@@ -108,7 +108,9 @@ int WorkerApp::execute(const WorkerFactory& _factory)
 	try
 	{
 		instance = new WorkerApp(_factory); // initializes logs
-		LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_INFO, "Stray fd %d, total %d closed, earlier at WorkerApp::execute start", strayFd, strayCnt); 
+		if (strayFd != -1) {
+			LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_WARNING, "Stray fd %d, total %d closed, earlier at WorkerApp::execute start", strayFd, strayCnt);
+		}
 	}
 	catch (const PPException& ex)
 	{
