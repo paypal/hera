@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <sstream>
 #include <memory>
@@ -79,16 +80,37 @@ int WorkerApp::execute(const WorkerFactory& _factory)
 	// for some reason syscall.ForkExec in workerclient.go leaves more than 5 descriptors open
 	int fd = 5;
 	int fdlimit = sysconf(_SC_OPEN_MAX);
-	while (fd < fdlimit)
-	{
-		close(fd++);
+
+	// use one sys call [poll] to find fd's to close
+	struct pollfd *fds = (struct pollfd*)malloc(sizeof(struct pollfd) * (fdlimit-fd));
+	for (int i=fd; i<fdlimit; i++) {
+		 fds[i-fd].fd = i;
+		 fds[i-fd].events = 0;
+		 fds[i-fd].revents = 0; // look for POLLNVAL == 0
 	}
+	poll(fds, fdlimit-fd, 0);
+	int strayCnt = 0;
+	int strayFd = -1;
+	for (int i=fd; i<fdlimit; i++) {
+		if (0 == fds[i-fd].revents & POLLNVAL) {
+			close(i);
+			strayFd = i; // logs aren't initialized, save value
+			strayCnt++;
+		}
+	}
+	free(fds);
+
+
+
 
 	if (instance)
 		return -1;
 	try
 	{
-		instance = new WorkerApp(_factory);
+		instance = new WorkerApp(_factory); // initializes logs
+		if (strayFd != -1) {
+			LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_WARNING, "Stray fd %d, total %d closed, earlier at WorkerApp::execute start", strayFd, strayCnt);
+		}
 	}
 	catch (const PPException& ex)
 	{
@@ -108,9 +130,10 @@ int WorkerApp::execute(const WorkerFactory& _factory)
 	}
 	catch (const PPException& ex)
 	{
-		LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_ALERT, "Exception: %s", ex.get_string().c_str());
+		int delay = instance->failure_delay * ( 500000 + (rand()*1000000LL)/RAND_MAX );
+		LogFactory::get(DEFAULT_LOGGER_NAME)->write_entry(LOG_ALERT, "Sleep %d us after Exception: %s", delay, ex.get_string().c_str());
 		// most likely DB is down... retry after some time
-		sleep(instance->failure_delay);
+		usleep(delay);
 		return -1;
 	}
 }
