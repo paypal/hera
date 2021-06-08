@@ -310,7 +310,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 
 	sz := len(requests)
 	autodisc := false /* ShardKey can overwrite the autodiscovery */
-	for i := 1; i < sz; i++ {
+	for i := 0; i < sz; i++ {
 		if requests[i].Cmd == common.CmdPrepare {
 			lowerSql := strings.ToLower(string(requests[i].Payload))
 			scuttle_idx := strings.LastIndex(lowerSql, strings.ToLower(GetConfig().ScuttleColName))
