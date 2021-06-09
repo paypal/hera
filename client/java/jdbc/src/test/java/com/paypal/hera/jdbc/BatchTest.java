@@ -92,6 +92,7 @@ public class BatchTest {
 		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
 		HeraClientConfigHolder.clear();
 		Properties props = new Properties();
+		props.setProperty("hera.enable.batch", "true");
 		props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
 		props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
 		props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");

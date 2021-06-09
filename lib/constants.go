@@ -73,6 +73,7 @@ var (
 	ErrBindEviction,
 	ErrNoShardKey,
 	ErrAutodiscoverWhileSetShardID,
+	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
 	ErrOther,
 	ErrReqParseFail error )
@@ -95,6 +96,7 @@ func MkErr(prefix string) {
 	ErrSaturationSoftSQLEviction   = errors.New(prefix+"-104: saturation soft sql eviction")
 	ErrBindThrottle                = errors.New(prefix+"-105: bind throttle")
 	ErrBindEviction                = errors.New(prefix+"-106: bind eviction")
+	ErrNoScuttleIdPredicate        = errors.New(prefix+"-372: no scuttle_id predicate, please remove scuttle_id in sql")
 	ErrNoShardKey                  = errors.New(prefix+"-373: no shard key or more than one or bad logical db")
 	ErrAutodiscoverWhileSetShardID = errors.New(prefix+"-374: autodiscover while set shard id")
 	ErrCrossKeysDML                = errors.New(prefix+"-206: cross key dml")

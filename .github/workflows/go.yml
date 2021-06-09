@@ -20,3 +20,26 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+    - name: Test
+      run: go test -v github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/utility/encoding/netstring github.com/paypal/hera/lib github.com/paypal/hera/common github.com/paypal/hera/cal 
+  container-job:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: 1-testDb
+          MYSQL_DATABASE: heratestdb
+        ports:
+          - 3306:3306
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15
+    - name: Build worker
+      run: go install github.com/paypal/hera/worker/mysqlworker
+    - name: System Test
+      run: tests/unittest/testall.sh
