@@ -799,7 +799,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 		}
 
 		break;
-	case OCC_BIND_NAME:
+	case OCC_BIND_NAME: {
 
 		bind_value_max_size = 0;
 		bind_num = 1;
@@ -850,6 +850,9 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 		if (bind_num == 1) bind_value_max_size= bind_values.length();
 		if (bind_num >= 1) bind_value_size[0] = bind_values.length();
 
+		const char* bind_var_name = _line.c_str();
+		if (*bind_var_name == ':')
+			bind_var_name++;
 		for (unsigned int i=0; 1; ++i) {
 			if (rc!=OCC_BIND_VALUE) {
 				occ_error("Commands out of sync OCC_BIND_VALUE!");
@@ -871,6 +874,16 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			bind_value.clear();
 			rc = m_reader->read(&bind_value);
 
+			if (0 == strcasecmp(bind_var_name, m_shard_key_name.c_str()) &&
+				0 != strcmp(bind_value.c_str(), bind_values.c_str()/*first entry in null term list of strings*/) ) 
+			{
+				std::ostringstream error;
+				error << "Shard key values in array bind differ";
+				occ_error(error.str().c_str()); 
+				rc = -1;
+				break;
+			}
+
 			bind_values.append("\0", 1);
 			bind_values.resize((i+1)*(bind_value_max_size+1));
 			bind_values.append(bind_value);
@@ -884,14 +897,16 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			
 		if (m_sql_rewritten) {
 			// check if the bind variable is the shard key
+			/*
 			const char* bind_var_name = _line.c_str();
 			if (*bind_var_name == ':')
-				bind_var_name++;
+				bind_var_name++; // */
 			
 			uint sklen = m_shard_key_name.length();
 			if (0 == strncasecmp(bind_var_name, m_shard_key_name.c_str(), sklen)) {
 				// extra check, to accept names like party_id_0
 				if ((bind_var_name[sklen] == 0) || (strncmp(bind_var_name + sklen, "_0", 2) == 0)) {
+
 					// bind the scuttle_id
 					std::string scuttle_id(m_scuttle_attr_name.c_str(), m_scuttle_attr_name.length());
 					if (bind_values.length() == 0) {
@@ -904,15 +919,22 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						unsigned long long scuttle_id_val = StringUtil::to_ullong(bind_values);
 						StringUtil::fmt_ulong(bind_values, compute_scuttle_id(scuttle_id_val));
 						bind_value_max_size = bind_values.length();
-						bind_num = 1;
-	
+
 						if (m_scuttle_id.empty()){
 							m_scuttle_id = bind_values;
 							if (logfile->get_log_level() >= LOG_VERBOSE)
-								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id %s in sql rewrite", m_scuttle_id.c_str());
+								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id %s in sql rewrite bindArrayMultiple:%d", m_scuttle_id.c_str(), bind_num);
 						}
 	
 						type = OCC_TYPE_STRING;
+						bind_value = bind_values;
+						bind_value_size[0] = bind_value.length();
+						for (int i=1; i<bind_num; i++) {
+							bind_values.append("\0", 1);
+							//scuttle id is same//bind_values.resize((i+1)*(bind_value_max_size+1));
+							bind_values.append(bind_value);
+							bind_value_size[i+1] = bind_value.length();
+						}
 						bind(scuttle_id, bind_values, bind_value_size, bind_value_max_size, bind_num, (DataType)type);
 					} // non-null
 				}
@@ -934,7 +956,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				}
 			}
 		}
-		break;
+		break; }
 	case OCC_BIND_OUT_NAME:
 		//bind an out-bound variable
 		type = OCC_TYPE_STRING;

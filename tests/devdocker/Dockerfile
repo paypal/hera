@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.12
+FROM golang:1.14.3
 
 # Before doing a docker build, copy over the repo into this directory
 # tests/devdocker$ mkdir -p src/github.com/paypal/hera

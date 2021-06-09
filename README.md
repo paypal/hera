@@ -15,14 +15,14 @@ Oracle databases.  It supports sharding the databases for horizontal scaling.
 
 # What is Hera
 
-     Hera is Data Access Gateway for  databases and is a key enabler for scaling and improving availability databases.
-    - It Protects the database from resource exhaustion by evicting poorly performing queries,
-    - Intelligently routes read/write traffic appropriately for better load balancing,
-    - Improves tolerance to database outages,
-    - Provides high performance secured connections between applications and Hera
-    - Provides domain agnostic database sharding for horizontal database scaling.
-    - Automatic transaction application failover between replica databases
-    - And many more site resiliency features.
+Hera is Data Access Gateway that helps to enable scaling and improving the availability of databases.
+* Protects the database from resource exhaustion by evicting poorly performing queries
+* Intelligently routes read/write traffic appropriately for better load balancing
+* Improves tolerance to database outages
+* Provides high performance secured connections between applications and Hera
+* Provides domain agnostic database sharding for horizontal database scaling
+* Automatic transaction application failover between replica databases
+* And many more site resiliency features
 
 # Getting Started
 
@@ -32,6 +32,7 @@ You can build mux using either [Docker](#docker-build) or [manual](#manual-build
 
 For development, the following docker commands can help get started
 
+    git clone https://github.com/paypal/hera.git
     docker run --network host --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
     docker exec -it mysql-11 bash -c 'echo "create database testschema;" | mysql -u root -h 127.0.0.1 -p62-AntHill'
     cd hera/tests/devdocker
@@ -53,7 +54,7 @@ The following sections explain the process for manually building mux without Doc
 ### Install Dependencies
 
 1.  [Install Go 1.10+](http://golang.org/doc/install).
-2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or Oracle(https://www.oracle.com/index.html).
+2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or [Oracle](https://www.oracle.com/index.html).
 3.  Install the [MySQL driver](https://github.com/go-sql-driver/mysql) and the [Oracle driver](https://github.com/go-goracle/goracle)
 3.  Install Oracle instant client     
 
