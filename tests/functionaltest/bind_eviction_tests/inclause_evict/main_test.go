@@ -9,7 +9,7 @@ import (
 	"time"
         _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
-	"github.com/paypal/hera/tests/functionaltest/bind_eviction_tests/util"
+//	"github.com/paypal/hera/tests/functionaltest/bind_eviction_tests/util"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -46,13 +46,13 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_1")
-        return testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
+        return testutil.RunDML("CREATE TABLE test_simple_table_1 (AccountNumber INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
 }
 
 /**-----------------------------------------
    Helper function to update (inclause) a row in test_simple_table_1 with delay
 --------------------------------------------*/
-func UpdateInclause (id string, wait_second int) error {
+func UpdateInclause (account_number string, wait_second int) error {
         hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
@@ -71,12 +71,12 @@ func UpdateInclause (id string, wait_second int) error {
         defer conn.Close()
         defer cancel()
         tx, _ := conn.BeginTx(ctx, nil)
-        stmt, _ := tx.PrepareContext(ctx, "update test_simple_table_1 set Name='Steve' where ID in (:ID1, :ID2, :ID3, :ID4)")
+        stmt, _ := tx.PrepareContext(ctx, "update test_simple_table_1 set Name='Steve' where AccountNumber in (:AccountNumber1, :AccountNumber2, :AccountNumber3, :AccountNumber4)")
         if err != nil {
                 fmt.Println("Error Pereparing context:", err)
         }
         defer stmt.Close()
-        _, err = stmt.Exec(sql.Named("ID1", id), sql.Named("ID2", "99999999"), sql.Named("ID3", "88888888"), sql.Named("ID4","77777777" ))
+        _, err = stmt.Exec(sql.Named("AccountNumber1", account_number), sql.Named("AccountNumber2", "99999999"), sql.Named("AccountNumber3", "88888888"), sql.Named("AccountNumber4","77777777" ))
         if err != nil {
                 return err
         }
@@ -88,6 +88,49 @@ func UpdateInclause (id string, wait_second int) error {
 
         return nil
 }
+/**-----------------------------------------
+   Helper function to insert a row to test_simple_table_1 with delay
+--------------------------------------------*/
+func InsertBinding (account string, wait_second int) error {
+        fmt.Println ("Insert a row, commit later")
+        status := 9999 
+        hostname,_ := os.Hostname()
+        fmt.Println ("Hostname: ", hostname);
+        db, err := sql.Open("hera", hostname + ":31002")
+        if err != nil {
+                fmt.Println("Error connecting to OCC:", err)
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                return err
+        }
+        defer conn.Close()
+        defer cancel()
+        tx, _ := conn.BeginTx(ctx, nil)
+        stmt, _ := tx.PrepareContext(ctx, "insert into test_simple_table_1 (AccountNumber, Name, Status) VALUES(:AccountNumber, :Name, :Status)")
+        if err != nil {
+                fmt.Println("Error Preparing context:", err)
+        }
+        defer stmt.Close()
+        _, err = stmt.Exec(sql.Named("AccountNumber", account), sql.Named("Name", "Lee"), sql.Named("Status", status))
+        if err != nil {
+                return err
+        }
+        time.Sleep (time.Duration(wait_second) * time.Second)
+        err = tx.Commit()
+        if err != nil {
+                fmt.Println("Error commiting row insertion:", err)
+                return err
+        }
+
+        return nil
+}
+
 
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, setupDb))
@@ -101,44 +144,44 @@ func TestMain(m *testing.M) {
 func TestInclauseEviction(t *testing.T) {
 	fmt.Println ("TestInclauseEviction begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestInclauseEviction begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	testutil.RunDML1("insert into test_simple_table_1 (ID, Name, Status) VALUES (12345699, 'Jack', 100)")
+	testutil.RunDML1("insert into test_simple_table_1 (AccountNumber, Name, Status) VALUES (12345699, 'Jack', 100)")
 	
-        id0 := "01234599"
-	fmt.Println ("Insert a row with id: ", id0);
-	util.InsertBinding(id0, 0)
+        account_number0 := "01234599"
+	fmt.Println ("Insert a row with account_number: ", account_number0);
+	InsertBinding(account_number0, 0)
 
 	fmt.Println ("First thread to insert a row, but commit later");
-        id1 := "12345678"
-        go  util.InsertBinding(id1, 5)
+        account_number1 := "12345678"
+        go  InsertBinding(account_number1, 5)
 
 
         fmt.Println ("Having 6 threads to update same row, so all workers are busy")
-        id := "66666666"
+        account_number := "66666666"
         for i := 0; i < 6; i++ {
                 time.Sleep(200 * time.Millisecond);
-                go UpdateInclause(id, 3)
+                go UpdateInclause(account_number, 3)
         }
 
         time.Sleep(8 * time.Second);
         fmt.Println ("Verify fetch requests are fine");
-        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id0);
+        row_count := testutil.Fetch ("Select Name from test_simple_table_1 where AccountNumber = " + account_number0);
         if (row_count != 1) {
             t.Fatalf ("Error: expected row is there");
 	}
 	
         fmt.Println ("Verify insert query is not evicted due to evict thresohold");
-        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where ID = " + id1);
+        row_count = testutil.Fetch ("Select Name from test_simple_table_1 where AccountNumber = " + account_number1);
         if (row_count != 1) {
             t.Fatalf ("Error: insert row SHOULD  be in DB");
         }
 
 	fmt.Println ("Verify BIND_EVICT events")
-	hcount := testutil.RegexCountFile ("BIND_EVICT.*3182244740", "cal.log")
+	hcount := testutil.RegexCountFile ("BIND_EVICT.*4182107863.*k=AccountNumber", "cal.log")
 	if ( hcount < 4) {
             t.Fatalf ("Error: expected at least 4 BIND_EVICT events");
         }
 	fmt.Println ("Verify BIND_THROTTLE event")
-	tcount := testutil.RegexCountFile ("BIND_THROTTLE.*3182244740", "cal.log")
+	tcount := testutil.RegexCountFile ("BIND_THROTTLE.*4182107863.*k=AccountNumber", "cal.log")
 	if ( tcount < 1) {
             t.Fatalf ("Error: expected 1 BIND_THROTTLE events");
         }

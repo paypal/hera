@@ -114,9 +114,9 @@ func TestSaturationRecover(t *testing.T) {
 	if ( count < hcount) {
             t.Fatalf ("Error: expected %d RECYCLED/RECOVERED_SATURATION_RECOVERED events", hcount);
         }
-        if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
-            t.Fatalf ("Error: expected %d recover  event", hcount);
-        }
+        //if ( testutil.RegexCountFile ("RECOVER.*dedicated", "cal.log") < hcount ) {
+        //    t.Fatalf ("Error: expected %d recover  event", hcount);
+        //}
 
 	fmt.Println ("Verify saturation error is returned to client")
         if ( testutil.RegexCount("error to client.*saturation kill") < hcount) {
