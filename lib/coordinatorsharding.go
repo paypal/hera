@@ -409,7 +409,6 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 			}
 		}
 	}
-	// E14:11:27.78    SHARDING        shard_key_auto_discovery        0       shardkey=accountid|2&shardid=2&scuttleid=2&flags=0&sqlhash=2012604829
 
 	if autodisc {
 		crd.computeLogicalShards()
