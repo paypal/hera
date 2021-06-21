@@ -432,8 +432,6 @@ public class BatchTest {
     }
 
 	public int get_scuttle_id(String input) throws IOException, SQLException{
-		if (isMySQL)
-			return;
 		byte[] data = input.getBytes();
 		return HeraJdbcUtil.getScuttleID(data);
 	}
