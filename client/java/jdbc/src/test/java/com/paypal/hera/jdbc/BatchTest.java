@@ -407,4 +407,34 @@ public class BatchTest {
 	    cleanTable(st, sID_START, 20, false);
 	    dbConn.commit();
     }
+
+	@Ignore @Test
+    public void test_batch_sharding() throws IOException, SQLException{
+		if (isMySQL)
+			return;
+		Statement st = dbConn.createStatement();
+		PreparedStatement pst_insert = dbConn.prepareStatement("insert into " + table + " (id, str_val) values (? , ?)");
+		int shardVal1 = iID_START;
+		int shardVal2 = iID_START + 1;
+		pst_insert.setInt(1, shardVal1);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+		pst_insert.setInt(1, shardVal2);
+		pst_insert.setString(2, "row 2");
+		pst_insert.addBatch();
+
+		int[] ret = pst_insert.executeBatch();
+		Assert.assertTrue("Results array for batch has 2 elements", ret.length == 2);
+		Assert.assertTrue("First query in batch was fine", ret[0] == PreparedStatement.SUCCESS_NO_INFO);
+		Assert.assertTrue("Second query in batch was fine", ret[1] == PreparedStatement.SUCCESS_NO_INFO);
+		ResultSet rs = st.executeQuery("select scuttle_id from " + table + " where id = " + Integer.toString(shardVal1));
+		Assert.assertTrue("Scuttle ID for first query is correct", get_scuttle_id(Integer.toString(shardVal1)) == rs.getInt(1));
+    }
+
+	public int get_scuttle_id(String input) throws IOException, SQLException{
+		if (isMySQL)
+			return;
+		byte[] data = input.getBytes();
+		return HeraJdbcUtil.getScuttleID(data);
+	}
 }
