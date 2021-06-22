@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	//"net"
+	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -120,14 +120,8 @@ func (m *mux) setupConfig() error {
 	}
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
 
-	/* // already setup by testall.sh for Github Actions
-	os.Remove("oracleworker")
-	os.Remove("mysqlworker")
-	if m.wType == OracleWorker {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/oracleworker", "oracleworker")
-	} else {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
-	} // */
+	// already setup by testall.sh for Github Actions
+	doBuildAndSymlink("mysqlworker")
 
 	os.Remove("hera.log")
 	os.Remove("cal.log")
@@ -135,6 +129,24 @@ func (m *mux) setupConfig() error {
 	_, err = os.Create("state.log")
 
 	return nil
+}
+
+func doBuildAndSymlink(binname string) {
+	var err error
+	_, err = os.Stat(binname)
+	if err != nil {
+		binpath := os.Getenv("GOPATH")+"/bin/"+binname
+		_, err = os.Stat(binpath)
+		if err != nil {
+			srcname := binname
+			if srcname != "mux" {
+				srcname = "worker/" + srcname
+			}
+			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
+			cmd.Run()
+		}
+		os.Symlink(binpath, binname)
+	}
 }
 
 func findNextChar(pos int, str string, ch byte) int {
@@ -154,53 +166,50 @@ func (m *mux) cleanupConfig() error {
 	os.Remove("secret.txt")
 	os.Remove("cal_client.txt")
 	os.Remove("oracleworker")
-	os.Remove("mysqlworker")
+	//os.Remove("mysqlworker")
 	return nil
 }
 
-func MakeMysql(dockerName string, dbName string) (ip string) {
-	// disable for migration to Github Actions
-	/*
-	CleanMysql(dockerName)
-
-	cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
-	cmd.Run()
-
-	// find its IP
-	cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
-	var ipBuf bytes.Buffer
-	cmd.Stdout = &ipBuf
-	cmd.Run()
-	ipBuf.Truncate(ipBuf.Len() - 1)
-
-	for {
-		conn, err := net.Dial("tcp", ipBuf.String()+":3306")
-		if err != nil {
-			time.Sleep(1 * time.Second)
-			logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-			continue
-		} else {
-			conn.Close()
-			break
-		}
+func checkTcp(ipBuf *bytes.Buffer, dockerName string) (bool) {
+	conn, err := net.Dial("tcp", (*ipBuf).String()+":3306")
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "could not connect mysql server to come up "+ipBuf.String()+" "+dockerName)
+	} else {
+		conn.Close()
+		return true
 	}
-	// */
+	return false
+}
+
+func MakeMysql(dockerName string, dbName string) (ip string) {
 	ipBuf := bytes.NewBufferString("localhost")
+	if !checkTcp(ipBuf, dockerName) {
+		CleanMysql(dockerName)
+		cmd := exec.Command("docker", "run", "-p", "3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
+		cmd.Run()
+		i := 0
+		for {
+			if checkTcp(ipBuf, dockerName) {
+				break
+			} else {
+				time.Sleep(1 * time.Second)
+				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName+" ",i)
+			}
+			i += 1
+		}
+	} else {
+		logger.GetLogger().Log(logger.Debug, "mysql server already running "+ipBuf.String()+" "+dockerName)
+	}
 
 	os.Setenv("username", "root")
 	os.Setenv("password", "1-testDb")
 	q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
-	//logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
-	err := MysqlDirect(q, ipBuf.String(), dbName)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
-	}
+	logger.GetLogger().Log(logger.Debug, "best effort, set up app user:"+q)
+	MysqlDirect(q, ipBuf.String(), dbName)
 	q = "GRANT ALL PRIVILEGES ON " + dbName + " . * TO 'appuser'@'%';"
-	//logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
-	err = MysqlDirect(q, ipBuf.String(), dbName)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
-	} else {
+	logger.GetLogger().Log(logger.Debug, "best effort, grant  app user:"+q)
+	err := MysqlDirect(q, ipBuf.String(), dbName)
+	if err == nil {
 		os.Setenv("username", "appuser")
 	}
 	os.Setenv("mysql_ip", ipBuf.String())
