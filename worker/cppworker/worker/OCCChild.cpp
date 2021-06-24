@@ -1513,16 +1513,16 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		return -1;
 	}
 
-	std::string envStr="password";
+	char envStr[12] = "password";
 	for(int i=0; i < RETRIES; i++) {
 		if ( i > 0) {
-			sprintf(envStr, "password%d",i+1);
+			sprintf(envStr, "password%d", i+1);
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Login Retry Attempt...:%d", i);
 			std::string err;
 			err.copy_formatted("m_err=Login failed, Attempting with next available credentials,Attempt=%d", i);
 			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err);
 		}
-		string db_pswd = getenv(envStr)
+		string db_pswd = getenv(envStr);
 		if(!db_pswd.is_empty()) {
 			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
 				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
