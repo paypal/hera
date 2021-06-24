@@ -6,7 +6,7 @@ do
     cp /home/runner/go/bin/mysqlworker .
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
-    ./$d.test 
+    ./$d.test 2>&1 | tee std.log
     rv=$?
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
