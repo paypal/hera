@@ -1518,9 +1518,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		if ( i > 0) {
 			sprintf(envStr, "password%d", i+1);
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Login Retry Attempt...:%d", i);
-			std::string err;
-			err.copy_formatted("m_err=Login failed, Attempting with next available credentials,Attempt=%d", i);
-			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err);
+			std::ostringstream err;
+			err << "m_err=Login failed, Attempting with next available credentials,Attempt="<<i;
+			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
 		}
 		string db_pswd = getenv(envStr);
 		if(!db_pswd.is_empty()) {
