@@ -1523,6 +1523,39 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	rc = OCISessionBegin(svchp,	 errhp, authp, OCI_CRED_RDBMS, 
 			(ub4) OCI_DEFAULT);
 	if(rc!=OCI_SUCCESS) {
+		std::string db_pwd2 = getenv("password2");
+		db_password.clear();
+		db_password = db_pwd2;
+		std::int attempt = 2;
+		while (attempt <= 3) {
+			WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Login Retry Attempt...:%d", attempt);
+			std::string err;
+			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err);
+			if(!db_password.is_empty()) {
+				rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
+							(dvoid *) const_cast<char*>(db_password.c_str()), (ub4) strlen(db_password.c_str()),
+							(ub4) OCI_ATTR_PASSWORD, errhp);
+				if(rc!=OCI_SUCCESS) {
+					log_oracle_error(rc,"Failed to set the password.");
+					return -1;
+				}
+				//create the user session
+				rc = OCISessionBegin(svchp,	 errhp, authp, OCI_CRED_RDBMS,
+							(ub4) OCI_DEFAULT);
+			}
+			if(rc!=OCI_SUCCESS) {
+				std::string db_pwd3 = getenv("password3");
+				db_password.clear();
+				db_password = db_pwd3;
+				attempt++;
+			} else { // If succeed, break the retry loop
+				break;
+			}
+
+		}
+	}
+
+	if(rc!=OCI_SUCCESS) {
 		log_oracle_error(rc,"Failed to log in the user session.");
 		return -1;
 	}
