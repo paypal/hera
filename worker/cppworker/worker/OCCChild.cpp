@@ -1515,7 +1515,7 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 
 	char envStr[12] = "password";
 	for(int i=0; i < RETRIES; i++) {
-		if ( i > 0) {
+		if( i > 0) {
 			sprintf(envStr, "password%d", i+1);
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Login Retry Attempt...:%d", i);
 			std::ostringstream err;
