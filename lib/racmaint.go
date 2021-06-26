@@ -43,6 +43,12 @@ type racAct struct {
 	delay  bool
 }
 
+
+type racCfgKey struct {
+	inst int
+	module string
+}
+
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
 var curTime int64
@@ -74,12 +80,18 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	}
 	defer db.Close()
 	db.SetMaxIdleConns(0)
-	prev := make([]racCfg, MaxRacID+1, MaxRacID+1)
+	prev := make(map[racCfgKey]racCfg, MaxRacID+1)
 	for i := 0; i <= MaxRacID; i++ {
-		prev[i].inst = i
-		prev[i].status = "U"
-		prev[i].tm = 0
-		prev[i].module = ""
+		racRow := racCfg{}
+		racRow.inst = i
+		racRow.status = "U"
+		racRow.tm = 0
+		racRow.module = ""
+
+		tempKey := racCfgKey{}
+		tempKey.inst = i
+		tempKey.module = ""
+		prev[tempKey] = racRow
 	}
 	racSQL := fmt.Sprintf("/*shard=%d*/ SELECT inst_id, UPPER(status), status_time, UPPER(module) "+
 		"FROM %s_maint "+
@@ -100,7 +112,7 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	racMaint is the main function for RAC maintenance processing, being called regularly.
 	When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
 */
-func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev []racCfg) {
+func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg) {
 	//
 	// print this log for unittesting
 	//
@@ -169,8 +181,19 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 				logger.GetLogger().Log(logger.Debug, "Rac maint: more than ", err)
 			}
 		} else {
-			tmChange := row.tm != prev[row.inst].tm
-			if tmChange || (row.status != prev[row.inst].status) {
+			cfgKey := racCfgKey{}
+			cfgKey.inst = row.inst
+			cfgKey.module = row.module
+			_, ok := prev[cfgKey]
+			if (false == ok) {
+				racRow := racCfg{}
+				racRow.inst = row.inst
+				racRow.status = "U"
+				racRow.tm = 0
+				racRow.module = row.module
+				prev[cfgKey] = racRow
+			}
+			if row.tm != prev[cfgKey].tm || (row.status != prev[cfgKey].status) {
 				racReq := racAct{instID: row.inst, tm: row.tm, delay: true}
 				if row.status == "R" {
 					racReq.delay = true
@@ -198,11 +221,9 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 						go workerpool.RacMaint(racReq)
 					}
 				}
-				prev[row.inst].tm = row.tm
-				prev[row.inst].status = row.status
-				prev[row.inst].module = row.module
+				prev[cfgKey] = row
 
-				out := fmt.Sprintf("%+v", prev[row.inst])
+				out := fmt.Sprintf("%+v", prev[cfgKey])
 				evt := cal.NewCalEvent("RACMAINT_INFO_CHANGE", hostName, cal.TransOK, out)
 				evt.Completed()
 				if logger.GetLogger().V(logger.Debug) {
@@ -210,7 +231,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 				}
 			} else {
 				if curTime <= time.Now().Unix() {
-					out := fmt.Sprintf("%+v", prev)
+					out := fmt.Sprintf("%+v", prev[cfgKey])
 					evt := cal.NewCalEvent("RACMAINT_INFO", hostName, cal.TransOK, out)
 					evt.Completed()
 					if logger.GetLogger().V(logger.Debug) {
