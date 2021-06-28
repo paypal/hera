@@ -1523,7 +1523,7 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
 		}
 		std::string db_pswd = getenv(envStr);
-		if(!db_pswd.is_empty()) {
+		if(!db_pswd.empty()) {
 			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
 				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
 				(ub4) OCI_ATTR_PASSWORD, errhp);
