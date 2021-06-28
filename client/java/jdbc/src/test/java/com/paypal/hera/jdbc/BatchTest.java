@@ -88,7 +88,7 @@ public class BatchTest {
 
 	@Before
 	public void setUp() throws Exception {
-		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
 		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
 		HeraClientConfigHolder.clear();
 		Properties props = new Properties();
@@ -407,4 +407,84 @@ public class BatchTest {
 	    cleanTable(st, sID_START, 20, false);
 	    dbConn.commit();
     }
+
+	/*
+		Hera Setup:
+		enable_sharding         = true
+		num_shards              = 2
+		enable_sql_rewrite      = false
+		shard_key_name          = str_val
+		shard_key_value_type_is_string = true
+		shard_key_value_type_is_string = true
+		max_scuttle=8
+	 */
+	@Ignore @Test
+    public void test_batch_sharding() throws IOException, SQLException{
+		if (isMySQL)
+			return;
+
+		Statement st = dbConn.createStatement();
+		PreparedStatement pst_insert = dbConn.prepareStatement("insert into " + table + " (id, str_val) values (? , ?)");
+		int shardVal1 = iID_START;
+		int shardVal2 = iID_START + 1;
+		int shardVal3 = iID_START + 2;
+		pst_insert.setInt(1, shardVal1);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+		pst_insert.setInt(1, shardVal2);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+		pst_insert.setInt(1, shardVal3);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+
+		int[] ret = pst_insert.executeBatch();
+		Assert.assertTrue("Results array for batch has 2 elements", ret.length == 2);
+		Assert.assertTrue("First query in batch was fine", ret[0] == PreparedStatement.SUCCESS_NO_INFO);
+		Assert.assertTrue("Second query in batch was fine", ret[1] == PreparedStatement.SUCCESS_NO_INFO);
+		ResultSet rs = st.executeQuery("select scuttle_id from " + table + " where id = " + Integer.toString(shardVal1));
+		Assert.assertTrue("Scuttle ID for first query is correct", get_scuttle_id(Integer.toString(shardVal1)) == rs.getInt(1));
+    }
+
+	/*
+		Hera Setup:
+		enable_sharding         = true
+		num_shards              = 2
+		enable_sql_rewrite      = false
+		shard_key_name          = str_val
+		shard_key_value_type_is_string = true
+		shard_key_value_type_is_string = true
+		max_scuttle=8
+	 */
+	@Ignore @Test
+	public void test_batch_sharding_crossKey() throws IOException, SQLException{
+		if (isMySQL)
+			return;
+		Statement st = dbConn.createStatement();
+		PreparedStatement pst_insert = dbConn.prepareStatement("insert into " + table + " (id, str_val) values (? , ?)");
+		int shardVal1 = iID_START;
+		int shardVal2 = iID_START + 1;
+		int shardVal3 = iID_START + 2;
+		pst_insert.setInt(1, shardVal1);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+		pst_insert.setInt(1, shardVal2);
+		pst_insert.setString(2, "row 2");
+		pst_insert.addBatch();
+		pst_insert.setInt(1, shardVal3);
+		pst_insert.setString(2, "row 1");
+		pst_insert.addBatch();
+
+		try {
+			int[] ret = pst_insert.executeBatch();
+			Assert.fail("Batch should throw because of Shard key values in batch differ");
+		} catch ( BatchUpdateException ex) {
+			Assert.assertTrue("The query failed due to shard key values in batch differ", 1==1);
+		}
+	}
+
+	public int get_scuttle_id(String input) throws IOException, SQLException{
+		byte[] data = input.getBytes();
+		return HeraJdbcUtil.getScuttleID(data);
+	}
 }
