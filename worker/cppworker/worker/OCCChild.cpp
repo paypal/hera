@@ -1522,7 +1522,7 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 			err << "m_err=Login failed, Attempting with next available credentials,Attempt="<<i;
 			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
 		}
-		string db_pswd = getenv(envStr);
+		std::string db_pswd = getenv(envStr);
 		if(!db_pswd.is_empty()) {
 			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
 				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
