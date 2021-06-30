@@ -72,38 +72,41 @@ var (
 	ErrBindThrottle,
 	ErrBindEviction,
 	ErrNoShardKey,
+	ErrNoShardValue,
 	ErrAutodiscoverWhileSetShardID,
 	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
 	ErrOther,
-	ErrReqParseFail error )
+	ErrReqParseFail error
+)
+
 // Initializes error strings with a prefix like "HERA"
 // HERA-100, HERA-101..
 func MkErr(prefix string) {
 	if ErrBklgTimeout != nil {
 		return // already initialized
 	}
-	ErrBklgTimeout    = errors.New(prefix+"-100: backlog timeout")
-	ErrSaturationKill = errors.New(prefix+"-101: saturation kill")
-	ErrCrossShardDML  = errors.New(prefix+"-200: cross shard dml")
-	ErrBadShardID     = errors.New(prefix+"-201: shard id out of range")
+	ErrBklgTimeout = errors.New(prefix + "-100: backlog timeout")
+	ErrSaturationKill = errors.New(prefix + "-101: saturation kill")
+	ErrCrossShardDML = errors.New(prefix + "-200: cross shard dml")
+	ErrBadShardID = errors.New(prefix + "-201: shard id out of range")
 	//  ErrShardingNotEnabled               = errors.New(prefix+"-202: sharding not enabled")
-	ErrChangeShardIDInTxn          = errors.New(prefix+"-203: changing shard_id while in txn")
-	ErrScuttleMarkdownR            = errors.New(prefix+"-204: scuttle/wl markdown for read")
-	ErrScuttleMarkdownW            = errors.New(prefix+"-205: scuttle/wl markdown for write")
-	ErrBklgEviction                = errors.New(prefix+"-102: backlog eviction")
-	ErrRejectDbDown                = errors.New(prefix+"-103: request rejected, database down")
-	ErrSaturationSoftSQLEviction   = errors.New(prefix+"-104: saturation soft sql eviction")
-	ErrBindThrottle                = errors.New(prefix+"-105: bind throttle")
-	ErrBindEviction                = errors.New(prefix+"-106: bind eviction")
-	ErrNoScuttleIdPredicate        = errors.New(prefix+"-372: no scuttle_id predicate, please remove scuttle_id in sql")
-	ErrNoShardKey                  = errors.New(prefix+"-373: no shard key or more than one or bad logical db")
-	ErrAutodiscoverWhileSetShardID = errors.New(prefix+"-374: autodiscover while set shard id")
-	ErrCrossKeysDML                = errors.New(prefix+"-206: cross key dml")
-	ErrOther                       = errors.New(prefix+"-1000: unknown error")
-	ErrReqParseFail                = errors.New("Request error")
+	ErrChangeShardIDInTxn = errors.New(prefix + "-203: changing shard_id while in txn")
+	ErrScuttleMarkdownR = errors.New(prefix + "-204: scuttle/wl markdown for read")
+	ErrScuttleMarkdownW = errors.New(prefix + "-205: scuttle/wl markdown for write")
+	ErrBklgEviction = errors.New(prefix + "-102: backlog eviction")
+	ErrRejectDbDown = errors.New(prefix + "-103: request rejected, database down")
+	ErrSaturationSoftSQLEviction = errors.New(prefix + "-104: saturation soft sql eviction")
+	ErrBindThrottle = errors.New(prefix + "-105: bind throttle")
+	ErrBindEviction = errors.New(prefix + "-106: bind eviction")
+	ErrNoScuttleIdPredicate = errors.New(prefix + "-372: no scuttle_id predicate, please remove scuttle_id in sql")
+	ErrNoShardKey = errors.New(prefix + "-373: no shard key or more than one or bad logical db")
+	ErrAutodiscoverWhileSetShardID = errors.New(prefix + "-374: autodiscover while set shard id")
+	ErrNoShardValue = errors.New(prefix + "-375: no shard value or wrong sharKey array binding")
+	ErrCrossKeysDML = errors.New(prefix + "-206: cross key dml")
+	ErrOther = errors.New(prefix + "-1000: unknown error")
+	ErrReqParseFail = errors.New("Request error")
 }
-
 
 // Configuration entry names
 const (

@@ -314,7 +314,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 		if requests[i].Cmd == common.CmdPrepare {
 			lowerSql := strings.ToLower(string(requests[i].Payload))
 			scuttle_idx := strings.LastIndex(lowerSql, strings.ToLower(GetConfig().ScuttleColName))
-			if scuttle_idx < 0 || scuttle_idx > strings.Index(lowerSql," from ") {
+			if scuttle_idx < 0 || scuttle_idx > strings.Index(lowerSql, " from ") {
 				continue
 			}
 			evt := cal.NewCalEvent(EvtTypeSharding, "RM_SCUTTLE_ID_FETCH_COL", cal.TransOK, "")
@@ -337,7 +337,24 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 				if !autodisc {
 					crd.shard = &shardInfo{sessionShardID: crd.prevShard.sessionShardID}
 				}
-				crd.shard.shardValues = append(crd.shard.shardValues, string(requests[i+1].Payload))
+				if requests[i+1].Cmd == common.CmdBindNum && requests[i+2].Cmd == common.CmdBindValueMaxSize {
+					crd.shard.shardValues = append(crd.shard.shardValues, string(requests[i+3].Payload))
+				} else if requests[i+1].Cmd == common.CmdBindValue {
+					crd.shard.shardValues = append(crd.shard.shardValues, string(requests[i+1].Payload))
+				} else {
+
+					// TODO: Need to rework on error statememt & CAL event type
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, crd.id, "req rejected, no shard value:", len(crd.shard.shardValues))
+					}
+					evt := cal.NewCalEvent(EvtTypeSharding, EvtNameBadShardKey, cal.TransOK, "")
+					evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+					evt.Completed()
+					ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoShardValue.Error()))
+					crd.respond(ns.Serialized)
+					return false /*don't hangup*/, ErrNoShardValue
+
+				}
 				autodisc = true
 			}
 		} else {
