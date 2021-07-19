@@ -34,8 +34,8 @@ For development, the following docker commands can help get started
 
     git clone https://github.com/paypal/hera.git
     docker run --network host --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
-    docker exec -it mysql-11 bash -c 'echo "create database testschema;" | mysql -u root -h 127.0.0.1 -p62-AntHill'
     cd hera/tests/devdocker
+    docker exec -i mysql-11 mysql -u root -h 127.0.0.1 -p62-AntHill -t < sample.sql
     mkdir -p src/github.com/paypal/hera
     rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
     docker build -t hera-oss .
