@@ -25,6 +25,7 @@ import (
 	"net"
 
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -38,7 +39,8 @@ type heraConnection struct {
 	// for the sharding extension
 	shardKeyPayload []byte
 	// correlation id
-	corrID *netstring.Netstring
+	// corrID *netstring.Netstring
+	corrID *encoding.Packet
 }
 
 // NewHeraConnection creates a structure implementing a driver.Con interface
@@ -88,7 +90,8 @@ func (c *heraConnection) exec(cmd int, payload []byte) error {
 }
 
 // internal function to execute commands
-func (c *heraConnection) execNs(ns *netstring.Netstring) error {
+// func (c *heraConnection) execNs(ns *netstring.Netstring) error {
+func (c *heraConnection) execNs(ns *encoding.Packet) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		payload := string(ns.Payload)
 		if len(payload) > 1000 {
@@ -101,13 +104,14 @@ func (c *heraConnection) execNs(ns *netstring.Netstring) error {
 }
 
 // returns the next message from the connection
-func (c *heraConnection) getResponse() (*netstring.Netstring, error) {
+// func (c *heraConnection) getResponse() (*netstring.Netstring, error) {
+func (c *heraConnection) getResponse() (*encoding.Packet, error) {
 	ns, err := c.reader.ReadNext()
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, c.id, "Failed to read response")
 		}
-		return nil, errors.New("Failed to read response")
+		return nil, errors.New("failed to read response")
 	}
 	if logger.GetLogger().V(logger.Verbose) {
 		payload := string(ns.Payload)
@@ -130,7 +134,7 @@ func (c *heraConnection) SetShardID(shard int) error {
 		return errors.New(string(ns.Payload))
 	}
 	if ns.Cmd != common.RcOK {
-		return fmt.Errorf("Unknown error, cmd=%d, payload size=%d", ns.Cmd, len(ns.Payload))
+		return fmt.Errorf("unknown error, cmd=%d, payload size=%d", ns.Cmd, len(ns.Payload))
 	}
 	return nil
 }
@@ -151,7 +155,7 @@ func (c *heraConnection) GetNumShards() (int, error) {
 		return -1, errors.New(string(ns.Payload))
 	}
 	if ns.Cmd != common.RcOK {
-		return -1, fmt.Errorf("Unknown error, cmd=%d, payload size=%d", ns.Cmd, len(ns.Payload))
+		return -1, fmt.Errorf("unknown error, cmd=%d, payload size=%d", ns.Cmd, len(ns.Payload))
 	}
 	var num int
 	fmt.Sscanf(string(ns.Payload), "%d", &num)

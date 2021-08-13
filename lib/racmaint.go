@@ -22,9 +22,9 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -43,19 +43,20 @@ type racAct struct {
 	delay  bool
 }
 
-
 type racCfgKey struct {
-	inst int
+	inst   int
 	module string
 }
 
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
+
 var curTime int64
 var hostName string
 
 // InitRacMaint initializes RAC maintenance, if enabled, by starting one goroutine racMaintMain per shard
 func InitRacMaint(cmdLineModuleName string) {
+	logger.GetLogger().Log(logger.Info, "RAC MAINT INIT LOG")
 	curTime = time.Now().Unix()
 	hostName, _ = os.Hostname()
 	interval := GetConfig().RacMaintReloadInterval
@@ -73,6 +74,9 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 		logger.GetLogger().Log(logger.Debug, "Rac maint for shard =", shard, ", interval =", interval)
 	}
 	ctx := context.Background()
+
+	logger.GetLogger().Log(logger.Info, "RAC MAINT LOG")
+
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error (db) rac maint for shard =", shard)
@@ -185,7 +189,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 			cfgKey.inst = row.inst
 			cfgKey.module = row.module
 			_, ok := prev[cfgKey]
-			if (false == ok) {
+			if false == ok {
 				racRow := racCfg{}
 				racRow.inst = row.inst
 				racRow.status = "U"

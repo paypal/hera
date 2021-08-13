@@ -79,5 +79,6 @@ func (driver *heraLoopDriver) Open(url string) (driver.Conn, error) {
 			}
 		}
 	}
+	// logger.GetLogger().Log(logger.Info, "loopdriver")
 	return gosqldriver.NewHeraConnection(cli), nil
 }

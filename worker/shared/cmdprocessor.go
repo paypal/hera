@@ -20,6 +20,8 @@ package shared
 import (
 	"bytes"
 	"context"
+
+	// "encoding"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +33,8 @@ import (
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility"
+	"github.com/paypal/hera/utility/encoding"
+
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 
@@ -102,7 +106,7 @@ type CmdProcessor struct {
 	//
 	// prepared statement yet to be executed.
 	//
-	stmt *sql.Stmt
+	stmt             *sql.Stmt
 	didExecAtPrepare bool
 	//
 	// tells if the current SQL is a query which returns result set (i.e. SELECT)
@@ -119,8 +123,8 @@ type CmdProcessor struct {
 	//
 	bindVars map[string]*BindValue
 	// placeholders for bindouts
-	bindOuts    []string
-	numBindOuts int
+	bindOuts         []string
+	numBindOuts      int
 	sendLastInsertId bool
 	//
 	// matching bindname to location in query for faster lookup at CmdExec.
@@ -168,6 +172,9 @@ type CmdProcessor struct {
 	WorkerScope          WorkerScopeType
 	// tells if the worker is dedicated: either in cursor or in transaction
 	dedicated bool
+
+	stmts map[int]*sql.Stmt // each stmt is given a stmtid to identify it by. this map contains the mappings
+
 }
 
 type QueryScopeType struct {
@@ -181,17 +188,21 @@ type WorkerScopeType struct {
 const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
 
 // NewCmdProcessor creates the processor using th egiven adapter
-func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
+// func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
+func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File) *CmdProcessor {
 	cs := os.Getenv("CAL_CLIENT_SESSION")
 	if cs == "" {
 		cs = "CLIENT_SESSION"
 	}
+	stmts := make(map[int]*sql.Stmt)
 
-	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, SocketCtrl: sockMuxCtrl, calSessionTxnName: cs, heartbeat: true}
+	// return &CmdProcessor{adapter: adapter, SocketOut: sockMux, SocketCtrl: sockMuxCtrl, calSessionTxnName: cs, heartbeat: true}
+	return &CmdProcessor{adapter: adapter, SocketOut: sockMux, calSessionTxnName: cs, stmts: stmts, heartbeat: true}
 }
 
 // ProcessCmd implements the client commands like prepare, bind, execute, etc
-func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
+// func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
+func (cp *CmdProcessor) ProcessCmd(ns *encoding.Packet) error {
 	if ns == nil {
 		return errors.New("empty netstring passed to processcommand")
 	}
@@ -253,7 +264,7 @@ outloop:
 				logger.GetLogger().Log(logger.Debug, "didExecAtPrepare: exec'ing at prepare")
 			}
 			_, err = cp.tx.Exec(sqlQuery)
-			cp.calExecTxn.AddDataStr("directExec","t")
+			cp.calExecTxn.AddDataStr("directExec", "t")
 			cp.calExecTxn.Completed()
 			cp.calExecTxn = nil
 			// keep cp.stmt nil so we don't exec
@@ -361,7 +372,7 @@ outloop:
 		}
 	case common.CmdBindNum:
 		if cp.stmt != nil {
-			err = fmt.Errorf("Batch not supported")
+			err = fmt.Errorf("batch not supported")
 			cp.calExecErr("Batch", err.Error())
 			break
 		}
@@ -381,7 +392,7 @@ outloop:
 				cp.bindOuts = make([]string, cp.numBindOuts)
 			}
 			curbindout := 0
-			if _,ok := cp.bindVars[LAST_INSERT_ID_BIND_OUT_NAME]; ok {
+			if _, ok := cp.bindVars[LAST_INSERT_ID_BIND_OUT_NAME]; ok {
 				cp.sendLastInsertId = true
 			}
 			for i := 0; i < len(cp.bindPos); i++ {
@@ -465,21 +476,20 @@ outloop:
 					logger.GetLogger().Log(logger.Debug, "exe row", rowcnt)
 				}
 
-                               lastId, err := cp.result.LastInsertId()
-                               if err != nil {
-                                       if logger.GetLogger().V(logger.Debug) {
-                                               logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error(), "sendLastInsertId:",cp.sendLastInsertId)
-                                       }
-                               } else {
-                                       // have last insert id
-                                       if cp.sendLastInsertId {
-                                               cp.bindOuts[0] = fmt.Sprintf("%d", lastId)
-                                               if logger.GetLogger().V(logger.Debug) {
-                                                       logger.GetLogger().Log(logger.Debug, "LastInsertId() bindOut:", lastId)
-                                               }
-                                       }
-                               }
-
+				lastId, err := cp.result.LastInsertId()
+				if err != nil {
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, "LastInsertId():", err.Error(), "sendLastInsertId:", cp.sendLastInsertId)
+					}
+				} else {
+					// have last insert id
+					if cp.sendLastInsertId {
+						cp.bindOuts[0] = fmt.Sprintf("%d", lastId)
+						if logger.GetLogger().V(logger.Debug) {
+							logger.GetLogger().Log(logger.Debug, "LastInsertId() bindOut:", lastId)
+						}
+					}
+				}
 
 				sz := 2
 				if len(cp.bindOuts) > 0 {
@@ -490,7 +500,8 @@ outloop:
 					logger.GetLogger().Log(logger.Verbose, "BINDOUTS", len(cp.bindOuts), cp.bindOuts)
 				}
 
-				nss := make([]*netstring.Netstring, sz)
+				// nss := make([]*netstring.Netstring, sz)
+				nss := make([]*encoding.Packet, sz)
 				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0"))
 				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte(strconv.FormatInt(rowcnt, 10)))
 				if sz > 2 {
@@ -523,7 +534,8 @@ outloop:
 					sz++
 				}
 
-				nss := make([]*netstring.Netstring, sz)
+				// nss := make([]*netstring.Netstring, sz)
+				nss := make([]*encoding.Packet, sz)
 				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte(strconv.Itoa(len(cols))))
 				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0"))
 				if sz > 2 {
@@ -547,20 +559,21 @@ outloop:
 						cp.eor(common.EORFree, resns)
 					}
 				}
-			}
-		} else {
-			if cp.didExecAtPrepare {
-				// for mysql begin/start transaction
-				// exec already done instead of prepare
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, "didExecAtPrepare exec skip since exec'd at prepare")
-				}
-				nss := make([]*netstring.Netstring, 2)
-				nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
-				nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows
-				// no bind outs
-				resns := netstring.NewNetstringEmbedded(nss)
-				cp.eor(common.EORInTransaction, resns)
+				// }
+				// } else {
+				// 	if cp.didExecAtPrepare {
+				// 		// for mysql begin/start transaction
+				// 		// exec already done instead of prepare
+				// 		if logger.GetLogger().V(logger.Debug) {
+				// 			logger.GetLogger().Log(logger.Debug, "didExecAtPrepare exec skip since exec'd at prepare")
+				// 		}
+				// 		// nss := make([]*netstring.Netstring, 2)
+				// 		nss := make([]*encoding.Packet, 2)
+				// 		nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // cols
+				// 		nss[1] = netstring.NewNetstringFrom(common.RcValue, []byte("0")) // rows
+				// 		// no bind outs
+				// 		resns := netstring.NewNetstringEmbedded(nss)
+				// 		cp.eor(common.EORInTransaction, resns)
 			} else if cp.inTrans {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
@@ -582,7 +595,8 @@ outloop:
 				calt.Completed()
 				break
 			}
-			var nss []*netstring.Netstring
+			// var nss []*netstring.Netstring
+			var nss []*encoding.Packet
 			cols, _ := cp.rows.Columns()
 			readCols := make([]interface{}, len(cols))
 			writeCols := make([]sql.NullString, len(cols))
@@ -634,7 +648,8 @@ outloop:
 			cp.rows = nil
 		} else {
 			// send back to client only if last result was ok
-			var nsr *netstring.Netstring
+			// var nsr *netstring.Netstring
+			var nsr *encoding.Packet
 			if cp.lastErr == nil {
 				nsr = netstring.NewNetstringFrom(common.RcError, []byte("fetch requested but no statement exists"))
 			}
@@ -664,7 +679,8 @@ outloop:
 			ns := netstring.NewNetstringFrom(common.RcValue, []byte("0"))
 			err = WriteAll(cp.SocketOut, ns)
 		} else {
-			nss := make([]*netstring.Netstring, len(cts)*5+1)
+			// nss := make([]*netstring.Netstring, len(cts)*5+1)
+			nss := make([]*encoding.Packet, len(cts)*5+1)
 			nss[0] = netstring.NewNetstringFrom(common.RcValue, []byte(strconv.Itoa(len(cts))))
 			var cnt = 1
 			var width, prec, scale int64
@@ -774,8 +790,8 @@ outloop:
 }
 
 func (cp *CmdProcessor) SendDbHeartbeat() bool {
-	var masterIsUp bool
-	masterIsUp = cp.adapter.Heartbeat(cp.db)
+	// var masterIsUp bool
+	masterIsUp := cp.adapter.Heartbeat(cp.db)
 	return masterIsUp
 }
 
@@ -817,7 +833,8 @@ func (cp *CmdProcessor) InitDB() error {
 	return nil
 }
 
-func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
+// func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
+func (cp *CmdProcessor) eor(code int, ns *encoding.Packet) error {
 	if code == common.EORFree {
 		if cp.moreIncomingRequests() {
 			code = common.EORMoreIncomingRequests

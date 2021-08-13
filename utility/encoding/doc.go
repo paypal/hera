@@ -17,3 +17,39 @@
 
 // Package encoding provides the encoding functions such as netstring etc.,
 package encoding
+
+type Packet struct {
+	Cmd          int    // Command byte in the payload
+	Serialized   []byte // The entire packet
+	Payload      []byte // The entire payload
+	Length       int    // Length of Payload
+	CommandID    []byte // identifies the type of PSQL message
+	IsPostgreSQL bool   // indicates whether or not the packet is PostgreSQL
+}
+
+// IsComposite returns if the netstring is compisite, embedding multiple netstrings in it
+func (ns *Packet) IsComposite() bool {
+	return ns.Cmd == ('0' - '0')
+}
+
+// Interface for reader
+type Reader interface {
+	ReadNext() (*Packet, error)
+}
+
+type WRONG_PACKET struct {
+}
+
+func (wp WRONG_PACKET) Error() string {
+	return "Wrong packet type. Did you mix netstring with mysql?"
+}
+
+type unknown struct {
+}
+
+func (wp unknown) Error() string {
+	return "Unknown packet type. Neither netstring nor mysql"
+}
+
+var WRONGPACKET = new(WRONG_PACKET)
+var UNKNOWNPACKET = new(unknown)

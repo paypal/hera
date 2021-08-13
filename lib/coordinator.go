@@ -32,6 +32,7 @@ import (
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -41,13 +42,18 @@ import (
 // It is possible that a request will start a transaction, in which case the worker will staty allocated until the transaction
 // is completed (with COMMIT) or canceled (with ROLLBACK)
 type Coordinator struct {
-	conn          net.Conn                    // used to send back the response(s)
-	clientchannel <-chan *netstring.Netstring // channel where client netstring arrives
-	ctx           context.Context
-	done          chan int
-	sqlParser     common.SQLParser
+	conn net.Conn // used to send back the response(s)
 
-	corrID         *netstring.Netstring
+	// clientchannel <-chan *netstring.Netstring // channel where client netstring arrives
+	clientchannel <-chan *encoding.Packet
+
+	ctx       context.Context
+	done      chan int
+	sqlParser common.SQLParser
+
+	// corrID *netstring.Netstring
+	corrID *encoding.Packet
+
 	preppendCorrID bool
 	// tells if the current request is SELECT
 	isRead bool
@@ -63,14 +69,18 @@ type Coordinator struct {
 	ticket        string        // the ticket for the worker
 
 	// if the current netstring is compositie, cache the subnetstrings so that it's not parsed again
-	nss []*netstring.Netstring
+	// nss []*netstring.Netstring
+	nss []*encoding.Packet
 
 	// if this handles an internal client like rac maintenance config or shard config
 	isInternal bool
 }
 
 // NewCoordinator creates a coordinator, clientchannel is used to read the requests, conn is used to write responses
-func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
+
+// func NewCoordinator(ctx context.Context, clientchannel <-chan *netstring.Netstring, conn net.Conn) *Coordinator {
+func NewCoordinator(ctx context.Context, clientchannel <-chan *encoding.Packet, conn net.Conn) *Coordinator {
+
 	coordinator := &Coordinator{clientchannel: clientchannel, conn: conn, ctx: ctx, done: make(chan int, 1), id: conn.RemoteAddr().String(), shard: &shardInfo{sessionShardID: -1}, prevShard: &shardInfo{sessionShardID: -1}}
 	var err error
 	coordinator.sqlParser, err = common.NewRegexSQLParser()
@@ -298,7 +308,7 @@ func (crd *Coordinator) Run() {
 	if crd.worker != nil { // for a client disconn
 		et := cal.NewCalEvent("HERAMUX", "CATCH_CLIENT_DROP_FREE_WORKER", cal.TransOK, "")
 		et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
-		et.AddDataStr("worker_pid", fmt.Sprintf("%d",crd.worker.pid))
+		et.AddDataStr("worker_pid", fmt.Sprintf("%d", crd.worker.pid))
 		et.Completed()
 
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
@@ -310,7 +320,8 @@ func (crd *Coordinator) Run() {
 	}
 }
 
-func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
+// func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
+func (crd *Coordinator) dispatch(request *encoding.Packet) bool {
 	if GetConfig().EnableTAF && (crd.worker == nil) {
 		taferr := crd.DispatchTAFSession(request)
 		crd.processError(taferr)
@@ -322,7 +333,8 @@ func (crd *Coordinator) dispatch(request *netstring.Netstring) bool {
 	return (deferr == nil)
 }
 
-func (crd *Coordinator) computeSQLHash(request *netstring.Netstring) {
+// func (crd *Coordinator) computeSQLHash(request *netstring.Netstring) {
+func (crd *Coordinator) computeSQLHash(request *encoding.Packet) {
 	hash, found := ExtractSQLHash(request)
 	if found {
 		crd.sqlhash = int32(hash)
@@ -330,94 +342,105 @@ func (crd *Coordinator) computeSQLHash(request *netstring.Netstring) {
 }
 
 // Check for multiple command in a given NetString
-func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool, hasCommit bool, hasRollback bool, parseErr error) {
-	foundPrepare := false
-	foundCommit := false
-	foundRollback := false
-	if request == nil {
-		return foundPrepare, foundCommit, foundRollback, ErrReqParseFail
-	}
+// func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool, hasCommit bool, hasRollback bool, parseErr error) {
+// 	foundPrepare := false
+// 	foundCommit := false
+// 	foundRollback := false
+// 	if request == nil {
+// 		return foundPrepare, foundCommit, foundRollback, ErrReqParseFail
+// 	}
 
-	if request.IsComposite() {
-		if crd.nss == nil {
-			crd.nss, parseErr = netstring.SubNetstrings(request)
-			if parseErr != nil {
-				return foundPrepare, foundCommit, foundRollback, parseErr
-			}
-		}
-		for _, ns := range crd.nss {
-			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
-				foundPrepare = true
-			} else if ns.Cmd == common.CmdCommit {
-				foundCommit = true
-			} else if ns.Cmd == common.CmdRollback {
-				foundRollback = true
-			}
-		}
-		return foundPrepare, foundCommit, foundRollback, nil
-	} else {
-		ns := request
-		if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
-			return true, false, false, nil
-		} else if ns.Cmd == common.CmdCommit {
-			return false, true, false, nil
-		} else if ns.Cmd == common.CmdRollback {
-			return false, false, true, nil
-		}
-	}
-	return false, false, false, nil
-}
+// 	if request.IsComposite() {
+// 		if crd.nss == nil {
+// 			crd.nss, parseErr = netstring.SubNetstrings(request)
+// 			if parseErr != nil {
+// 				return foundPrepare, foundCommit, foundRollback, parseErr
+// 			}
+// 		}
+// 		for _, ns := range crd.nss {
+// 			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+// 				foundPrepare = true
+// 			} else if ns.Cmd == common.CmdCommit {
+// 				foundCommit = true
+// 			} else if ns.Cmd == common.CmdRollback {
+// 				foundRollback = true
+// 			}
+// 		}
+// 		return foundPrepare, foundCommit, foundRollback, nil
+// 	} else {
+// 		ns := request
+// 		if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+// 			return true, false, false, nil
+// 		} else if ns.Cmd == common.CmdCommit {
+// 			return false, true, false, nil
+// 		} else if ns.Cmd == common.CmdRollback {
+// 			return false, false, true, nil
+// 		}
+// 	}
+// 	return false, false, false, nil
+// }
 
 /*
  * it handles the command if it is the case. if the command is indended for a worker, it will return false.
  * worker commands start with one of the prepare/prepare_v2
  */
-func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
+// func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
+func (crd *Coordinator) handleMux(request *encoding.Packet) (bool, error) {
 	crd.isRead = false
-	crd.preppendCorrID = (crd.worker == nil)
-	if request.IsComposite() {
-		// TODO: avoid full parsing if necessary
-		// if this is a worker command, only a shallow parse might be needed (if sharding is enabled, full parsing still needed anyway)
-		nss, err := netstring.SubNetstrings(request)
-		if err != nil {
-			return false, err
-		}
-		crd.nss = nss
-		for _, ns := range nss {
-			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
-				crd.sqlhash = int32(utility.GetSQLHash(string(ns.Payload)))
-				crd.isRead = crd.sqlParser.IsRead(string(ns.Payload))
-				handled := false
-				if GetConfig().EnableSharding {
-					hangup, err := crd.PreprocessSharding(nss)
-					if err != nil {
-						handled = true
-						if logger.GetLogger().V(logger.Debug) {
-							logger.GetLogger().Log(logger.Debug, crd.id, "Error preprocessing sharding, hangup:", err.Error(), hangup)
-						}
-						if hangup {
-							crd.conn.Close()
-						}
-					}
-				}
-				return handled, err
-			}
-
-			handled, err := crd.processMuxCommand(ns)
-			if !handled {
-				if nss[0].Cmd == common.CmdClientCalCorrelationID {
-					crd.preppendCorrID = false
-				}
+	if !request.IsPostgreSQL {
+		crd.isRead = false
+		crd.preppendCorrID = (crd.worker == nil)
+		if request.IsComposite() {
+			// TODO: avoid full parsing if necessary
+			// if this is a worker command, only a shallow parse might be needed (if sharding is enabled, full parsing still needed anyway)
+			nss, err := netstring.SubNetstrings(request)
+			if err != nil {
 				return false, err
 			}
+			crd.nss = nss
+			for _, ns := range nss {
+				if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
+					crd.sqlhash = int32(utility.GetSQLHash(string(ns.Payload)))
+					crd.isRead = crd.sqlParser.IsRead(string(ns.Payload))
+					handled := false
+					if GetConfig().EnableSharding {
+						hangup, err := crd.PreprocessSharding(nss)
+						if err != nil {
+							handled = true
+							if logger.GetLogger().V(logger.Debug) {
+								logger.GetLogger().Log(logger.Debug, crd.id, "Error preprocessing sharding, hangup:", err.Error(), hangup)
+							}
+							if hangup {
+								crd.conn.Close()
+							}
+						}
+					}
+					return handled, err
+				}
+
+				handled, err := crd.processMuxCommand(ns)
+				if !handled {
+					if nss[0].Cmd == common.CmdClientCalCorrelationID {
+						crd.preppendCorrID = false
+					}
+					return false, err
+				}
+			}
+			return true, nil
 		}
-		return true, nil
-	}
-	crd.nss = nil
-	// an individual request
-	if (request.Cmd == common.CmdPrepare) || (request.Cmd == common.CmdPrepareV2) || (request.Cmd == common.CmdPrepareSpecial) {
-		crd.isRead = crd.sqlParser.IsRead(string(request.Payload))
-		return false, nil
+		crd.nss = nil
+		// an individual request
+		if (request.Cmd == common.CmdPrepare) || (request.Cmd == common.CmdPrepareV2) || (request.Cmd == common.CmdPrepareSpecial) {
+			crd.isRead = crd.sqlParser.IsRead(string(request.Payload))
+			return false, nil
+		}
+		// } else {
+		// 	// Processing a single request
+		// 	crd.nss = nil // this probably doesn't have to be set because mysqlpackets don't get put into nss...
+		// 	if request.Cmd == common.COM_STMT_PREPARE {
+		// 		crd.isRead = crd.sqlParser.IsRead(string(request.Payload[1:]))
+		// 		return false, nil
+		// 	}
 	}
 	return crd.processMuxCommand(request)
 }
@@ -425,7 +448,8 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 /*
  * process one mux command
  */
-func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, error) {
+// func (crd *Coordinator) processMuxCommand(request *netstring.Netstring) (bool, error) {
+func (crd *Coordinator) processMuxCommand(request *encoding.Packet) (bool, error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "Mux handle command:", request.Cmd)
 	}
@@ -562,196 +586,197 @@ func (crd *Coordinator) resetWorkerInfo() {
  * or as part of end-of-data if the request was a select+fetch
  *
  */
-func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: starting")
-	}
-	defer func() {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: exiting")
-		}
-	}()
+// func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
+// func (crd *Coordinator) dispatchRequest(request *encoding.Packet) error {
+// 	if logger.GetLogger().V(logger.Verbose) {
+// 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: starting")
+// 	}
+// 	defer func() {
+// 		if logger.GetLogger().V(logger.Verbose) {
+// 			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: exiting")
+// 		}
+// 	}()
 
-	var err error
-	workerpool := crd.workerpool
-	worker := crd.worker
-	ticket := crd.ticket
-	xShardRead := false
+// 	var err error
+// 	workerpool := crd.workerpool
+// 	worker := crd.worker
+// 	ticket := crd.ticket
+// 	xShardRead := false
 
-	// check bind throttle
-	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
-	if ok {
-		wType := wtypeRW
-		cfg := GetNumWorkers(crd.shard.shardID)
-		if GetConfig().ReadonlyPct > 0 {
-			if crd.isRead {
-				wType = wtypeRO
-				cfg = int( float64(cfg)*float64(GetConfig().ReadonlyPct)/100.0 );
-			} else {
-				cfg = int( float64(cfg)*float64(100-GetConfig().ReadonlyPct)/100.0 );
-			}
-		}
-		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
-		heavyUsage := false
-		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
-		if numFree < int(thres) {
-			heavyUsage = true
-		}
-		if logger.GetLogger().V(logger.Verbose) {
-			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
-				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
-			logger.GetLogger().Log(logger.Verbose, msg)
-		}
-		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
-		if needBlock {
-			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
-				throttleEntry.Name,
-				throttleEntry.Value,
-				throttleEntry.AllowEveryX,
-				1.0/float64(throttleEntry.AllowEveryX),
-				crd.conn.RemoteAddr().String())
-			sqlhashStr := fmt.Sprintf("%d",uint32(crd.sqlhash))
-			evt := cal.NewCalEvent("BIND_THROTTLE", sqlhashStr, "1", msg)
-			evt.Completed()
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "bind throttle", sqlhashStr, msg)
-			}
-			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrBindThrottle.Error()))
-			crd.respond(ns.Serialized)
-			crd.conn.Close()
-			return fmt.Errorf("bind throttle block")
-		} else {
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "bind throttle allow",uint32(crd.sqlhash))
-			}
-		}
-	}
+// 	// check bind throttle
+// 	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+// 	if ok {
+// 		wType := wtypeRW
+// 		cfg := GetNumWorkers(crd.shard.shardID)
+// 		if GetConfig().ReadonlyPct > 0 {
+// 			if crd.isRead {
+// 				wType = wtypeRO
+// 				cfg = int(float64(cfg) * float64(GetConfig().ReadonlyPct) / 100.0)
+// 			} else {
+// 				cfg = int(float64(cfg) * float64(100-GetConfig().ReadonlyPct) / 100.0)
+// 			}
+// 		}
+// 		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
+// 		heavyUsage := false
+// 		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
+// 		if numFree < int(thres) {
+// 			heavyUsage = true
+// 		}
+// 		if logger.GetLogger().V(logger.Verbose) {
+// 			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
+// 				numFree, cfg, GetConfig().BindEvictionTargetConnPct, thres)
+// 			logger.GetLogger().Log(logger.Verbose, msg)
+// 		}
+// 		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
+// 		if needBlock {
+// 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
+// 				throttleEntry.Name,
+// 				throttleEntry.Value,
+// 				throttleEntry.AllowEveryX,
+// 				1.0/float64(throttleEntry.AllowEveryX),
+// 				crd.conn.RemoteAddr().String())
+// 			sqlhashStr := fmt.Sprintf("%d", uint32(crd.sqlhash))
+// 			evt := cal.NewCalEvent("BIND_THROTTLE", sqlhashStr, "1", msg)
+// 			evt.Completed()
+// 			if logger.GetLogger().V(logger.Verbose) {
+// 				logger.GetLogger().Log(logger.Verbose, crd.id, "bind throttle", sqlhashStr, msg)
+// 			}
+// 			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrBindThrottle.Error()))
+// 			crd.respond(ns.Serialized)
+// 			crd.conn.Close()
+// 			return fmt.Errorf("bind throttle block")
+// 		} else {
+// 			if logger.GetLogger().V(logger.Verbose) {
+// 				logger.GetLogger().Log(logger.Verbose, "bind throttle allow", uint32(crd.sqlhash))
+// 			}
+// 		}
+// 	}
 
-	if worker == nil {
-		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
-			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
-			if err != nil {
-				return err
-			}
-			if crd.isInternal {
-				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
-			} else {
-				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
-			}
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
-				}
-				return err
-			}
-		} else {
-			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
-			if err != nil {
-				return err
-			}
-			if crd.isInternal {
-				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
-			} else {
-				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
-			}
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker", err)
-				}
-				return err
-			}
-		}
-	} else {
-		if crd.isRead {
-			if crd.shard.shardID != worker.shardID {
-				// we allow this but we need to have a different worker since it is a different shard
-				wType := wtypeRO
-				if GetConfig().ReadonlyPct == 0 {
-					wType = wtypeRW
-				}
+// 	if worker == nil {
+// 		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
+// 			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
+// 			if err != nil {
+// 				return err
+// 			}
+// 			if crd.isInternal {
+// 				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+// 			} else {
+// 				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+// 			}
+// 			if err != nil {
+// 				if logger.GetLogger().V(logger.Warning) {
+// 					logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool", err)
+// 				}
+// 				return err
+// 			}
+// 		} else {
+// 			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
+// 			if err != nil {
+// 				return err
+// 			}
+// 			if crd.isInternal {
+// 				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+// 			} else {
+// 				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+// 			}
+// 			if err != nil {
+// 				if logger.GetLogger().V(logger.Warning) {
+// 					logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker", err)
+// 				}
+// 				return err
+// 			}
+// 		}
+// 	} else {
+// 		if crd.isRead {
+// 			if crd.shard.shardID != worker.shardID {
+// 				// we allow this but we need to have a different worker since it is a different shard
+// 				wType := wtypeRO
+// 				if GetConfig().ReadonlyPct == 0 {
+// 					wType = wtypeRW
+// 				}
 
-				evt := cal.NewCalEvent(EvtTypeMux, "cross_shard_request", cal.TransOK, "")
-				evt.Completed()
+// 				evt := cal.NewCalEvent(EvtTypeMux, "cross_shard_request", cal.TransOK, "")
+// 				evt.Completed()
 
-				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, crd.shard.shardID)
-				if err != nil {
-					return err
-				}
-				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
-				if err != nil {
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool during shardswitch", err)
-					}
-					return err
-				}
-				xShardRead = true
-				// for now change change to fetch all
-				// TODO: later when doing scatter-gather review this
-				request = crd.removeFetchSize(request)
-				if !crd.inTransaction {
-					if logger.GetLogger().V(logger.Alert) {
-						logger.GetLogger().Log(logger.Alert, crd.id, "Expected to be in transaction")
-					}
-				}
-			}
-		}
-	}
+// 				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, crd.shard.shardID)
+// 				if err != nil {
+// 					return err
+// 				}
+// 				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+// 				if err != nil {
+// 					if logger.GetLogger().V(logger.Warning) {
+// 						logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: no worker in RO pool during shardswitch", err)
+// 					}
+// 					return err
+// 				}
+// 				xShardRead = true
+// 				// for now change change to fetch all
+// 				// TODO: later when doing scatter-gather review this
+// 				request = crd.removeFetchSize(request)
+// 				if !crd.inTransaction {
+// 					if logger.GetLogger().V(logger.Alert) {
+// 						logger.GetLogger().Log(logger.Alert, crd.id, "Expected to be in transaction")
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
 
-	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+// 	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
-	if !xShardRead {
-		if wait {
-			crd.worker = worker
-			crd.workerpool = workerpool
-			crd.ticket = ticket
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: waiting for client.")
-			}
-			return nil
-		}
-		crd.resetWorkerInfo()
-	} else {
-		// restore the shard info
-		crd.copyShardInfo(crd.shard, crd.prevShard)
-		crd.inTransaction = true
-		// this can happen when Oracle returns inTransaction for read SQLs
-		if wait {
-			GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
-			return nil
-		}
-	}
+// 	if !xShardRead {
+// 		if wait {
+// 			crd.worker = worker
+// 			crd.workerpool = workerpool
+// 			crd.ticket = ticket
+// 			if logger.GetLogger().V(logger.Verbose) {
+// 				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: waiting for client.")
+// 			}
+// 			return nil
+// 		}
+// 		crd.resetWorkerInfo()
+// 	} else {
+// 		// restore the shard info
+// 		crd.copyShardInfo(crd.shard, crd.prevShard)
+// 		crd.inTransaction = true
+// 		// this can happen when Oracle returns inTransaction for read SQLs
+// 		if wait {
+// 			GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
+// 			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+// 			return nil
+// 		}
+// 	}
 
-	GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
+// 	GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
 
-	if err == nil {
-		workerpool.ReturnWorker(worker, ticket)
-		return nil
-	}
+// 	if err == nil {
+// 		workerpool.ReturnWorker(worker, ticket)
+// 		return nil
+// 	}
 
-	crd.inTransaction = false
-	if err != ErrWorkerFail {
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: stranded conn", err.Error())
-		}
-		//
-		// donot return a stranded worker. recover inserts a good worker back to pool.
-		//
-		if err == ErrSaturationKill {
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
-		} else {
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
-		}
-	} else {
-		//
-		// worker failure or saturationkill will recover worker.
-		//
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, crd.id, "coordinator dispatchrequest: worker failure", err.Error())
-		}
-	}
-	return err
-}
+// 	crd.inTransaction = false
+// 	if err != ErrWorkerFail {
+// 		if logger.GetLogger().V(logger.Warning) {
+// 			logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: stranded conn", err.Error())
+// 		}
+// 		//
+// 		// donot return a stranded worker. recover inserts a good worker back to pool.
+// 		//
+// 		if err == ErrSaturationKill {
+// 			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+// 		} else {
+// 			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+// 		}
+// 	} else {
+// 		//
+// 		// worker failure or saturationkill will recover worker.
+// 		//
+// 		if logger.GetLogger().V(logger.Debug) {
+// 			logger.GetLogger().Log(logger.Debug, crd.id, "coordinator dispatchrequest: worker failure", err.Error())
+// 		}
+// 	}
+// 	return err
+// }
 
 // Errors returned to the main loop for the connection
 var (
@@ -761,323 +786,322 @@ var (
 	ErrCanceled   = errors.New("Canceled")
 )
 
-
 /* does not return all values from array binds */
-func parseBinds(request *netstring.Netstring) (map[string]string) {
-    out := make(map[string]string)
+// func parseBinds(request *netstring.Netstring) map[string]string {
+// 	out := make(map[string]string)
 
-    requests, err := netstring.SubNetstrings(request)
-    if err != nil {
-	return out
-    }
+// 	requests, err := netstring.SubNetstrings(request)
+// 	if err != nil {
+// 		return out
+// 	}
 
-    sz := len(requests)
-    for i := 0; i < sz; i++ {
-        if requests[i].Cmd == common.CmdBindName {
-            bindName := string(requests[i].Payload)
-            for j:=1; i+j<sz; j++ {
-                if requests[i+j].Cmd == common.CmdBindNum {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindType {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindValue {
-                    out[bindName] = string(requests[i+j].Payload)
-                } else {
-                    // i=3 i+j=5 ---- 3:name 4:value 5:name
-                    i += j-2
-                    break
-                }
-            }
-        } // end if bind name
-    }
+// 	sz := len(requests)
+// 	for i := 0; i < sz; i++ {
+// 		if requests[i].Cmd == common.CmdBindName {
+// 			bindName := string(requests[i].Payload)
+// 			for j := 1; i+j < sz; j++ {
+// 				if requests[i+j].Cmd == common.CmdBindNum {
+// 					continue
+// 				} else if requests[i+j].Cmd == common.CmdBindType {
+// 					continue
+// 				} else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
+// 					continue
+// 				} else if requests[i+j].Cmd == common.CmdBindValue {
+// 					out[bindName] = string(requests[i+j].Payload)
+// 				} else {
+// 					// i=3 i+j=5 ---- 3:name 4:value 5:name
+// 					i += j - 2
+// 					break
+// 				}
+// 			}
+// 		} // end if bind name
+// 	}
 
-    return out
-}
+// 	return out
+// }
 
 /**
  * performs a SQL, which is a communication of request & responses until EOR_... is received, or some
  * exception happens (client disconnects, worker exits, timeout)
  * 2nd return parameter tells if the worker is still busy (in transaction or in cursor)
  */
-func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, request *netstring.Netstring, clientWriter io.Writer, rqTimer *time.Timer) (bool, error) {
-	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequeset: starting")
-	}
-	defer func() {
-		//
-		// only one coordinator can own the worker at one time, no lock required.
-		//
-		if worker != nil {
-			worker.reqCount++
-		}
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: exiting")
-		}
-	}()
+// func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, request *netstring.Netstring, clientWriter io.Writer, rqTimer *time.Timer) (bool, error) {
+// 	if logger.GetLogger().V(logger.Verbose) {
+// 		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequeset: starting")
+// 	}
+// 	defer func() {
+// 		//
+// 		// only one coordinator can own the worker at one time, no lock required.
+// 		//
+// 		if worker != nil {
+// 			worker.reqCount++
+// 		}
+// 		if logger.GetLogger().V(logger.Verbose) {
+// 			logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: exiting")
+// 		}
+// 	}()
 
-	now := time.Now().UnixNano()
-	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
-	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
+// 	now := time.Now().UnixNano()
+// 	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+// 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
 
-	if request != nil {
-		_/*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
-		if parseErr != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
-			}
-			return false, ErrReqParseFail
-		}
-		cnt := 1
-		if request.IsComposite() {
-			cnt = len(crd.nss)
-			if cnt == 0 {
-				logger.GetLogger().Log(logger.Alert, crd.id, "Unexpected embedded ns length")
-			}
-		}
-		plusAnyCorrId := request
-		if crd.preppendCorrID {
-			corrID := crd.corrID
-			if corrID == nil {
-				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
-			}
-			var ns []*netstring.Netstring;
-			if !request.IsComposite() {
-				ns = make([]*netstring.Netstring, 2)
-				ns[0] = corrID
-				ns[1] = request
-			} else { // composite
-				rnss, _ := netstring.SubNetstrings(request)
-				ns = make([]*netstring.Netstring, len(rnss)+1)
-				ns[0] = corrID
-				for i:=0; i<len(rnss); i++ {
-					ns[i+1] = rnss[i]
-				}
-			}
-			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			cnt++
-		}
-		err := worker.Write(plusAnyCorrId, uint16(cnt))
-		if err != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send the session starter request to worker")
-			}
-			return false, ErrWorkerFail
-		}
-		timesincestart := uint32(0)
-		if isCommit || isRollback { // set the sqlStartTimeMs to 0 to avoid recover routine to pick during saturation for OCC_COMMIT and OCC_ROLLBACK
-			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
-		}
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "worker pid:", worker.pid, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
-		}
-	}
+// 	if request != nil {
+// 		_ /*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
+// 		if parseErr != nil {
+// 			if logger.GetLogger().V(logger.Debug) {
+// 				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
+// 			}
+// 			return false, ErrReqParseFail
+// 		}
+// 		cnt := 1
+// 		if request.IsComposite() {
+// 			cnt = len(crd.nss)
+// 			if cnt == 0 {
+// 				logger.GetLogger().Log(logger.Alert, crd.id, "Unexpected embedded ns length")
+// 			}
+// 		}
+// 		plusAnyCorrId := request
+// 		if crd.preppendCorrID {
+// 			corrID := crd.corrID
+// 			if corrID == nil {
+// 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
+// 			}
+// 			var ns []*netstring.Netstring
+// 			if !request.IsComposite() {
+// 				ns = make([]*netstring.Netstring, 2)
+// 				ns[0] = corrID
+// 				ns[1] = request
+// 			} else { // composite
+// 				rnss, _ := netstring.SubNetstrings(request)
+// 				ns = make([]*netstring.Netstring, len(rnss)+1)
+// 				ns[0] = corrID
+// 				for i := 0; i < len(rnss); i++ {
+// 					ns[i+1] = rnss[i]
+// 				}
+// 			}
+// 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
+// 			cnt++
+// 		}
+// 		err := worker.Write(plusAnyCorrId, uint16(cnt))
+// 		if err != nil {
+// 			if logger.GetLogger().V(logger.Debug) {
+// 				logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send the session starter request to worker")
+// 			}
+// 			return false, ErrWorkerFail
+// 		}
+// 		timesincestart := uint32(0)
+// 		if isCommit || isRollback { // set the sqlStartTimeMs to 0 to avoid recover routine to pick during saturation for OCC_COMMIT and OCC_ROLLBACK
+// 			atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+// 		}
+// 		if logger.GetLogger().V(logger.Debug) {
+// 			logger.GetLogger().Log(logger.Debug, "worker pid:", worker.pid, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
+// 		}
+// 	}
 
-	//
-	// the assumption is each dosession deals with a single sql. if not, uncomment the sqlhash
-	// extraction code in workerclient to reset worker.sqlHash on each prepare inside one
-	// dosession.
-	//
-	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
-	worker.sqlBindNs.Store(request)
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
-	}
+// 	//
+// 	// the assumption is each dosession deals with a single sql. if not, uncomment the sqlhash
+// 	// extraction code in workerclient to reset worker.sqlHash on each prepare inside one
+// 	// dosession.
+// 	//
+// 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+// 	worker.sqlBindNs.Store(request)
+// 	if logger.GetLogger().V(logger.Debug) {
+// 		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
+// 	}
 
-	logmsg := fmt.Sprintf("worker (type%d,inst%d,id%d) %d", worker.Type, worker.instID, worker.ID, worker.pid)
+// 	logmsg := fmt.Sprintf("worker (type%d,inst%d,id%d) %d", worker.Type, worker.instID, worker.ID, worker.pid)
 
-	idleTimer := time.NewTimer(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
-	defer idleTimer.Stop()
+// 	idleTimer := time.NewTimer(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
+// 	defer idleTimer.Stop()
 
-	var timeout <-chan time.Time
-	if rqTimer != nil {
-		timeout = rqTimer.C
-	}
+// 	var timeout <-chan time.Time
+// 	if rqTimer != nil {
+// 		timeout = rqTimer.C
+// 	}
 
-	//
-	// request string used to log eor status when there is a multiple_client_req
-	//
-	var reqStr string
-	clientChannel := crd.clientchannel
-	done := ctx.Done()
-	for {
-		select {
-		case <-timeout:
-			return false, ErrTimeout
-		case <-idleTimer.C:
-			crd.done <- GetTrIdleTimeoutMs()
-			return false, ErrTimeout
-		case ns, ok := <-clientChannel:
-			if !ok {
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "doRequest: client channel closed", logmsg)
-				}
-				evt := cal.NewCalEvent(EvtTypeMux, "client_closed", cal.TransOK, "")
-				evt.Completed()
-				return false, ErrClientFail
-			}
-			if (ns != nil) && (ns.Cmd != common.CmdFetch) && (ns.Cmd != common.CmdCols) && (ns.Cmd != common.CmdColsInfo) {
-				//
-				// if one dorequest gets multiple multiple_client_req, do this once.
-				//
-				if len(reqStr) == 0 {
-					var buf bytes.Buffer
-					buf.WriteString("reqns=")
-					if request != nil {
-						buf.WriteString(DebugString(request.Serialized))
-					}
-					buf.WriteString(" reqcorrid=")
-					if crd.corrID != nil {
-						buf.WriteString(DebugString(crd.corrID.Serialized))
-					}
-					reqStr = buf.String()
-				}
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, crd.id, "doSession: multiple client req", logmsg, DebugString(ns.Serialized), reqStr)
-				}
-				evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req", cal.TransOK, logmsg+fmt.Sprintf(", cmd=%s %s", DebugString(ns.Serialized), reqStr))
-				evt.Completed()
-			}
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, crd.id, "coordinator dorequest got client request")
-			}
+// 	//
+// 	// request string used to log eor status when there is a multiple_client_req
+// 	//
+// 	var reqStr string
+// 	clientChannel := crd.clientchannel
+// 	done := ctx.Done()
+// 	for {
+// 		select {
+// 		case <-timeout:
+// 			return false, ErrTimeout
+// 		case <-idleTimer.C:
+// 			crd.done <- GetTrIdleTimeoutMs()
+// 			return false, ErrTimeout
+// 		case ns, ok := <-clientChannel:
+// 			if !ok {
+// 				if logger.GetLogger().V(logger.Verbose) {
+// 					logger.GetLogger().Log(logger.Verbose, crd.id, "doRequest: client channel closed", logmsg)
+// 				}
+// 				evt := cal.NewCalEvent(EvtTypeMux, "client_closed", cal.TransOK, "")
+// 				evt.Completed()
+// 				return false, ErrClientFail
+// 			}
+// 			if (ns != nil) && (ns.Cmd != common.CmdFetch) && (ns.Cmd != common.CmdCols) && (ns.Cmd != common.CmdColsInfo) {
+// 				//
+// 				// if one dorequest gets multiple multiple_client_req, do this once.
+// 				//
+// 				if len(reqStr) == 0 {
+// 					var buf bytes.Buffer
+// 					buf.WriteString("reqns=")
+// 					if request != nil {
+// 						buf.WriteString(DebugString(request.Serialized))
+// 					}
+// 					buf.WriteString(" reqcorrid=")
+// 					if crd.corrID != nil {
+// 						buf.WriteString(DebugString(crd.corrID.Serialized))
+// 					}
+// 					reqStr = buf.String()
+// 				}
+// 				if logger.GetLogger().V(logger.Warning) {
+// 					logger.GetLogger().Log(logger.Warning, crd.id, "doSession: multiple client req", logmsg, DebugString(ns.Serialized), reqStr)
+// 				}
+// 				evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req", cal.TransOK, logmsg+fmt.Sprintf(", cmd=%s %s", DebugString(ns.Serialized), reqStr))
+// 				evt.Completed()
+// 			}
+// 			if logger.GetLogger().V(logger.Debug) {
+// 				logger.GetLogger().Log(logger.Debug, crd.id, "coordinator dorequest got client request")
+// 			}
 
-			if !idleTimer.Stop() {
-				<-idleTimer.C
-			}
-			idleTimer.Reset(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
+// 			if !idleTimer.Stop() {
+// 				<-idleTimer.C
+// 			}
+// 			idleTimer.Reset(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
 
-			// this is typically for the JDBCs "execute" use case
-			//? TODO: we should actually modify the worker to send a IN_CURSOR_IN_TRANSACTION / IN_CURSOR_NOT_IN_TRANSACTION EOR after the execute
-			cnt := 1
-			if ns.IsComposite() {
-				nss, err := netstring.SubNetstrings(ns)
-				if err != nil {
-					logger.GetLogger().Log(logger.Alert, crd.id, "Can't parse embedded ns, size", len(ns.Serialized))
-					return false, ErrClientFail
-				}
-				cnt = len(nss)
-			}
+// 			// this is typically for the JDBCs "execute" use case
+// 			//? TODO: we should actually modify the worker to send a IN_CURSOR_IN_TRANSACTION / IN_CURSOR_NOT_IN_TRANSACTION EOR after the execute
+// 			cnt := 1
+// 			if ns.IsComposite() {
+// 				nss, err := netstring.SubNetstrings(ns)
+// 				if err != nil {
+// 					logger.GetLogger().Log(logger.Alert, crd.id, "Can't parse embedded ns, size", len(ns.Serialized))
+// 					return false, ErrClientFail
+// 				}
+// 				cnt = len(nss)
+// 			}
 
-			err := worker.Write(ns, uint16(cnt))
-			if err != nil {
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send request to worker, err=", err)
-				}
-				return false, ErrWorkerFail
-			}
-			// disable timeout
-			// TODO: support failover for these clients
-			timeout = nil
-		case <-done:
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, crd.id, "doRequest: request canceled")
-			}
-			// TODO: correct the event type to C++ name
-			evt := cal.NewCalEvent(EvtTypeMux, "eor_late_or_recover", cal.TransOK, "")
-			evt.Completed()
-			return false, ErrCanceled
-		case msg, ok := <-worker.channel():
-			if !ok {
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker closed, exiting")
-				}
+// 			err := worker.Write(ns, uint16(cnt))
+// 			if err != nil {
+// 				if logger.GetLogger().V(logger.Debug) {
+// 					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: can't send request to worker, err=", err)
+// 				}
+// 				return false, ErrWorkerFail
+// 			}
+// 			// disable timeout
+// 			// TODO: support failover for these clients
+// 			timeout = nil
+// 		case <-done:
+// 			if logger.GetLogger().V(logger.Verbose) {
+// 				logger.GetLogger().Log(logger.Verbose, crd.id, "doRequest: request canceled")
+// 			}
+// 			// TODO: correct the event type to C++ name
+// 			evt := cal.NewCalEvent(EvtTypeMux, "eor_late_or_recover", cal.TransOK, "")
+// 			evt.Completed()
+// 			return false, ErrCanceled
+// 		case msg, ok := <-worker.channel():
+// 			if !ok {
+// 				if logger.GetLogger().V(logger.Debug) {
+// 					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker closed, exiting")
+// 				}
 
-				calmsg := logmsg + "closed connection on coordinator"
-				evtname := "unexpected_eof"
-				et := cal.NewCalEvent(cal.EventTypeWarning, evtname, cal.TransOK, calmsg)
-				et.Completed()
-				return false, ErrWorkerFail
-			}
-			msglen := len(msg.data)
-			if msglen > 0 {
-				// disable timeout once response was sent to the client
-				timeout = nil
+// 				calmsg := logmsg + "closed connection on coordinator"
+// 				evtname := "unexpected_eof"
+// 				et := cal.NewCalEvent(cal.EventTypeWarning, evtname, cal.TransOK, calmsg)
+// 				et.Completed()
+// 				return false, ErrWorkerFail
+// 			}
+// 			msglen := len(msg.data)
+// 			if msglen > 0 {
+// 				// disable timeout once response was sent to the client
+// 				timeout = nil
 
-				_, err := clientWriter.Write(msg.data)
-				if err != nil {
-					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, crd.id, "Fail to reply to client")
-					}
-					return false, ErrClientFail
-				}
+// 				_, err := clientWriter.Write(msg.data)
+// 				if err != nil {
+// 					if logger.GetLogger().V(logger.Debug) {
+// 						logger.GetLogger().Log(logger.Debug, crd.id, "Fail to reply to client")
+// 					}
+// 					return false, ErrClientFail
+// 				}
 
-				if msglen >= 64*1024 {
-					evt := cal.NewCalEvent(EvtTypeMux, "large_payload_out", cal.TransOK, "")
-					evt.AddDataInt("len", int64(msglen))
-					evt.Completed()
-				}
-			}
+// 				if msglen >= 64*1024 {
+// 					evt := cal.NewCalEvent(EvtTypeMux, "large_payload_out", cal.TransOK, "")
+// 					evt.AddDataInt("len", int64(msglen))
+// 					evt.Completed()
+// 				}
+// 			}
 
-			if msg.free {
-				if msg.rqId != worker.rqId {
-					evname := "crqId"
-					if (msg.rqId > worker.rqId) && ((worker.rqId > 10000) || (msg.rqId < 10000) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
-						// this is not expected, so log with different name
-						evname = "crqId_Error"
-					}
-					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
-					e.AddDataInt("mux", int64(worker.rqId))
-					e.AddDataInt("wk", int64(msg.rqId))
-					e.Completed()
-				}
+// 			if msg.free {
+// 				if msg.rqId != worker.rqId {
+// 					evname := "crqId"
+// 					if (msg.rqId > worker.rqId) && ((worker.rqId > 10000) || (msg.rqId < 10000) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+// 						// this is not expected, so log with different name
+// 						evname = "crqId_Error"
+// 					}
+// 					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
+// 					e.AddDataInt("mux", int64(worker.rqId))
+// 					e.AddDataInt("wk", int64(msg.rqId))
+// 					e.Completed()
+// 				}
 
-				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, crd.id, "workersqltime=", worker.sqlStartTimeMs)
-				}
-				if len(reqStr) > 0 {
-					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_free", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
-					evt.Completed()
-				}
-				return false, nil
-			}
+// 				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+// 				if logger.GetLogger().V(logger.Verbose) {
+// 					logger.GetLogger().Log(logger.Verbose, crd.id, "workersqltime=", worker.sqlStartTimeMs)
+// 				}
+// 				if len(reqStr) > 0 {
+// 					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_free", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
+// 					evt.Completed()
+// 				}
+// 				return false, nil
+// 			}
 
-			if msg.eor {
-				// Sometimes Oracle return IN_TRANSACTION for read requests
-				if !crd.isRead {
-					crd.inTransaction = msg.inTransaction
-				}
-				if len(reqStr) > 0 {
-					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_intxn", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
-					evt.Completed()
-				}
-				return true, nil
-			}
-		case msg, ok := <-worker.ctrlCh:
-			//
-			// workerctrlchan is closed on worker restart. return worker error to skip recover.
-			//
-			if !ok {
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan closed, exiting")
-				}
-				et := cal.NewCalEvent(cal.EventTypeWarning, "workerCtrlChanClosed", cal.TransOK, "")
-				et.Completed()
-				return false, ErrWorkerFail
-			}
-			if msg.abort {
-				//
-				// reset sqlstarttime to prevent the same worker from saturationrecover again.
-				//
-				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+// 			if msg.eor {
+// 				// Sometimes Oracle return IN_TRANSACTION for read requests
+// 				if !crd.isRead {
+// 					crd.inTransaction = msg.inTransaction
+// 				}
+// 				if len(reqStr) > 0 {
+// 					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_intxn", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
+// 					evt.Completed()
+// 				}
+// 				return true, nil
+// 			}
+// 		case msg, ok := <-worker.ctrlCh:
+// 			//
+// 			// workerctrlchan is closed on worker restart. return worker error to skip recover.
+// 			//
+// 			if !ok {
+// 				if logger.GetLogger().V(logger.Debug) {
+// 					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan closed, exiting")
+// 				}
+// 				et := cal.NewCalEvent(cal.EventTypeWarning, "workerCtrlChanClosed", cal.TransOK, "")
+// 				et.Completed()
+// 				return false, ErrWorkerFail
+// 			}
+// 			if msg.abort {
+// 				//
+// 				// reset sqlstarttime to prevent the same worker from saturationrecover again.
+// 				//
+// 				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
 
-				if logger.GetLogger().V(logger.Debug) {
-					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan abort")
-				}
-				if msg.bindEvict {
-					if logger.GetLogger().V(logger.Debug) {
-						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan bind evict")
-					}
-					return false, ErrBindEviction
-				} else {
-					return false, ErrSaturationKill
-				}
-			}
-		}
-	}
-}
+// 				if logger.GetLogger().V(logger.Debug) {
+// 					logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan abort")
+// 				}
+// 				if msg.bindEvict {
+// 					if logger.GetLogger().V(logger.Debug) {
+// 						logger.GetLogger().Log(logger.Debug, crd.id, "doRequest: worker ctrlchan bind evict")
+// 					}
+// 					return false, ErrBindEviction
+// 				} else {
+// 					return false, ErrSaturationKill
+// 				}
+// 			}
+// 		}
+// 	}
+// }
 
 func (crd *Coordinator) respond(data []byte) error {
 	if logger.GetLogger().V(logger.Verbose) {
@@ -1113,4 +1137,442 @@ func (crd *Coordinator) processError(err error) {
 // Done returns the channel used when the coordinator is done
 func (crd *Coordinator) Done() <-chan int {
 	return crd.done
+}
+
+// NEW doRequest FUNCTION, COMMENT OUT THE OTHER ONE
+/**
+ * performs a SQL, which is a communication of request & responses until EOR_... is received, or some
+ * exception happens (client disconnects, worker exits, timeout)
+ * 2nd return parameter tells if the worker is still busy (in transaction or in cursor)
+ */
+func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, request *encoding.Packet, clientWriter io.Writer, rqTimer *time.Timer) (bool, error) {
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "coordinator dorequeset: starting")
+	}
+	defer func() {
+		//
+		// only one coordinator can own the worker at one time, no lock required.
+		//
+		if worker != nil {
+			worker.reqCount++
+		}
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "coordinator dorequest: exiting")
+		}
+	}()
+	//
+	// proxy sends "18:2006 CorrId=NotSet," to worker if not getting one from client.
+	//
+	if crd.preppendCorrID {
+		var err error
+		if crd.corrID == nil {
+			err = worker.Write(netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet")), 1)
+		} else {
+			err = worker.Write(crd.corrID, 1)
+		}
+		if err != nil {
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "doRequest: can't send the corr_id to worker", err)
+			}
+			return false, ErrWorkerFail
+		}
+	}
+	if request != nil {
+		// if !request.IsMySQL {
+		if !request.IsPostgreSQL {
+			cnt := 1
+			if request.IsComposite() {
+				cnt = len(crd.nss)
+				if cnt == 0 {
+					logger.GetLogger().Log(logger.Alert, "Unexpected embedded ns length")
+				}
+			}
+
+			err := worker.Write(request, uint16(cnt))
+			if err != nil {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: can't send the session starter request to worker")
+				}
+				return false, ErrWorkerFail
+			}
+		} else {
+			// TODO: MySQL Packet case for sending session starter request to worker.
+			// It's written down below, but not too sure whether or not it's as simple as this.
+			logger.GetLogger().Log(logger.Info, "Wrote request to worker")
+			err := worker.Write(request, uint16(1))
+			if err != nil {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: can't send the session starter request to worker")
+				}
+				return false, ErrWorkerFail
+			}
+
+		}
+	}
+
+	//
+	// the assumption is each dosession deals with a single sql. if not, uncomment the sqlhash
+	// extraction code in workerclient to reset worker.sqlHash on each prepare inside one
+	// dosession.
+	//
+	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+	now := time.Now().UnixNano()
+	timesincestart := uint32((now - GetStateLog().GetStartTime()) / int64(time.Millisecond))
+	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
+	}
+
+	logmsg := fmt.Sprintf("worker (type%d,inst%d,id%d) %d", worker.Type, worker.instID, worker.ID, worker.pid)
+
+	idleTimer := time.NewTimer(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
+	defer idleTimer.Stop()
+
+	var timeout <-chan time.Time
+	if rqTimer != nil {
+		timeout = rqTimer.C
+	}
+
+	//
+	// request string used to log eor status when there is a multiple_client_req
+	//
+	var reqStr string
+	clientChannel := crd.clientchannel
+	done := ctx.Done()
+	for {
+		select {
+		case <-timeout:
+			return false, ErrTimeout
+		case <-idleTimer.C:
+			crd.done <- GetTrIdleTimeoutMs()
+			return false, ErrTimeout
+			// TODO: make mysql case
+			// I added some changes into here for mysqlpackets. Unsure if this covers all the cases...
+		case ns, ok := <-clientChannel:
+			logger.GetLogger().Log(logger.Verbose, "Got message from client channel", ns.Serialized)
+			if !ok {
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "doRequest: client channel closed", logmsg)
+				}
+				evt := cal.NewCalEvent(EvtTypeMux, "client_closed", cal.TransOK, "")
+				evt.Completed()
+				return false, ErrClientFail
+			}
+
+			if (ns != nil) && !ns.IsPostgreSQL && /*!ns.IsMySQL &&*/ (ns.Cmd != common.CmdFetch) && (ns.Cmd != common.CmdCols) && (ns.Cmd != common.CmdColsInfo) {
+				//
+				// if one dorequest gets multiple multiple_client_req, do this once.
+				//
+				if len(reqStr) == 0 {
+					var buf bytes.Buffer
+					buf.WriteString("reqns=")
+					if request != nil {
+						buf.WriteString(DebugString(request.Serialized))
+					}
+					buf.WriteString(" reqcorrid=")
+					if crd.corrID != nil {
+						buf.WriteString(DebugString(crd.corrID.Serialized))
+					}
+					reqStr = buf.String()
+				}
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "doSession: multiple client req", logmsg, DebugString(ns.Serialized), reqStr)
+				}
+				evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req", cal.TransOK, logmsg+fmt.Sprintf(", cmd=%s %s", DebugString(ns.Serialized), reqStr))
+				evt.Completed()
+			}
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "coordinator dorequest got client request")
+			}
+
+			if !idleTimer.Stop() {
+				<-idleTimer.C
+			}
+			idleTimer.Reset(time.Duration(GetTrIdleTimeoutMs()) * time.Millisecond)
+
+			// this is typically for the JDBCs "execute" use case
+			//? TODO: we should actually modify the worker to send a IN_CURSOR_IN_TRANSACTION / IN_CURSOR_NOT_IN_TRANSACTION EOR after the execute
+			cnt := 1
+			// if !ns.IsMySQL && ns.IsComposite() {
+			if !ns.IsPostgreSQL && ns.IsComposite() {
+				nss, err := netstring.SubNetstrings(ns)
+				if err != nil {
+					logger.GetLogger().Log(logger.Alert, "Can't parse embedded ns, size", len(ns.Serialized))
+					return false, ErrClientFail
+				}
+				cnt = len(nss)
+			}
+
+			err := worker.Write(ns, uint16(cnt))
+			if err != nil {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: can't send request to worker, err=", err)
+				}
+				return false, ErrWorkerFail
+			}
+			// disable timeout
+			// TODO: support failover for these clients
+			timeout = nil
+		case <-done:
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "doRequest: request canceled")
+			}
+			// TODO: correct the event type to C++ name
+			evt := cal.NewCalEvent(EvtTypeMux, "eor_late_or_recover", cal.TransOK, "")
+			evt.Completed()
+			return false, ErrCanceled
+		case msg, ok := <-worker.channel():
+			logger.GetLogger().Log(logger.Verbose, "Got message from worker channel. Expect sql packet: ", msg.data)
+			if !ok {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: worker closed, exiting")
+				}
+
+				calmsg := logmsg + "closed connection on coordinator"
+				evtname := "unexpected_eof"
+				et := cal.NewCalEvent(cal.EventTypeWarning, evtname, cal.TransOK, calmsg)
+				et.Completed()
+				return false, ErrWorkerFail
+			}
+			msglen := len(msg.data)
+			if msglen > 0 {
+				// disable timeout once response was sent to the client
+				timeout = nil
+				// Exclude the indicator byte when writing to client by starting array slice index at 1.
+				_, err := clientWriter.Write(msg.data[1:])
+				logger.GetLogger().Log(logger.Verbose, "Wrote to client!", msg.data[1:])
+				if err != nil {
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, "Fail to reply to client")
+					}
+					return false, ErrClientFail
+				}
+
+				if msglen >= 64*1024 {
+					evt := cal.NewCalEvent(EvtTypeMux, "large_payload_out", cal.TransOK, "")
+					evt.AddDataInt("len", int64(msglen))
+					evt.Completed()
+				}
+			}
+
+			if msg.free {
+				if msg.rqId != worker.rqId {
+					evname := "crqId"
+					if (msg.rqId > worker.rqId) && ((worker.rqId > 128) || (msg.rqId < 128) /*rqId can wrap around to 0, this test checks that it did not just wrap*/) {
+						// this is not expected, so log with different name
+						evname = "crqId_Error"
+					}
+					e := cal.NewCalEvent("WARNING", evname, cal.TransOK, "")
+					e.AddDataInt("mux", int64(worker.rqId))
+					e.AddDataInt("wk", int64(msg.rqId))
+					e.Completed()
+				}
+
+				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "workersqltime=", worker.sqlStartTimeMs)
+				}
+				if len(reqStr) > 0 {
+					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_free", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
+					evt.Completed()
+				}
+				return false, nil
+			}
+
+			if msg.eor {
+				// Sometimes Oracle return IN_TRANSACTION for read requests
+				if !crd.isRead {
+					crd.inTransaction = msg.inTransaction
+				}
+				if len(reqStr) > 0 {
+					evt := cal.NewCalEvent(EvtTypeMux, "multiple_client_req_get_eor_intxn", cal.TransOK, logmsg+fmt.Sprintf(", %s", reqStr))
+					evt.Completed()
+				}
+				return true, nil
+			}
+		case msg, ok := <-worker.ctrlCh:
+			//
+			// workerctrlchan is closed on worker restart. return worker error to skip recover.
+			//
+			logger.GetLogger().Log(logger.Verbose, "Got message from worker ctrlCh", msg.data)
+			if !ok {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: worker ctrlchan closed, exiting")
+				}
+				et := cal.NewCalEvent(cal.EventTypeWarning, "workerCtrlChanClosed", cal.TransOK, "")
+				et.Completed()
+				return false, ErrWorkerFail
+			}
+			if msg.abort {
+				//
+				// reset sqlstarttime to prevent the same worker from saturationrecover again.
+				//
+				atomic.StoreUint32(&(worker.sqlStartTimeMs), 0)
+
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "doRequest: worker ctrlchan abort")
+				}
+				return false, ErrSaturationKill
+			}
+		}
+	}
+}
+
+func (crd *Coordinator) dispatchRequest(request *encoding.Packet) error {
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "coordinator dispatchrequest: starting")
+	}
+	defer func() {
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "coordinator dispatchrequest: exiting")
+		}
+	}()
+
+	var err error
+	workerpool := crd.workerpool
+	worker := crd.worker
+	ticket := crd.ticket
+	xShardRead := false
+
+	if worker == nil {
+		logger.GetLogger().Log(logger.Info, "worker is nil")
+		if crd.isRead && (GetConfig().ReadonlyPct != 0) {
+			logger.GetLogger().Log(logger.Info, "This case!")
+			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, crd.shard.shardID)
+			if err != nil {
+				return err
+			}
+			logger.GetLogger().Log(logger.Info, "Tried to re-acquire workerpool!")
+			if crd.isInternal {
+				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+			} else {
+				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+			}
+			logger.GetLogger().Log(logger.Info, "Got a worker!")
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "coordinator dispatchrequest: no worker in RO pool", err)
+				}
+				return err
+			}
+		} else {
+			logger.GetLogger().Log(logger.Info, "This case!")
+			workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, crd.shard.shardID)
+			if err != nil {
+				return err
+			}
+			logger.GetLogger().Log(logger.Info, "shard ID problems...?")
+			if crd.isInternal {
+				logger.GetLogger().Log(logger.Info, "isInternal")
+				worker, ticket, err = workerpool.GetWorker(crd.sqlhash, 0 /*no backlog timeout*/)
+			} else {
+				logger.GetLogger().Log(logger.Info, "isNotInternal")
+				logger.GetLogger().Log(logger.Info, workerpool)
+				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+				// if err == nil && worker != nil {
+				logger.GetLogger().Log(logger.Info, "Got a worker!")
+				// }
+			}
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "coordinator dispatchrequest: no worker", err)
+				}
+				return err
+			}
+		}
+	} else {
+		if crd.isRead {
+			logger.GetLogger().Log(logger.Info, "crd.isRead")
+			if crd.shard.shardID != worker.shardID {
+				// we allow this but we need to have a different worker since it is a different shard
+				wType := wtypeRO
+				if GetConfig().ReadonlyPct == 0 {
+					wType = wtypeRW
+				}
+
+				evt := cal.NewCalEvent(EvtTypeMux, "cross_shard_request", cal.TransOK, "")
+				evt.Completed()
+
+				workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wType, 0, crd.shard.shardID)
+				if err != nil {
+					return err
+				}
+				worker, ticket, err = workerpool.GetWorker(crd.sqlhash)
+				if err != nil {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, "coordinator dispatchrequest: no worker in RO pool during shardswitch", err)
+					}
+					return err
+				}
+				xShardRead = true
+				// for now change change to fetch all
+				// TODO: later when doing scatter-gather review this
+				// if !request.IsMySQL {
+				if !request.IsPostgreSQL {
+					request = crd.removeFetchSize(request)
+				}
+				if !crd.inTransaction {
+					if logger.GetLogger().V(logger.Alert) {
+						logger.GetLogger().Log(logger.Alert, "Expected to be in transaction")
+					}
+				}
+			}
+		}
+	}
+
+	logger.GetLogger().Log(logger.Info, "Reached doRequest")
+	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+
+	if !xShardRead {
+		if wait {
+			crd.worker = worker
+			crd.workerpool = workerpool
+			crd.ticket = ticket
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "coordinator dispatchrequest: waiting for client.")
+			}
+			return nil
+		}
+		crd.resetWorkerInfo()
+	} else {
+		// restore the shard info
+		crd.copyShardInfo(crd.shard, crd.prevShard)
+		crd.inTransaction = true
+		// this can happen when Oracle returns inTransaction for read SQLs
+		if wait {
+			GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
+			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+			return nil
+		}
+	}
+
+	GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
+
+	if err == nil {
+		workerpool.ReturnWorker(worker, ticket)
+		return nil
+	}
+
+	crd.inTransaction = false
+	if err != ErrWorkerFail {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "coordinator dispatchrequest: stranded conn", err.Error())
+		}
+		//
+		// donot return a stranded worker. recover inserts a good worker back to pool.
+		//
+		if err == ErrSaturationKill {
+			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+		} else {
+			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+		}
+	} else {
+		//
+		// worker failure or saturationkill will recover worker.
+		//
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "coordinator dispatchrequest: worker failure", err.Error())
+		}
+	}
+	return err
 }

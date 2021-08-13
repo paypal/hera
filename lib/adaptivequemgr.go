@@ -21,12 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"sync/atomic"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/paypal/hera/cal"
-	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -118,7 +117,7 @@ type BindCount struct {
 	Workers map[string]*WorkerClient // lookup by ticket
 }
 
-func bindEvictNameOk(bindName string) (bool) {
+func bindEvictNameOk(bindName string) bool {
 	commaNames := GetConfig().BindEvictionNames
 	if len(commaNames) == 0 {
 		// for tests, allow all names to be subject to bind eviction
@@ -126,7 +125,7 @@ func bindEvictNameOk(bindName string) (bool) {
 	}
 	commaNames = strings.ToLower(commaNames)
 	bindName = strings.ToLower(bindName)
-	for _, okSubname := range strings.Split(commaNames,",") {
+	for _, okSubname := range strings.Split(commaNames, ",") {
 		if strings.Contains(bindName, okSubname) {
 			return true
 		}
@@ -136,139 +135,139 @@ func bindEvictNameOk(bindName string) (bool) {
 
 /* A bad query with multiple binds will add independent bind throttles to all
 bind name and values */
-func (mgr *adaptiveQueueManager) doBindEviction() (int) {
-	throttleCount := 0
-	for _,keyValues := range GetBindEvict().BindThrottle {
-		throttleCount += len(keyValues)
-	}
-	if throttleCount > GetConfig().BindEvictionMaxThrottle {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "already too many bind throttles, skipping bind eviction and throttle")
-		}
-		return 0
-	}
+// func (mgr *adaptiveQueueManager) doBindEviction() (int) {
+// 	throttleCount := 0
+// 	for _,keyValues := range GetBindEvict().BindThrottle {
+// 		throttleCount += len(keyValues)
+// 	}
+// 	if throttleCount > GetConfig().BindEvictionMaxThrottle {
+// 		if logger.GetLogger().V(logger.Info) {
+// 			logger.GetLogger().Log(logger.Info, "already too many bind throttles, skipping bind eviction and throttle")
+// 		}
+// 		return 0
+// 	}
 
-	bindCounts := make(map[string]*BindCount)
-	mgr.wpool.poolCond.L.Lock()
-	defer mgr.wpool.poolCond.L.Unlock()
-	for worker, ticket := range mgr.dispatchedWorkers {
-		if worker == nil {
-			continue
-		}
-		usqlhash := uint32(worker.sqlHash)
-		sqlhash := atomic.LoadUint32(&(usqlhash))
-		_, ok := GetBindEvict().BindThrottle[sqlhash]
-		if ok {
-			continue // don't repeatedly bind evict something already evicted
-		}
-		request, ok := worker.sqlBindNs.Load().(*netstring.Netstring)
-		if !ok {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "bad req netstring, skipping bind evict eval, pid", worker.pid)
-			}
-			continue
-		}
-		contextBinds := parseBinds(request)
-		for bindName0, bindValue := range contextBinds {
-			/* avoid too short status values
-			D=deleted, P=pending, C=confirmed
-			US Zip Codes: 90210, 95131
-			we want account id's, phone number, or full emails
-			easiest just to check length */
-			if len(bindValue) <= 7 {
-				continue
-			}
+// 	bindCounts := make(map[string]*BindCount)
+// 	mgr.wpool.poolCond.L.Lock()
+// 	defer mgr.wpool.poolCond.L.Unlock()
+// 	for worker, ticket := range mgr.dispatchedWorkers {
+// 		if worker == nil {
+// 			continue
+// 		}
+// 		usqlhash := uint32(worker.sqlHash)
+// 		sqlhash := atomic.LoadUint32(&(usqlhash))
+// 		_, ok := GetBindEvict().BindThrottle[sqlhash]
+// 		if ok {
+// 			continue // don't repeatedly bind evict something already evicted
+// 		}
+// 		request, ok := worker.sqlBindNs.Load().(*netstring.Netstring)
+// 		if !ok {
+// 			if logger.GetLogger().V(logger.Alert) {
+// 				logger.GetLogger().Log(logger.Alert, "bad req netstring, skipping bind evict eval, pid", worker.pid)
+// 			}
+// 			continue
+// 		}
+// 		contextBinds := parseBinds(request)
+// 		for bindName0, bindValue := range contextBinds {
+// 			/* avoid too short status values
+// 			D=deleted, P=pending, C=confirmed
+// 			US Zip Codes: 90210, 95131
+// 			we want account id's, phone number, or full emails
+// 			easiest just to check length */
+// 			if len(bindValue) <= 7 {
+// 				continue
+// 			}
 
-			/* select * from .. where id in ( :bn1, :bn2, bn3.. )
-			bind names are all normalized to bn#
-			bind values may repeat */
-			bindName := NormalizeBindName(bindName0)
-			if !bindEvictNameOk(bindName) {
-				continue
-			}
-			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
+// 			/* select * from .. where id in ( :bn1, :bn2, bn3.. )
+// 			bind names are all normalized to bn#
+// 			bind values may repeat */
+// 			bindName := NormalizeBindName(bindName0)
+// 			if !bindEvictNameOk(bindName) {
+// 				continue
+// 			}
+// 			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
 
-			entry, ok := bindCounts[concatKey]
-			if !ok {
-				entry = &BindCount{
-					Sqlhash: sqlhash,
-					Name:    bindName,
-					Value:   bindValue,
-					Workers: make(map[string]*WorkerClient),
-					}
-				bindCounts[concatKey] = entry
-			}
+// 			entry, ok := bindCounts[concatKey]
+// 			if !ok {
+// 				entry = &BindCount{
+// 					Sqlhash: sqlhash,
+// 					Name:    bindName,
+// 					Value:   bindValue,
+// 					Workers: make(map[string]*WorkerClient),
+// 					}
+// 				bindCounts[concatKey] = entry
+// 			}
 
-			entry.Workers[ticket] = worker
-		}
-	} // end for worker search
+// 			entry.Workers[ticket] = worker
+// 		}
+// 	} // end for worker search
 
-	evictedTicket := make(map[string]string)
+// 	evictedTicket := make(map[string]string)
 
-	numDispatchedWorkers := len(mgr.dispatchedWorkers)
-	evictCount := 0
-	for _, entry := range bindCounts {
-		sqlhash := entry.Sqlhash
-		bindName := entry.Name
-		bindValue := entry.Value
+// 	numDispatchedWorkers := len(mgr.dispatchedWorkers)
+// 	evictCount := 0
+// 	for _, entry := range bindCounts {
+// 		sqlhash := entry.Sqlhash
+// 		bindName := entry.Name
+// 		bindValue := entry.Value
 
-		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(numDispatchedWorkers) ) {
-			continue
-		}
-		// evict sqlhash, bindvalue
-		//for idx := 0; idx < len(entry.Workers); idx++  {
-		for ticket, worker := range entry.Workers {
-			_, ok := evictedTicket[ticket]
-			if ok {
-				continue
-			}
-			evictedTicket[ticket] = ticket
+// 		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(numDispatchedWorkers) ) {
+// 			continue
+// 		}
+// 		// evict sqlhash, bindvalue
+// 		//for idx := 0; idx < len(entry.Workers); idx++  {
+// 		for ticket, worker := range entry.Workers {
+// 			_, ok := evictedTicket[ticket]
+// 			if ok {
+// 				continue
+// 			}
+// 			evictedTicket[ticket] = ticket
 
-			if mgr.dispatchedWorkers[worker] != ticket ||
-				worker.Status == wsFnsh ||
-				worker.isUnderRecovery == 1 /* Recover() uses compare & swap */ {
+// 			if mgr.dispatchedWorkers[worker] != ticket ||
+// 				worker.Status == wsFnsh ||
+// 				worker.isUnderRecovery == 1 /* Recover() uses compare & swap */ {
 
-				continue
-			}
+// 				continue
+// 			}
 
-			// do eviction
-			select {
-			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: true}:
-			default:
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (bind eviction)", worker.pid)
-				}
-			}
-			et := cal.NewCalEvent("BIND_EVICT", fmt.Sprintf("%d", entry.Sqlhash),
-				"1", fmt.Sprintf("pid=%d&k=%s&v=%s", worker.pid, entry.Name, entry.Value))
-			et.Completed()
-			evictCount++
-		}
+// 			// do eviction
+// 			select {
+// 			case worker.ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: true}:
+// 			default:
+// 				if logger.GetLogger().V(logger.Warning) {
+// 					logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (bind eviction)", worker.pid)
+// 				}
+// 			}
+// 			et := cal.NewCalEvent("BIND_EVICT", fmt.Sprintf("%d", entry.Sqlhash),
+// 				"1", fmt.Sprintf("pid=%d&k=%s&v=%s", worker.pid, entry.Name, entry.Value))
+// 			et.Completed()
+// 			evictCount++
+// 		}
 
-		// setup allow-every-x
-		sqlBind, ok := GetBindEvict().BindThrottle[sqlhash]
-		if !ok {
-			sqlBind = make(map[string]*BindThrottle)
-			GetBindEvict().BindThrottle[sqlhash] = sqlBind
-		}
-		concatKey := fmt.Sprintf("%s|%s", bindName, bindValue)
-		throttle, ok := sqlBind[concatKey]
-		if ok {
-			throttle.incrAllowEveryX()
-		} else {
-			throttle := BindThrottle{
-				Name:          bindName,
-				Value:         bindValue,
-				Sqlhash:       sqlhash,
-				AllowEveryX:   3*len(entry.Workers) + 1,
-			}
-			now := time.Now()
-			throttle.RecentAttempt.Store(&now)
-			sqlBind[concatKey] = &throttle
-		}
-	}
-	return evictCount
-}
+// 		// setup allow-every-x
+// 		sqlBind, ok := GetBindEvict().BindThrottle[sqlhash]
+// 		if !ok {
+// 			sqlBind = make(map[string]*BindThrottle)
+// 			GetBindEvict().BindThrottle[sqlhash] = sqlBind
+// 		}
+// 		concatKey := fmt.Sprintf("%s|%s", bindName, bindValue)
+// 		throttle, ok := sqlBind[concatKey]
+// 		if ok {
+// 			throttle.incrAllowEveryX()
+// 		} else {
+// 			throttle := BindThrottle{
+// 				Name:          bindName,
+// 				Value:         bindValue,
+// 				Sqlhash:       sqlhash,
+// 				AllowEveryX:   3*len(entry.Workers) + 1,
+// 			}
+// 			now := time.Now()
+// 			throttle.RecentAttempt.Store(&now)
+// 			sqlBind[concatKey] = &throttle
+// 		}
+// 	}
+// 	return evictCount
+// }
 
 /**
  * saturation recovery loop wake up every second (default).
@@ -302,7 +301,8 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "saturation recover active (ms)", sleep)
 		}
-		if mgr.shouldRecover() && mgr.doBindEviction() == 0 {
+		// if mgr.shouldRecover() && mgr.doBindEviction() == 0 {
+		if mgr.shouldRecover() {
 			//
 			// once we decided to recover a worker and send an abort msg through worker.ctrlCh,
 			// one of three things could happen
@@ -447,19 +447,19 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 				}
 			}
 		} else {
-		if worker != nil && worker.Status == wsFnsh  {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
+			if worker != nil && worker.Status == wsFnsh {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
+				}
+			} else {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "removing nil worker in aq for ticket", ticket)
+				}
+				//
+				// deleting nil from map works as usual.
+				//
+				delete(mgr.dispatchedWorkers, worker)
 			}
-		} else {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "removing nil worker in aq for ticket", ticket)
-			}
-			//
-			// deleting nil from map works as usual.
-			//
-			delete(mgr.dispatchedWorkers, worker)
-		}
 		}
 	}
 	if logger.GetLogger().V(logger.Verbose) {

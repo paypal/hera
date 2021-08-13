@@ -21,11 +21,12 @@ import (
 	"io"
 
 	"github.com/paypal/hera/common"
-	"github.com/paypal/hera/utility/encoding/netstring"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/logger"
 )
 
-func WriteAll(w io.Writer, ns *netstring.Netstring) error {
+// func WriteAll(w io.Writer, ns *netstring.Netstring) error {
+func WriteAll(w io.Writer, ns *encoding.Packet) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		if ns.Cmd == common.CmdEOR {
 			logger.GetLogger().Log(logger.Verbose, "worker writing EOR to mux >>> ", len(ns.Serialized), ":", common.CmdEOR, " ",

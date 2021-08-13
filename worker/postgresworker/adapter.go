@@ -20,129 +20,96 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/paypal/hera/cal"
+	// _ "github.com/jackc/pgx/v4"
+
+	_ "github.com/lib/pq"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/paypal/hera/worker/shared"
 )
 
-type mysqlAdapter struct {
+type psqlAdapter struct {
 }
 
-func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser, error) {
+func (adapter *psqlAdapter) MakeSqlParser() (common.SQLParser, error) {
 	return common.NewRegexSQLParser()
 }
 
-// InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
-// "mysql_datasource" parameters
-func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
-	user := os.Getenv("username")
-	pass := os.Getenv("password")
-	ds := os.Getenv("mysql_datasource")
-	calTrans := cal.NewCalTransaction(cal.TransTypeURL, "INITDB", cal.TransOK, "", cal.DefaultTGName)
-	if user == "" {
-		calTrans.AddDataStr("m_err", "USERNAME_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.AddDataStr("m_datasource", ds)
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'username' from env")
-	}
-	if pass == "" {
-		calTrans.AddDataStr("m_err", "PASSWORD_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.AddDataStr("m_datasource", ds)
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'password' from env")
-	}
-	if ds == "" {
-		calTrans.AddDataStr("m_err", "DATASOURCE_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'mysql_datasource' from env")
+func (adapter *psqlAdapter) InitDB() (*sql.DB, error) {
+	// LINES 55-74 USES LIB/PQ POSTGRESQL DRIVER WHICH IS NOT AS WELL MAINTAINED AS JACKC/PGX
+	// https://github.com/lib/pq
+
+	// HARD CODED VALUES FOR TESTING
+	// LINES 61-65 ARE NOT HARD-CODED AND SHOULD REPLACE THESE
+	host := "localhost"
+	port := 5432
+	user := "postgres"
+	pass := "password"
+	dbname := "testdb"
+
+	// // Typically use localhost and port anyways
+	// host := os.Getenv("host")
+	// port := os.Getenv("port")
+	// user := os.Getenv("username")
+	// pass := os.Getev("password")
+	// dbname := os.Getenv("dbname")
+	// psqlInfo URL := postgres://username:password@host:port/database_name
+
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, pass, dbname)
+
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "DB connection error")
+	} else {
+		logger.GetLogger().Log(logger.Info, user+" connect success "+host+strconv.Itoa(port)+dbname)
 	}
 
-	var db *sql.DB
-	var err error
-	for idx, curDs := range strings.Split(ds, "||") {
-		user := os.Getenv("username")
-		pass := os.Getenv("password")
-		attempt := 1
-		is_writable := false
-		for attempt <= 3 {
-			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
-				}
-				calTrans.AddDataStr("m_err", err.Error())
-				calTrans.AddDataStr("m_errtype", "CONNECT")
-				calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
-				calTrans.SetStatus(cal.TransFatal)
-				break
-			}
-			is_writable = adapter.Heartbeat(db)
-			if is_writable {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
-				}
-				err = nil
-				break
-			} else {
-				// read only connection
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("Attempt=%d", attempt))
-				}
-				db.Close()
-				if attempt == 1 { // If attempt 1 failed then try with password2
-					if os.Getenv("password2") != "" {
-						pass = os.Getenv("password2")
-					} else {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "Password2 not found for "+curDs)
-						}
-						attempt = attempt + 1
-					}
-				}
-				if attempt == 2 { // If attempt 2 failed then try with password3
-					if os.Getenv("password3") != "" {
-						pass = os.Getenv("password3")
-					} else {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "Password3 not found for "+curDs)
-						}
-						attempt = attempt + 1
-					}
-				}
-				attempt = attempt + 1
-				if attempt >= 3 {
-					calTrans.AddDataStr("m_err", "READONLY_CONN")
-					calTrans.AddDataStr("m_errtype", "CONNECT")
-					calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
-					calTrans.SetStatus(cal.TransFatal)
-					err = errors.New("cannot use read-only conn " + curDs)
-				}
-			}
-		}
-		if is_writable {
-			break
-		}
+	// createStmt := `CREATE TABLE IF NOT EXISTS sports (team varchar(255), league varchar(255));`
+	// _, err = db.Exec(createStmt)
+	// if err != nil {
+	// 	fmt.Println("create err", err.Error())
+	// }
+
+	// waitStmt := `SELECT pg_sleep(2);`
+	// _, err = db.Exec(waitStmt)
+	// if err != nil {
+	// 	fmt.Println("wait err", err.Error())
+	// }
+
+	insertStmt := `INSERT INTO sports(team, league) VALUES ('Golden State Warriors', 'NBA');`
+	_, err = db.Exec(insertStmt)
+	if err != nil {
+		fmt.Println("insert err", err.Error())
 	}
-	calTrans.Completed()
+
+	// // USING PGX (POSTGRESQL DRIVER) -- REQUIRES GO VERSION 1.15 OR HIGHER
+	// // https://github.com/jackc/pgx
+	// // UNCOMMENT THIS SECTION AND COMMENT OUT SECTION ABOVE TO USE
+
+	// // MUST RUN THIS DURING MANUAL BUILD FOR CONNECTION TO WORK
+	// // export PSQL_URL="postgres://postgres:password@localhost:5432/testdb"
+	// // urlExample := "postgres://username:password@localhost:5432/database_name"
+
+	// psqlURL := os.Getenv("PSQL_URL")
+
+	// if psqlURL == "" {
+	// 	return nil, errors.New("Can't get 'psql URL' from env")
+	// }
+
+	// db, err := pgx.Connect(context.Background(), os.Getenv("PSQL_URL"))
+
 	return db, err
 }
 
 // Checking master status
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
+func (adapter *psqlAdapter) Heartbeat(db *sql.DB) bool {
 	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	writable := false
 	conn, err := db.Conn(ctx)
@@ -155,7 +122,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 	defer conn.Close()
 
 	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
-		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
+		stmt, err := conn.PrepareContext(ctx, "select * from sports")
 		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
 		if err != nil {
 			if logger.GetLogger().V(logger.Warning) {
@@ -194,7 +161,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 }
 
 // UseBindNames return false because the SQL string uses ? for bind parameters
-func (adapter *mysqlAdapter) UseBindNames() bool {
+func (adapter *psqlAdapter) UseBindNames() bool {
 	return false
 }
 
@@ -218,11 +185,11 @@ var colTypeMap = map[string]int{
 	"TIMESTAMP": 185,
 }
 
-func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
+func (adapter *psqlAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
+func (adapter *psqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
 	errStr := errToProcess.Error()
 
 	if strings.HasPrefix(errStr, "driver: bad connection") {
@@ -278,7 +245,7 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 	}
 }
 
-func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {
+func (adapter *psqlAdapter) ProcessResult(colType string, res string) string {
 	switch colType {
 	case "DATE":
 		var day, month, year int

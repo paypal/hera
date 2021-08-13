@@ -25,6 +25,7 @@ import (
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -289,7 +290,8 @@ func (crd *Coordinator) isShardKey(bind string) bool {
 // before determining if the current request should continue, returning nil error if the request should be allowed.
 // If error is not nil, the second parameter says if the coordinator should hangup the client connection.
 // The decision to hang-up or not in case of error is based on backward compatibility
-func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (bool, error) {
+// func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (bool, error) {
+func (crd *Coordinator) PreprocessSharding(requests []*encoding.Packet) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, crd.id, "PreprocessSharding:", crd.shard)
 	}
@@ -364,7 +366,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 					evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardIDAndKey, cal.TransOK, "")
 					evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
 					evt.Completed()
-					return true, errors.New("Unsupported both HERA_SET_SHARD_ID and ShardKey")
+					return true, errors.New("unsupported both HERA_SET_SHARD_ID and ShardKey")
 				}
 
 				key, vals := crd.parseShardKey(requests[i].Payload)

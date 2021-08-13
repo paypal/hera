@@ -26,6 +26,7 @@ import (
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -97,7 +98,8 @@ func (p *tafResponsePreproc) Write(bf []byte) (int, error) {
 }
 
 // removeFetchSize replaces fetch chunk size value with zero. For simplicity we remove the fetch size hint. Fetch hint should not be used anyways for TAF case
-func (crd *Coordinator) removeFetchSize(request *netstring.Netstring) *netstring.Netstring {
+// func (crd *Coordinator) removeFetchSize(request *netstring.Netstring) *netstring.Netstring {
+func (crd *Coordinator) removeFetchSize(request *encoding.Packet) *encoding.Packet {
 	nss := crd.nss
 	for i := range nss {
 		if nss[i].Cmd == common.CmdFetch {
@@ -122,7 +124,8 @@ func (crd *Coordinator) removeFetchSize(request *netstring.Netstring) *netstring
 // When the primary database health decreases, we start sending the some requests directly to the fallback database.
 // If the primary is completely down, we still send 1% of requests to the primary, as a "health check", so that
 // we can c ompletely switch to the primary when the primary eventualy comes back up
-func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
+// func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
+func (crd *Coordinator) DispatchTAFSession(request *encoding.Packet) error {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "TAFSession: starting")
 	}

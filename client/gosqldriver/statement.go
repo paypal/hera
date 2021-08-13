@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -91,7 +92,9 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and CmdBindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+	// nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and CmdBindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+	nss := make([]*encoding.Packet, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and CmdBindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -139,9 +142,9 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 		case common.RcSQLError:
 			return nil, fmt.Errorf("SQL error: %s", string(ns.Payload))
 		case common.RcError:
-			return nil, fmt.Errorf("Internal hera error: %s", string(ns.Payload))
+			return nil, fmt.Errorf("internal hera error: %s", string(ns.Payload))
 		default:
-			return nil, fmt.Errorf("Unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
+			return nil, fmt.Errorf("unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
 		}
 	}
 	// it was columns number, irelevant for DML
@@ -150,7 +153,7 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 		return nil, err
 	}
 	if ns.Cmd != common.RcValue {
-		return nil, fmt.Errorf("Unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
+		return nil, fmt.Errorf("unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
 	}
 	res := &result{}
 	res.nRows, err = strconv.Atoi(string(ns.Payload))
@@ -176,7 +179,9 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*CmdClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+	// nss := make([]*netstring.Netstring, crid /*CmdClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+	nss := make([]*encoding.Packet, crid /*CmdClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
+
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -228,9 +233,9 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 		case common.RcSQLError:
 			return nil, fmt.Errorf("SQL error: %s", string(ns.Payload))
 		case common.RcError:
-			return nil, fmt.Errorf("Internal hera error: %s", string(ns.Payload))
+			return nil, fmt.Errorf("internal hera error: %s", string(ns.Payload))
 		default:
-			return nil, fmt.Errorf("Unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
+			return nil, fmt.Errorf("unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
 		}
 	}
 	// it was columns number, irelevant for DML
@@ -239,7 +244,7 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 		return nil, err
 	}
 	if ns.Cmd != common.RcValue {
-		return nil, fmt.Errorf("Unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
+		return nil, fmt.Errorf("unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
 	}
 	res := &result{}
 	res.nRows, err = strconv.Atoi(string(ns.Payload))
@@ -264,7 +269,9 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
+	// nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
+	nss := make([]*encoding.Packet, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
+
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -306,7 +313,8 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		return nil, err
 	}
 
-	var ns *netstring.Netstring
+	// var ns *netstring.Netstring
+	var ns *encoding.Packet
 Loop:
 	for {
 		ns, err = st.hera.getResponse()
@@ -323,9 +331,9 @@ Loop:
 			case common.RcSQLError:
 				return nil, fmt.Errorf("SQL error: %s", string(ns.Payload))
 			case common.RcError:
-				return nil, fmt.Errorf("Internal hera error: %s", string(ns.Payload))
+				return nil, fmt.Errorf("internal hera error: %s", string(ns.Payload))
 			default:
-				return nil, fmt.Errorf("Unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
+				return nil, fmt.Errorf("unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
 			}
 		} else {
 			break Loop
@@ -341,7 +349,7 @@ Loop:
 		return nil, err
 	}
 	if ns.Cmd != common.RcValue {
-		return nil, fmt.Errorf("Unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
+		return nil, fmt.Errorf("unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
 	}
 	// number of rows is ignored
 	_, err = strconv.Atoi(string(ns.Payload))
@@ -368,7 +376,9 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
+	// nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
+	nss := make([]*encoding.Packet, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
+
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -414,7 +424,9 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 		return nil, err
 	}
 
-	var ns *netstring.Netstring
+	// var ns *netstring.Netstring
+	var ns *encoding.Packet
+
 Loop:
 	for {
 		ns, err = st.hera.getResponse()
@@ -431,9 +443,9 @@ Loop:
 			case common.RcSQLError:
 				return nil, fmt.Errorf("SQL error: %s", string(ns.Payload))
 			case common.RcError:
-				return nil, fmt.Errorf("Internal hera error: %s", string(ns.Payload))
+				return nil, fmt.Errorf("internal hera error: %s", string(ns.Payload))
 			default:
-				return nil, fmt.Errorf("Unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
+				return nil, fmt.Errorf("unknown code: %d, data: %s", ns.Cmd, string(ns.Payload))
 			}
 		} else {
 			break Loop
@@ -449,7 +461,7 @@ Loop:
 		return nil, err
 	}
 	if ns.Cmd != common.RcValue {
-		return nil, fmt.Errorf("Unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
+		return nil, fmt.Errorf("unknown code2: %d, data: %s", ns.Cmd, string(ns.Payload))
 	}
 	// number of rows is ignored
 	_, err = strconv.Atoi(string(ns.Payload))

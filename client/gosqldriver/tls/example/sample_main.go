@@ -35,7 +35,6 @@ func main() {
 	}
 	defer rows.Close()
 
-	count := 0
 	for rows.Next() {
 		var rstatus, wstatus sql.NullString
 		err = rows.Scan(&rstatus, &wstatus)
@@ -43,7 +42,5 @@ func main() {
 			fmt.Println("fetch err", err.Error())
 			return
 		}
-		count++;
 	}
-	fmt.Printf("Sucessfully read %v rows from sample.\n", count)
 }

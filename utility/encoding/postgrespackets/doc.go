@@ -15,44 +15,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gosqldriver
-
-import (
-	"errors"
-	"fmt"
-
-	"github.com/paypal/hera/common"
-)
-
-// implements sql/driver Tx interface
-type tx struct {
-	hera *heraConnection
-}
-
-func (t *tx) cmd(cmd int) error {
-	if t.hera == nil {
-		return errors.New("invalid connection")
-	}
-	hera := t.hera
-	t.hera = nil
-	err := hera.exec(cmd, nil)
-	if err != nil {
-		return err
-	}
-	ns, err := hera.getResponse()
-	if err != nil {
-		return err
-	}
-	if ns.Cmd != common.RcOK {
-		return fmt.Errorf("got error=%d", ns.Cmd)
-	}
-	return nil
-}
-
-func (t *tx) Commit() error {
-	return t.cmd(common.CmdCommit)
-}
-
-func (t *tx) Rollback() error {
-	return t.cmd(common.CmdRollback)
-}
+// Package mysqlpackets provides the functions to read and write mysqlpackets
+package postgrespackets

@@ -92,7 +92,7 @@ func (r *rows) Close() error {
 // Next should return io.EOF when there are no more rows.
 func (r *rows) Next(dest []driver.Value) error {
 	if logger.GetLogger().V(logger.Verbose) {
-		//		logger.GetLogger().Log(logger.Verbose, r.hera.id, "Rows.Next(): currentRow = ", r.currentRow, ", numValues =", len(dest))
+		logger.GetLogger().Log(logger.Verbose, r.hera.id, "Rows.Next(): currentRow = ", r.currentRow, ", numValues =", len(dest))
 	}
 	if r.cols*r.currentRow == len(r.vals) {
 		if r.completed {

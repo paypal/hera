@@ -33,6 +33,7 @@ import (
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility/encoding"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -71,10 +72,12 @@ type workerMsg struct {
 	// the request counter / Id
 	rqId uint32
 	// the actual message to be sent to the client
-	ns *netstring.Netstring
+	// ns *netstring.Netstring
+	ns *encoding.Packet
 }
 
-func (msg *workerMsg) GetNetstring() *netstring.Netstring {
+// func (msg *workerMsg) GetNetstring() *netstring.Netstring {
+func (msg *workerMsg) GetNetstring() *encoding.Packet {
 	if msg.ns == nil {
 		msg.ns, _ = NetstringFromBytes(msg.data)
 	}
@@ -487,6 +490,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	// wait for control message
 	ns, err := netstring.NewNetstring(worker.workerConn)
 	if err != nil {
+		logger.GetLogger().Log(logger.Info, "error is here 1")
 		return err
 	}
 
@@ -887,7 +891,8 @@ func (worker *WorkerClient) doRead() {
 }
 
 // Write sends a message to the worker
-func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error {
+// func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error {
+func (worker *WorkerClient) Write(ns *encoding.Packet, nsCount uint16) error {
 	worker.setState(wsBusy)
 
 	worker.rqId += uint32(nsCount)

@@ -20,14 +20,16 @@ package lib
 import (
 	"bytes"
 	"errors"
-	"github.com/paypal/hera/common"
-	"github.com/paypal/hera/utility"
-	"github.com/paypal/hera/utility/encoding/netstring"
 	"io"
 	"net"
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/utility"
+	"github.com/paypal/hera/utility/encoding"
+	"github.com/paypal/hera/utility/encoding/netstring"
 )
 
 // WriteAll writes data in a loop until all is sent
@@ -126,7 +128,8 @@ func IPAddrStr(address net.Addr) string {
 }
 
 // NetstringFromBytes creates a netstring containing data as payload.
-func NetstringFromBytes(data []byte) (*netstring.Netstring, error) {
+// func NetstringFromBytes(data []byte) (*netstring.Netstring, error) {
+func NetstringFromBytes(data []byte) (*encoding.Packet, error) {
 	reader := bytes.NewReader(data)
 	ns, err := netstring.NewNetstring(reader)
 	if err != nil {
@@ -138,11 +141,13 @@ func NetstringFromBytes(data []byte) (*netstring.Netstring, error) {
 // ExtractSQLHash parse request to see if it has an embedded PREPARE statement.
 // if there is one, compute and return the sqlhash and true.
 // otherwise, return 0 and false
-func ExtractSQLHash(request *netstring.Netstring) (uint32, bool) {
+// func ExtractSQLHash(request *netstring.Netstring) (uint32, bool) {
+func ExtractSQLHash(request *encoding.Packet) (uint32, bool) {
 	//
 	// create a collection of flat netstrings (e.g. de-subnetstring)
 	//
-	var nss []*netstring.Netstring
+	// var nss []*netstring.Netstring
+	var nss []*encoding.Packet
 	var err error
 	if request.Cmd == (netstring.CodeSubCommand - '0') {
 		nss, err = netstring.SubNetstrings(request)
