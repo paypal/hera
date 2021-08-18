@@ -1,4 +1,4 @@
-// Copyright 2019 PayPal Inc.
+// Copyright 2021 PayPal Inc.
 //
 // Licensed to the Apache Software Foundation (ASF) under one or more
 // contributor license agreements.  See the NOTICE file distributed with
@@ -26,23 +26,23 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
 	"github.com/paypal/hera/worker/shared"
 )
 
-type mysqlAdapter struct {
+type postgresAdapter struct {
 }
 
-func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser, error) {
+func (adapter *postgresAdapter) MakeSqlParser() (common.SQLParser, error) {
 	return common.NewRegexSQLParser()
 }
 
-// InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
+// InitDB creates sql.DB object for conection to the database, using "username", "password" and
 // "mysql_datasource" parameters
-func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
+func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
 	user := os.Getenv("username")
 	pass := os.Getenv("password")
 	ds := os.Getenv("mysql_datasource")
@@ -73,13 +73,19 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 
 	var db *sql.DB
 	var err error
+	// 
+	// postgres://pqgotest:password@localhost/pqgotest?sslmode=verify-full
+	// user=pqgotest dbname=pqgotest sslmode=verify-full
+	// host=%s port=%d user=%s password=%s dbname=%s sslmode=disable
+	//
 	for idx, curDs := range strings.Split(ds, "||") {
 		user := os.Getenv("username")
 		pass := os.Getenv("password")
 		attempt := 1
 		is_writable := false
 		for attempt <= 3 {
-			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
+			//db, err = sql.Open("postgres", fmt.Sprintf("user=%s password=%s %s", user, pass, curDs))
+			db, err = sql.Open("postgres", fmt.Sprintf("postgres://%s:%s@%s", user, pass, curDs))
 			if err != nil {
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
@@ -142,7 +148,10 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 }
 
 // Checking master status
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
+func (adapter *postgresAdapter) Heartbeat(db *sql.DB) bool {
+	return true
+}
+func (adapter *postgresAdapter) HeartbeatOld(db *sql.DB) bool {
 	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	writable := false
 	conn, err := db.Conn(ctx)
@@ -193,12 +202,12 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 	return writable
 }
 
-// UseBindNames return false because the SQL string uses ? for bind parameters
-func (adapter *mysqlAdapter) UseBindNames() bool {
+// UseBindNames return false because the SQL string uses $1 $2 for bind parameters
+func (adapter *postgresAdapter) UseBindNames() bool {
 	return false
 }
-func (adapter *mysqlAdapter) UseBindQuestionMark() bool {
-	return true
+func (adapter *postgresAdapter) UseBindQuestionMark() bool {
+	return false
 }
 
 /**
@@ -221,67 +230,40 @@ var colTypeMap = map[string]int{
 	"TIMESTAMP": 185,
 }
 
-func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
+func (adapter *postgresAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
+func (adapter *postgresAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
 	errStr := errToProcess.Error()
+
+	// parse errors
+	// some fatal errors should set shutdown
+	// (*workerScope).Child_shutdown_flag = true
 
 	if strings.HasPrefix(errStr, "driver: bad connection") {
 		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "mysql ProcessError badConnRecycle "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd)
+			logger.GetLogger().Log(logger.Warning, "postgres ProcessError badConnRecycle "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd)
 		}
-		(*workerScope).Child_shutdown_flag = true
 		return
 	}
 
+	/*
 	idx := strings.Index(errStr, ":")
 	if idx < 0 || idx >= len(errStr) {
 		return
 	}
 	var errno int
 	fmt.Sscanf(errStr[6:idx], "%d", &errno)
+	// */
 
 	if logger.GetLogger().V(logger.Warning) {
-		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d", errno))
+		logger.GetLogger().Log(logger.Warning, "postgres ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd) // +fmt.Sprintf(" errno:%d", errno))
 	}
 
-	switch errno {
-	case 0:
-		fallthrough // if there isn't a normal error number
-	case 1153:
-		fallthrough // pkt too large
-	case 1154:
-		fallthrough // read err fr pipe
-	case 1155:
-		fallthrough // err fnctl
-	case 1156:
-		fallthrough // pkt order
-	case 1157:
-		fallthrough // err uncompress
-	case 1158:
-		fallthrough // err read
-	case 1159:
-		fallthrough // read timeout
-	case 1160:
-		fallthrough // err write
-	case 1161:
-		fallthrough // write timeout
-	case 1290:
-		fallthrough // read-only mode
-	case 1317:
-		fallthrough // query interupt
-	case 1836:
-		fallthrough // read-only mode
-	case 1874:
-		fallthrough // innodb read-only
-	case 1878: // temp file write fail
-		(*workerScope).Child_shutdown_flag = true
-	}
 }
 
-func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {
+func (adapter *postgresAdapter) ProcessResult(colType string, res string) string {
 	switch colType {
 	case "DATE":
 		var day, month, year int
