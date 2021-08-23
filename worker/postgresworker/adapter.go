@@ -18,15 +18,14 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
@@ -147,61 +146,10 @@ func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
 	return db, err
 }
 
-// Checking master status
 func (adapter *postgresAdapter) Heartbeat(db *sql.DB) bool {
+	// perhaps - select inet_server_addr()
 	return true
 }
-func (adapter *postgresAdapter) HeartbeatOld(db *sql.DB) bool {
-	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
-	writable := false
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
-		}
-		return writable
-	}
-	defer conn.Close()
-
-	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
-		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
-		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
-		if err != nil {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
-			}
-			return false
-		}
-		defer stmt.Close()
-
-		rows, err := stmt.Query()
-		if err != nil {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
-			}
-			return false
-		}
-		defer rows.Close()
-		countRows := 0
-		if rows.Next() {
-			countRows++
-			var readOnly int
-			/*var nom string
-			rows.Scan(&nom, &readOnly) // */
-			rows.Scan(&readOnly)
-			if readOnly == 0 {
-				writable = true
-			}
-		}
-
-		// read only connection
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "writable:", writable)
-		}
-	}
-	return writable
-}
-
 // UseBindNames return false because the SQL string uses $1 $2 for bind parameters
 func (adapter *postgresAdapter) UseBindNames() bool {
 	return false
@@ -237,9 +185,50 @@ func (adapter *postgresAdapter) GetColTypeMap() map[string]int {
 func (adapter *postgresAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
 	errStr := errToProcess.Error()
 
-	// parse errors
-	// some fatal errors should set shutdown
-	// (*workerScope).Child_shutdown_flag = true
+	pgErr, ok := errToProcess.(*pq.Error)
+	if !ok {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "not postgres error type", errStr)
+		}
+		return
+	}
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose,
+			"s=",pgErr.Severity,                             // Sample: ERROR
+			"m=",pgErr.Message,                              // Sample: syntax error at end of input
+			"(",pgErr.Code.Class(), pgErr.Code.Name(),")",   // Sample: 42 syntax_error
+			"d=",pgErr.Detail,
+			"h=",pgErr.Hint,
+			"p=",pgErr.Position,                             // Sample: 69
+			"i=",pgErr.InternalPosition,
+			"q=",pgErr.InternalQuery,
+			"w=",pgErr.Where,
+			"schema=",pgErr.Schema,
+			"t=",pgErr.Table,
+			"c=",pgErr.Column,
+			"dtn=",pgErr.DataTypeName,
+			"c=",pgErr.Constraint,
+			"f=",pgErr.File,                                 // Sample: scan.l
+			"l=",pgErr.Line,                                 // Sample: 1115
+			"r=",pgErr.Routine )                             // Sample: scanner_yyerror
+	}
+
+	switch pgErr.Code.Class().Name() {
+	case "08": fallthrough // Connection Exception
+	case "24": fallthrough // Invalid Cursor State
+	case "25": fallthrough // Invalid Transaction State
+	case "2D": fallthrough // Invalid Transaction Termination
+	case "3B": fallthrough // Savepoint Exception
+	//case "53": fallthrough // Insufficient Resources
+	case "58": fallthrough // External System Error
+	case "XX": fallthrough // Internal Error
+	case "handleErrorClass":
+		// some fatal errors should set shutdown
+		(*workerScope).Child_shutdown_flag = true
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, pgErr.Code.Class().Name()+"=errClass postgres ProcessError setting child shutdown flag "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd)
+		}
+	}
 
 	if strings.HasPrefix(errStr, "driver: bad connection") {
 		if logger.GetLogger().V(logger.Warning) {
@@ -247,15 +236,6 @@ func (adapter *postgresAdapter) ProcessError(errToProcess error, workerScope *sh
 		}
 		return
 	}
-
-	/*
-	idx := strings.Index(errStr, ":")
-	if idx < 0 || idx >= len(errStr) {
-		return
-	}
-	var errno int
-	fmt.Sscanf(errStr[6:idx], "%d", &errno)
-	// */
 
 	if logger.GetLogger().V(logger.Warning) {
 		logger.GetLogger().Log(logger.Warning, "postgres ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd) // +fmt.Sprintf(" errno:%d", errno))
