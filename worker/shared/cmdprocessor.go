@@ -49,6 +49,7 @@ type CmdProcessorAdapter interface {
 	// ProcessResult is used for date related types to translate between the database format to the mux format
 	ProcessResult(colType string, res string) string
 	UseBindNames() bool
+	UseBindQuestionMark() bool // true for mysql, false for postgres $1 $2 binds
 }
 
 // bindType defines types of bind variables
@@ -871,6 +872,7 @@ func (cp *CmdProcessor) calExecErr(field string, err string) {
 func (cp *CmdProcessor) preprocess(query string) string {
 	//
 	// @TODO strip comment sections which could have ":".
+	// @TODO duplicate bind names
 	//
 
 	//
@@ -889,7 +891,24 @@ func (cp *CmdProcessor) preprocess(query string) string {
 		cp.bindPos[i] = val
 	}
 	if !(cp.adapter.UseBindNames()) {
-		query = cp.regexBindName.ReplaceAllString(query, "?")
+		if cp.adapter.UseBindQuestionMark() {
+			query = cp.regexBindName.ReplaceAllString(query, "?")
+		} else {
+			var dollarBindQuery strings.Builder
+			curIdx := 0
+			// TODO share FindAll.. with binds, also check bind order!
+			for _,matchIdx := range cp.regexBindName.FindAllStringIndex(query, -1) {
+				curBindName := query[matchIdx[0]:matchIdx[1]]
+				dollarBindQuery.WriteString(query[curIdx:matchIdx[0]])
+				dollarBindQuery.WriteString(fmt.Sprintf("$%d",cp.bindVars[curBindName].index+1))
+				curIdx = matchIdx[1]
+			}
+			dollarBindQuery.WriteString(query[curIdx:])
+			query = dollarBindQuery.String()
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, query, "dollarBindQ")
+			}
+		}
 	}
 	return query
 }
