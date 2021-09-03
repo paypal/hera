@@ -59,6 +59,9 @@ func (adapter *oracleAdapter) InitDB() (*sql.DB, error) {
 func (adapter *oracleAdapter) UseBindNames() bool {
 	return true
 }
+func (adapter *oracleAdapter) UseBindQuestionMark() bool {
+	return true
+}
 
 /**
  * @TODO

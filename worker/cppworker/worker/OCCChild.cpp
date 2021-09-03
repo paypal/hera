@@ -1374,9 +1374,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	WRITE_LOG_ENTRY(logfile, LOG_VERBOSE,"oracle_connect_timeout %i", oracle_connect_timeout);
 
 	if(db_username.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"username not found in the config file.");
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"username not found");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
-		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=oracle_username not found in config.");
+		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=oracle_username not found");
 		client_session.get_session_transaction()->AddDataToRoot("m_err", "ORALCE_USERNAME_NOT_FOUND");
 		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
 		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
@@ -1384,9 +1384,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	}
 
 	if(db_password.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"password not found in the config file.");
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"password not found");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
-		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=password not found in config.");
+		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=password not found");
 		client_session.get_session_transaction()->AddDataToRoot("m_err", "PWD_NOT_FOUND");
 		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
 		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
