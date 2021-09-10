@@ -49,26 +49,27 @@ func CfgFromTns(name string) {
 		}
 	}
 
+	twoTaskSuffix := os.Getenv("TWO_TASK_SUFFIX")
 	var ok bool
 	numShards := 0
 	tafShards := 0
 	rwShards := 0
 	for {
-		dbName := fmt.Sprintf("%s_SH%d", baseName, numShards)
+		dbName := fmt.Sprintf("%s_SH%d%s", baseName, numShards, twoTaskSuffix)
 		_,ok = tnsEntries[dbName]
 		if !ok {
 			break
 		}
 		os.Setenv(fmt.Sprintf("TWO_TASK_%d",numShards), dbName)
 
-		dbName = fmt.Sprintf("%s2_SH%d", baseName[:len(baseName)-1], numShards)
+		dbName = fmt.Sprintf("%s2_SH%d%s", baseName[:len(baseName)-1], numShards, twoTaskSuffix)
 		_,ok = tnsEntries[dbName]
 		if ok && baseName[len(baseName)-2] == 'R' {
 			tafShards++
 			os.Setenv(fmt.Sprintf("TWO_TASK_STANDBY0_%d",numShards), dbName)
 		}
 
-		dbName = fmt.Sprintf("%s_%s_SH%d", baseName, rwSuffix, numShards)
+		dbName = fmt.Sprintf("%s_%s_SH%d%s", baseName, rwSuffix, numShards, twoTaskSuffix)
 		_,ok = tnsEntries[dbName]
 		if ok {
 			rwShards++
@@ -95,7 +96,7 @@ func CfgFromTns(name string) {
 	}
 
 	if numShards == 0 {
-		dbName := baseName[:len(baseName)-1]+"2"
+		dbName := baseName[:len(baseName)-1]+"2"+twoTaskSuffix
 		_,ok = tnsEntries[dbName] // taf
 		if ok && baseName[len(baseName)-2] == 'R' {
 			GetConfig().EnableTAF=true
@@ -103,13 +104,15 @@ func CfgFromTns(name string) {
 			os.Setenv("TWO_TASK_STANDBY0", dbName)
 		}
 
-		dbName = baseName+"_"+rwSuffix
+		dbName = baseName+"_"+rwSuffix+twoTaskSuffix
 		_,ok = tnsEntries[dbName]
 		if ok {
 			logErr("rw-split=true")
 			GetConfig().ReadonlyPct=50
 			os.Setenv("TWO_TASK_READ", dbName)
 		}
+
+		os.Setenv("TWO_TASK", baseName+twoTaskSuffix)
 	}
 
 	if GetConfig().CfgFromTnsOverrideNumShards != -1 {
