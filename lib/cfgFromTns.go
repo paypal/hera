@@ -43,8 +43,10 @@ func CfgFromTns(name string) {
 
 	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN")+"/tnsnames.ora")
 	if err != nil {
+		logErr("now trying ORACLE_HOME tnsnames")
 		tnsEntries, err = loadTns(os.Getenv("ORACLE_HOME")+"/network/admin/tnsnames.ora")
 		if err != nil {
+			logErr(err.Error())
 			return
 		}
 	}
@@ -82,7 +84,7 @@ func CfgFromTns(name string) {
 		GetConfig().EnableSharding=true
 		GetConfig().NumOfShards=numShards
 		// shard key must be configured
-		logErr(fmt.Sprintf("numShards=%d %d",numShards,tafShards))
+		logErr(fmt.Sprintf("numShards=%d taf:%d rw:%d",numShards,tafShards,rwShards))
 
 		if numShards == tafShards {
 			GetConfig().EnableTAF=true
@@ -112,7 +114,12 @@ func CfgFromTns(name string) {
 			os.Setenv("TWO_TASK_READ", dbName)
 		}
 
-		os.Setenv("TWO_TASK", baseName+twoTaskSuffix)
+		dbName = baseName+twoTaskSuffix
+		_,ok = tnsEntries[dbName]
+		if ok {
+			logErr("setting TWO_TASK "+dbName)
+			os.Setenv("TWO_TASK", dbName)
+		}
 	}
 
 	if GetConfig().CfgFromTnsOverrideNumShards != -1 {
@@ -137,7 +144,6 @@ func loadTns(tnsFname string) (map[string]int, error) {
 	out := make(map[string]int)
 	fh, err := os.Open(tnsFname)
 	if err != nil {
-		logErr(err.Error())
 		return nil,err
 	}
 	defer fh.Close()
@@ -148,7 +154,11 @@ func loadTns(tnsFname string) (map[string]int, error) {
 		line := scanner.Text()
 		if parenCnt == 0 {
 			// try to pick off name
-			idx := strings.Index(line,"=")
+			idx  := strings.Index(line,"=")
+			idx2 := strings.Index(line,"<") // substitution delimiter
+			if idx2 > 0 && idx2 < idx {
+				idx = idx2
+			}
 			if idx > 0 {
 				for ;line[idx-1] == ' ';idx-- {} // trim spaces before =
 				name := line[0:idx]
