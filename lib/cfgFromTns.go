@@ -113,7 +113,7 @@ func CfgFromTns(name string) {
 
 		dbName = baseName+twoTaskSuffix
 		_,ok = tnsEntries[dbName]
-		if ok {
+		if ok || "" == os.Getenv("TWO_TASK") {
 			logErr("setting TWO_TASK "+dbName)
 			os.Setenv("TWO_TASK", dbName)
 		}
