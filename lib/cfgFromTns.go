@@ -25,6 +25,7 @@ import (
 )
 
 
+
 // name hera-winky-batch 
 // state log prefix hera
 func CfgFromTns(name string) {
@@ -41,14 +42,10 @@ func CfgFromTns(name string) {
 		baseName = baseName[0:idx]
 	}
 
-	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN")+"/tnsnames.ora")
+	tnsEntries, err := FindTns()
 	if err != nil {
-		logErr("now trying ORACLE_HOME tnsnames")
-		tnsEntries, err = loadTns(os.Getenv("ORACLE_HOME")+"/network/admin/tnsnames.ora")
-		if err != nil {
-			logErr(err.Error())
-			return
-		}
+		logErr(err.Error())
+		return
 	}
 
 	twoTaskSuffix := os.Getenv("TWO_TASK_SUFFIX")
@@ -140,8 +137,22 @@ func logErr(msg string) {
 	fmt.Println("cfgFromTns",msg)
 }
 
-func loadTns(tnsFname string) (map[string]int, error) {
-	out := make(map[string]int)
+func FindTns() (map[string]string, error) {
+	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN")+"/tnsnames.ora")
+	if err != nil {
+		logErr("now trying ORACLE_HOME tnsnames")
+		tnsEntries, err = loadTns(os.Getenv("ORACLE_HOME")+"/network/admin/tnsnames.ora")
+		if err != nil {
+			logErr(err.Error())
+			return nil, err
+		}
+		return tnsEntries, err
+	}
+	return tnsEntries, err
+}
+
+func loadTns(tnsFname string) (map[string]string, error) {
+	out := make(map[string]string)
 	fh, err := os.Open(tnsFname)
 	if err != nil {
 		return nil,err
@@ -162,7 +173,7 @@ func loadTns(tnsFname string) (map[string]int, error) {
 			if idx > 0 {
 				for ;line[idx-1] == ' ';idx-- {} // trim spaces before =
 				name := line[0:idx]
-				out[name] = lineCnt
+				out[name] = line[idx+1:]
 			}
 		}
 		for i:=0;i<len(line);i++ {
