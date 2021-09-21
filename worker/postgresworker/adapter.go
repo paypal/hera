@@ -24,8 +24,8 @@ import (
 	"os"
 	"strings"
 
-	_ "github.com/lib/pq"
 	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
@@ -246,17 +246,22 @@ func (adapter *postgresAdapter) ProcessError(errToProcess error, workerScope *sh
 func (adapter *postgresAdapter) ProcessResult(colType string, res string) string {
 	switch colType {
 	case "DATE":
-		var day, month, year int
-		fmt.Sscanf(res, "%d-%d-%d", &year, &month, &day)
-		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, 0, 0, 0)
+		fallthrough
 	case "TIME":
-		var hour, min, sec int
-		fmt.Sscanf(res, "%d:%d:%d", &hour, &min, &sec)
-		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", 0, 0, 0, hour, min, sec)
-	case "TIMESTAMP", "DATETIME":
+		fallthrough
+	case "TIMESTAMP":
+		fallthrough
+	case "TIMESTAMPTZ":
 		var day, month, year, hour, min, sec int
-		fmt.Sscanf(res, "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &min, &sec)
-		return fmt.Sprintf("%02d-%02d-%d %02d:%02d:%02d.000", day, month, year, hour, min, sec)
+		fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &min, &sec)
+		return fmt.Sprintf("%02d-%02d-%04d %02d:%02d:%02d.000", day, month, year, hour, min, sec)
+	case "TIMETZ":
+		var day, month, year, hour, min, sec, pr, tzh, tzm int
+		fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d%d:%d", &year, &month, &day, &hour, &min, &sec, &tzh, &tzm)
+		if tzh == 0 && tzm == 0 {
+			fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d.%d%d:%d", &year, &month, &day, &hour, &min, &sec, &pr, &tzh, &tzm)	
+		}
+		return fmt.Sprintf("%02d-%02d-%04d %02d:%02d:%02d.000 %+03d:%02d", day, month, year, hour, min, sec, tzh, tzm)
 	default:
 		return res
 	}
