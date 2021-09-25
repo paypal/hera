@@ -61,7 +61,7 @@ jobs:
         cd /home/runner/go/pgserv
         ln -s ../bin/mux  mux
         ln -s ../bin/postgresworker postgresworker
-        ./mux &
+        ./mux --name hera-test &
         ps -ef | grep mux
         ps -ef | grep postgresworker
         cat /home/runner/go/pgserv/cal.log
