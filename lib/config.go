@@ -265,16 +265,19 @@ func InitConfig() error {
 		if gAppConfig.ChildExecutable == "" {
 			gAppConfig.ChildExecutable = "oracleworker"
 		}
-	} else {
-		if strings.EqualFold(databaseType, "mysql") {
-			gAppConfig.DatabaseType = MySQL
-			if gAppConfig.ChildExecutable == "" {
-				gAppConfig.ChildExecutable = "mysqlworker"
-			}
-		} else {
-			// db type is not supported
-			return errors.New("database type must be either Oracle or MySQL")
+	} else if strings.EqualFold(databaseType, "mysql") {
+		gAppConfig.DatabaseType = MySQL
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "mysqlworker"
 		}
+	} else if strings.EqualFold(databaseType, "postgres") {
+		gAppConfig.DatabaseType = POSTGRES
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "postgresworker"
+		}
+	} else {
+	// db type is not supported
+		return errors.New("database type must be either Oracle or MySQL")
 	}
 
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
