@@ -48,7 +48,16 @@ jobs:
       run: | 
         go install github.com/paypal/hera/worker/postgresworker
         go install github.com/paypal/hera/mux
-      
+        
+    - name: run hera mux and pg worker
+      run: |
+        export username='postgres'
+        export password='postgres'
+        export TWO_TASK='127.0.0.1/postgres?connect_timeout=60&sslmode=disable'
+        mkdir ~/pgserv
+        
+        
+        
     - name: Set up JDK 8
       uses: actions/setup-java@v2
       with:
