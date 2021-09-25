@@ -43,6 +43,11 @@ jobs:
         
     - name: whereami
       run: pwd
+    
+    - name: installhera
+      run: | 
+        go install github.com/paypal/hera/worker/postgresworker
+        go install github.com/paypal/hera/mux
       
     - name: Set up JDK 8
       uses: actions/setup-java@v2
