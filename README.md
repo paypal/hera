@@ -142,9 +142,6 @@ There is a Java client implemented as JDBC driver. Please see the [documentation
 
 There is also a Go client implemented as [SQL driver](client/gosqldriver). Please see the [example](tests/e2e/client).
 
-## Github Action
-Software development workflow
-
 ## License
 
 Hera is licensed under Apache 2.0.
