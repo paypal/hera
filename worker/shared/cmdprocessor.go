@@ -760,6 +760,9 @@ outloop:
 			err = nil
 		}
 	case common.CmdRollback:
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "Rollback")
+		}
 		if cp.tx != nil {
 			calevt := cal.NewCalEvent("ROLLBACK", "Local", cal.TransOK, "")
 			err = cp.tx.Rollback()
