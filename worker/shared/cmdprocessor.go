@@ -438,7 +438,12 @@ outloop:
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Execute error:", err.Error())
 				}
-				if cp.inTrans {
+				// Adding additional check to see if txn is already open. cp.inTrans is set to true only when a DML ran successfully. 
+				// If the first statement in a txn fails, worker thinks that it is not in a txn and returns EOR free to mux. 
+				// The worker moves from Busy -> Finished -> Accept again. The rollback sent by the client is a NoOp and mux responds OK. 
+				// The older txn is not closed and is used for newer transactions too, thereby causing the "PSQLException: current transaction is aborted, commands ignored until end of transaction block"
+				// Adding this check ensures that the worker is moved to wait state and waits for the client to send either commit/rollback. 
+				if cp.inTrans || cp.tx != nil {
 					cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
 				} else {
 					cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
