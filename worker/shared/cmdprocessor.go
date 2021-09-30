@@ -181,6 +181,8 @@ type WorkerScopeType struct {
 
 const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
 
+const ErrInFailedTransaction = "pq: Could not complete operation in a failed transaction"
+
 // NewCmdProcessor creates the processor using th egiven adapter
 func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
 	cs := os.Getenv("CAL_CLIENT_SESSION")
@@ -729,8 +731,18 @@ outloop:
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Commit error:", err.Error())
 				}
-				calevt.AddDataStr("RC", err.Error())
-				calevt.SetStatus(cal.TransError)
+				// This is a postgres specific error that is returned by the pq driver to the client to indicate that the client 
+				// atttempted to commit a failed transaction. It does a rollback instead of commit and returns the message. 
+				//  For more details refer: https://github.com/lib/pq/blob/master/conn.go#L571
+				if err.Error() == ErrInFailedTransaction {
+					logger.GetLogger().Log(logger.Debug, "Issued Commit in a failed transaction")
+					calevt.AddDataStr("RC", err.Error())
+					cp.tx = nil
+					err = nil
+				} else {
+					calevt.AddDataStr("RC", err.Error())
+					calevt.SetStatus(cal.TransError)
+				}
 			} else {
 				cp.tx = nil
 			}
