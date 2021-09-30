@@ -114,6 +114,7 @@ using namespace occ;
 #define MAX_DYNAMIC_BIND_ROWS	1		//!< How many rows of data do we accept in an out-bound placeholder
 
 #define DEFAULT_SEND_BUF_SIZE  (128*1024)   // 128k, useful especially for large insert payloads
+#define RETRIES 3
 
 static unsigned int MAX_ARRAY_DATA_SIZE = 65534;   //!< Size of the largest column for array bind
 static const unsigned int DEFAULT_MAX_FETCH_BLOCK_SIZE = 20;	//!< Default number of rows to fetch at a time.
@@ -904,6 +905,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			
 			uint sklen = m_shard_key_name.length();
 			if (0 == strncasecmp(bind_var_name, m_shard_key_name.c_str(), sklen)) {
+
 				// extra check, to accept names like party_id_0
 				if ((bind_var_name[sklen] == 0) || (strncmp(bind_var_name + sklen, "_0", 2) == 0)) {
 
@@ -916,25 +918,26 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						if (logfile->get_log_level() >= LOG_VERBOSE)
 							WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id null in sql rewrite to mirror null shard key value");
 					} else {
-						unsigned long long scuttle_id_val = StringUtil::to_ullong(bind_values);
-						StringUtil::fmt_ulong(bind_values, compute_scuttle_id(scuttle_id_val));
-						bind_value_max_size = bind_values.length();
+						std::string scuttle_id_str_val;
+						StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
+						bind_value_max_size = scuttle_id_str_val.length();
 
 						if (m_scuttle_id.empty()){
-							m_scuttle_id = bind_values;
+							m_scuttle_id = scuttle_id_str_val;
 							if (logfile->get_log_level() >= LOG_VERBOSE)
 								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id %s in sql rewrite bindArrayMultiple:%d", m_scuttle_id.c_str(), bind_num);
 						}
 	
 						type = OCC_TYPE_STRING;
-						bind_value = bind_values;
-						bind_value_size[0] = bind_value.length();
+						bind_values.clear();
+						bind_values.append(scuttle_id_str_val);
+						bind_value_size[0] = scuttle_id_str_val.length();
 						for (int i=1; i<bind_num; i++) {
 							bind_values.append("\0", 1);
-							//scuttle id is same//bind_values.resize((i+1)*(bind_value_max_size+1));
-							bind_values.append(bind_value);
-							bind_value_size[i+1] = bind_value.length();
+							bind_values.append(scuttle_id_str_val);
+							bind_value_size[i] = bind_value_max_size;
 						}
+
 						bind(scuttle_id, bind_values, bind_value_size, bind_value_max_size, bind_num, (DataType)type);
 					} // non-null
 				}
@@ -1371,9 +1374,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	WRITE_LOG_ENTRY(logfile, LOG_VERBOSE,"oracle_connect_timeout %i", oracle_connect_timeout);
 
 	if(db_username.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"username not found in the config file.");
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"username not found");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
-		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=oracle_username not found in config.");
+		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=oracle_username not found");
 		client_session.get_session_transaction()->AddDataToRoot("m_err", "ORALCE_USERNAME_NOT_FOUND");
 		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
 		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
@@ -1381,9 +1384,9 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	}
 
 	if(db_password.empty()) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"password not found in the config file.");
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT,"password not found");
 		CalTransaction::Status s(CAL::TRANS_FATAL, CAL::MOD_OCC, CAL::SYS_ERR_CONFIG, -1);
-		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=password not found in config.");
+		CalEvent e(CAL::EVENT_TYPE_FATAL, "Oracle Session", s, "m_err=password not found");
 		client_session.get_session_transaction()->AddDataToRoot("m_err", "PWD_NOT_FOUND");
 		client_session.get_session_transaction()->AddDataToRoot("m_errtype","CONNECT");
 		client_session.get_session_transaction()->SetStatus(CAL::SYSTEM_FAILURE, CalActivity::CAL_SET_ROOT_STATUS);
@@ -1510,18 +1513,33 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		return -1;
 	}
 
-	rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
-			(dvoid *) const_cast<char*>(db_password.c_str()), (ub4) strlen(db_password.c_str()),
-			(ub4) OCI_ATTR_PASSWORD, errhp);
-	if(rc!=OCI_SUCCESS) {
-		log_oracle_error(rc,"Failed to set the password.");
-		return -1;
+	char envStr[12] = "password";
+	for(int i=0; i < RETRIES; i++) {
+		if( i > 0) {
+			sprintf(envStr, "password%d", i+1);
+			WRITE_LOG_ENTRY(logfile, LOG_ALERT,"Login Retry Attempt...:%d", i);
+			std::ostringstream err;
+			err << "m_err=Login failed, Attempting with next available credentials,Attempt="<<i;
+			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
+		}
+		std::string db_pswd = getenv(envStr);
+		if(!db_pswd.empty()) {
+			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
+				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
+				(ub4) OCI_ATTR_PASSWORD, errhp);
+			if(rc!=OCI_SUCCESS) {
+				log_oracle_error(rc,"Failed to set the password.");
+				return -1;
+			}
+
+			//create the user session
+			rc = OCISessionBegin(svchp, errhp, authp, OCI_CRED_RDBMS,
+						(ub4) OCI_DEFAULT);
+			if(rc == OCI_SUCCESS) {
+				break;
+			}
+		}
 	}
-
-
-	//create the user session
-	rc = OCISessionBegin(svchp,	 errhp, authp, OCI_CRED_RDBMS, 
-			(ub4) OCI_DEFAULT);
 	if(rc!=OCI_SUCCESS) {
 		log_oracle_error(rc,"Failed to log in the user session.");
 		return -1;

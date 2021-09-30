@@ -103,6 +103,11 @@ type Config struct {
 	HostnamePrefix       map[string]string
 	ShardingCrossKeysErr bool
 
+	CfgFromTns					bool
+	CfgFromTnsOverrideNumShards int // -1 no-override
+	CfgFromTnsOverrideTaf       int // -1 no-override, 0 override-false, 1 override-true
+	CfgFromTnsOverrideRWSplit   int // -1 no-override, readChildPct
+
 	//
 	// statelog printing interval (in sec)
 	//
@@ -265,71 +270,74 @@ func InitConfig() error {
 		if gAppConfig.ChildExecutable == "" {
 			gAppConfig.ChildExecutable = "oracleworker"
 		}
-	} else {
-		if strings.EqualFold(databaseType, "mysql") {
-			gAppConfig.DatabaseType = MySQL
-			if gAppConfig.ChildExecutable == "" {
-				gAppConfig.ChildExecutable = "mysqlworker"
-			}
-		} else {
-			// db type is not supported
-			return errors.New("database type must be either Oracle or MySQL")
+	} else if strings.EqualFold(databaseType, "mysql") {
+		gAppConfig.DatabaseType = MySQL
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "mysqlworker"
 		}
+	} else if strings.EqualFold(databaseType, "postgres") {
+		gAppConfig.DatabaseType = POSTGRES
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "postgresworker"
+		}
+	} else {
+	// db type is not supported
+		return errors.New("database type must be either Oracle or MySQL")
 	}
 
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
-	gAppConfig.NumOfShards = 1
-	if gAppConfig.EnableSharding {
-		gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
-		if gAppConfig.UseShardMap {
-			gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
-		}
-		if (gAppConfig.NumOfShards < 1) || (gAppConfig.NumOfShards > 48) {
-			return errors.New("num_shards must be between 1 and 48")
-		}
-		gAppConfig.ShardKeyName = strings.ToLower(cdb.GetOrDefaultString("shard_key_name", ""))
-		gAppConfig.MaxScuttleBuckets = cdb.GetOrDefaultInt("max_scuttle", 1024)
-		if (gAppConfig.MaxScuttleBuckets < 1) || (gAppConfig.MaxScuttleBuckets > 1024) {
-			return errors.New("max_scuttle must be between 1 and 1024")
-		}
-		gAppConfig.ScuttleColName = cdb.GetOrDefaultString("scuttle_col_name", "scuttle_id")
-		if len(gAppConfig.ScuttleColName) == 0 {
-			return errors.New("scuttle_col_name is empty string")
-		}
-		algo := cdb.GetOrDefaultString("sharding_algo", "hash")
-		algo = strings.ToUpper(algo)
-		if algo == "HASH" {
-			gAppConfig.ShardingAlgoHash = true
-		} else {
-			if algo == "MOD" {
-				gAppConfig.ShardingAlgoHash = false
-			} else {
-				return errors.New("sharding_algo must be either hash or mod")
-			}
-		}
-		gAppConfig.ShardingPostfix = cdb.GetOrDefaultString("sharding_postfix", "")
-		gAppConfig.EnableWhitelistTest = cdb.GetOrDefaultBool("enable_whitelist_test", false)
-		if gAppConfig.EnableWhitelistTest {
-			gAppConfig.NumWhitelistChildren = cdb.GetOrDefaultInt("whitelist_children", 5)
-		}
-		gAppConfig.ShardingCfgReloadInterval = cdb.GetOrDefaultInt("sharding_cfg_reload_interval", 2)
-		gAppConfig.ShardingCrossKeysErr = cdb.GetOrDefaultBool("sharding_cross_keys_err", false)
-		gAppConfig.ShardKeyValueTypeIsString = cdb.GetOrDefaultBool("shard_key_value_type_is_string", false)
+	gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
+	gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
+	if (gAppConfig.NumOfShards < 1) || (gAppConfig.NumOfShards > 48) {
+		return errors.New("num_shards must be between 1 and 48")
 	}
+	gAppConfig.ShardKeyName = strings.ToLower(cdb.GetOrDefaultString("shard_key_name", ""))
+	gAppConfig.MaxScuttleBuckets = cdb.GetOrDefaultInt("max_scuttle", 1024)
+	if (gAppConfig.MaxScuttleBuckets < 1) || (gAppConfig.MaxScuttleBuckets > 1024) {
+		return errors.New("max_scuttle must be between 1 and 1024")
+	}
+	gAppConfig.ScuttleColName = cdb.GetOrDefaultString("scuttle_col_name", "scuttle_id")
+	if len(gAppConfig.ScuttleColName) == 0 {
+		return errors.New("scuttle_col_name is empty string")
+	}
+	algo := cdb.GetOrDefaultString("sharding_algo", "hash")
+	algo = strings.ToUpper(algo)
+	if algo == "HASH" {
+		gAppConfig.ShardingAlgoHash = true
+	} else {
+		if algo == "MOD" {
+			gAppConfig.ShardingAlgoHash = false
+		} else {
+			return errors.New("sharding_algo must be either hash or mod")
+		}
+	}
+	gAppConfig.ShardingPostfix = cdb.GetOrDefaultString("sharding_postfix", "")
+	gAppConfig.EnableWhitelistTest = cdb.GetOrDefaultBool("enable_whitelist_test", false)
+	if gAppConfig.EnableWhitelistTest {
+		gAppConfig.NumWhitelistChildren = cdb.GetOrDefaultInt("whitelist_children", 5)
+	}
+	gAppConfig.ShardingCfgReloadInterval = cdb.GetOrDefaultInt("sharding_cfg_reload_interval", 2)
+	gAppConfig.ShardingCrossKeysErr = cdb.GetOrDefaultBool("sharding_cross_keys_err", false)
+	gAppConfig.ShardKeyValueTypeIsString = cdb.GetOrDefaultBool("shard_key_value_type_is_string", false)
 
 	gAppConfig.HostnamePrefix = parseMapStrStr(cdb.GetOrDefaultString("hostname_prefix", ""))
 
+	gAppConfig.CfgFromTns = cdb.GetOrDefaultBool("cfg_from_tns", true)
+	gAppConfig.CfgFromTnsOverrideNumShards = cdb.GetOrDefaultInt("cfg_from_tns_override_num_shards", -1)
+	gAppConfig.CfgFromTnsOverrideTaf = cdb.GetOrDefaultInt("cfg_from_tns_override_taf", -1)
+	gAppConfig.CfgFromTnsOverrideRWSplit = cdb.GetOrDefaultInt("cfg_from_tns_override_rw_split", -1)
+
 	// TAF stuff
 	gAppConfig.EnableTAF = cdb.GetOrDefaultBool("enable_taf", false)
+	gAppConfig.TAFTimeoutMs = uint32(cdb.GetOrDefaultInt("taf_timeout_ms", 200))
+	gAppConfig.TAFBinDuration = cdb.GetOrDefaultInt("taf_bin_duration", 3600*24)
+	gAppConfig.TAFAllowSlowEveryX = cdb.GetOrDefaultInt("taf_allow_slow_every_x", 100)
+	gAppConfig.TAFNormallySlowCount = cdb.GetOrDefaultInt("taf_normally_slow_count", 5)
 	if gAppConfig.EnableTAF {
-		gAppConfig.TAFTimeoutMs = uint32(cdb.GetOrDefaultInt("taf_timeout_ms", 200))
-		gAppConfig.TAFBinDuration = cdb.GetOrDefaultInt("taf_bin_duration", 3600*24)
-		gAppConfig.TAFAllowSlowEveryX = cdb.GetOrDefaultInt("taf_allow_slow_every_x", 100)
-		gAppConfig.TAFNormallySlowCount = cdb.GetOrDefaultInt("taf_normally_slow_count", 5)
 		InitTAF(gAppConfig.NumOfShards)
-		// TODO:
-		gAppConfig.NumStdbyDbs = 1
 	}
+	// TODO:
+	gAppConfig.NumStdbyDbs = 1
 
 	var numWorkers int
 	numWorkers = 6

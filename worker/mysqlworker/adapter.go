@@ -80,58 +80,31 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		is_writable := false
 		for attempt <= 3 {
 			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
-			if err != nil {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, user+" failed to connect to "+curDs+fmt.Sprintf(" %d", idx))
-				}
-				calTrans.AddDataStr("m_err", err.Error())
-				calTrans.AddDataStr("m_errtype", "CONNECT")
-				calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
-				calTrans.SetStatus(cal.TransFatal)
-				break
-			}
-			is_writable = adapter.Heartbeat(db)
-			if is_writable {
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
-				}
-				err = nil
-				break
-			} else {
-				// read only connection
-				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("Attempt=%d", attempt))
+			if err == nil {
+				is_writable = adapter.Heartbeat(db)
+				if is_writable {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
+					}
+					err = nil
+					break
 				}
 				db.Close()
-				if attempt == 1 { // If attempt 1 failed then try with password2
-					if os.Getenv("password2") !=  "" {
-						pass = os.Getenv("password2")
-					} else  {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "Password2 not found for " +curDs)
-						}
-						attempt = attempt + 1
-					}
-				}
-				if attempt == 2 { // If attempt 2 failed then try with password3
-					if os.Getenv("password3") !=  "" {
-						pass = os.Getenv("password3")
-					}  else {
-						if logger.GetLogger().V(logger.Info) {
-							logger.GetLogger().Log(logger.Info, "Password3 not found for " +curDs)
-						}
-						attempt = attempt + 1
-					}
-				}
-				attempt = attempt + 1
-				if attempt >= 3 {
-					calTrans.AddDataStr("m_err", "READONLY_CONN")
-					calTrans.AddDataStr("m_errtype", "CONNECT")
-					calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
-					calTrans.SetStatus(cal.TransFatal)
-					err = errors.New("cannot use read-only conn " + curDs)
-				}
 			}
+			attempt = attempt + 1
+			// read only connection
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("Attempt=%d", attempt))
+			}
+			pwdStr := fmt.Sprintf("password%d", attempt)
+			pass = os.Getenv(pwdStr)
+		}
+		if attempt > 3 {
+			calTrans.AddDataStr("m_err", "READONLY_CONN")
+			calTrans.AddDataStr("m_errtype", "CONNECT")
+			calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
+			calTrans.SetStatus(cal.TransFatal)
+			err = errors.New("cannot use read-only conn " + curDs)
 		}
 		if is_writable {
 			break
@@ -196,6 +169,10 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 // UseBindNames return false because the SQL string uses ? for bind parameters
 func (adapter *mysqlAdapter) UseBindNames() bool {
 	return false
+}
+
+func (adapter *mysqlAdapter) UseBindQuestionMark() bool {
+	return true
 }
 
 /**
