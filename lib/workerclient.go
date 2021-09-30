@@ -363,6 +363,18 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	envUpsert(&attr, "password2", dbPassword2)
 	envUpsert(&attr, "password3", dbPassword3)
 	envUpsert(&attr, "mysql_datasource", twoTask)
+	if twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
+		tnsnames, err := FindTns()
+		if err == nil {
+			dsn, ok := tnsnames[twoTask]
+			if ok {
+				envUpsert(&attr, "mysql_datasource", dsn)
+				logger.GetLogger().Log(logger.Debug, "looked up datasource "+twoTask+" in tnsnames "+dsn)
+			} else {
+				logger.GetLogger().Log(logger.Alert, "mux could not lookup "+twoTask+" in tnsnames, hoping client library can lookup")
+			}
+		}
+	}
 
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
