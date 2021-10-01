@@ -569,7 +569,7 @@ outloop:
 				// no bind outs
 				resns := netstring.NewNetstringEmbedded(nss)
 				cp.eor(common.EORInTransaction, resns)
-			} else if cp.inTrans {
+			} else if cp.inTrans || cp.tx != nil {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
 				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
