@@ -120,6 +120,7 @@ type dbtype int
 const (
 	Oracle dbtype = iota
 	MySQL
+	POSTGRES
 )
 
 // env variables to workers
