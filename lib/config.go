@@ -288,6 +288,9 @@ func InitConfig() error {
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
 	gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
 	gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
+	if gAppConfig.EnableSharding == false || gAppConfig.UseShardMap == false {
+		gAppConfig.NumOfShards = 1
+	}
 	if (gAppConfig.NumOfShards < 1) || (gAppConfig.NumOfShards > 48) {
 		return errors.New("num_shards must be between 1 and 48")
 	}
