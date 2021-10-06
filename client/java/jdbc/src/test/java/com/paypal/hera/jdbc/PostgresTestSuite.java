@@ -8,6 +8,7 @@ import org.junit.runners.Suite;
 
 @Suite.SuiteClasses({
         PgCurdTest.class,
+        PostgresTxnTest.class,
 })
 
 public class PostgresTestSuite {
