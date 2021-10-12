@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	//"net"
+	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -34,6 +34,7 @@ type WorkerType int
 const (
 	OracleWorker WorkerType = iota
 	MySQLWorker
+	PostgresWorker
 )
 
 type mux struct {
@@ -87,8 +88,10 @@ func (m *mux) setupConfig() error {
 	for k,v := range m.opscfg {
 		m.appcfg[k] = v
 	}
-	if m.wType != OracleWorker {
+	if m.wType == MySQLWorker {
 		m.appcfg["child.executable"] = "mysqlworker"
+	} else if m.wType == PostgresWorker {
+		m.appcfg["child.executable"] = "postgresworker"
 	}
 	err := createCfg(m.appcfg, "hera")
 	if err != nil {
@@ -155,6 +158,7 @@ func (m *mux) cleanupConfig() error {
 	os.Remove("cal_client.txt")
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
+	os.Remove("postgresworker")
 	return nil
 }
 
@@ -207,6 +211,102 @@ func MakeMysql(dockerName string, dbName string) (ip string) {
 
 	return ipBuf.String()
 }
+
+func MakePostgres(dockerName string, dbName string) (ip string) {
+	// disable for migration to Github Actions
+	CleanPostgres(dockerName)
+
+	cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
+	cmd.Run()
+
+	// find its IP
+	cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
+	var ipBuf bytes.Buffer
+	cmd.Stdout = &ipBuf
+	cmd.Run()
+	ipBuf.Truncate(ipBuf.Len() - 1)
+
+	for {
+		conn, err := net.Dial("tcp", ipBuf.String()+":5432")
+		if err != nil {
+			time.Sleep(1 * time.Second)
+			logger.GetLogger().Log(logger.Debug, "waiting for postgres server to come up "+ipBuf.String()+" "+dockerName)
+			continue
+		} else {
+			conn.Close()
+			break
+		}
+	}
+	// ipBuf := bytes.NewBufferString("localhost")
+
+	os.Setenv("username", "postgres")
+	os.Setenv("password", "1-testDb")
+	q := "CREATE USER appuser PASSWORD '1-testDb'"
+	//logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+	err := PostgresDirect(q, ipBuf.String(), dbName)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
+	}
+	q = "GRANT ALL PRIVILEGES ON DATABASE " + dbName + " TO appuser;"
+	//logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
+	err = PostgresDirect(q, ipBuf.String(), dbName)
+	if err != nil {
+		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
+	} else {
+		os.Setenv("username", "appuser")
+	}
+	os.Setenv("postgresql_ip", ipBuf.String())
+
+	return ipBuf.String()
+}
+
+func CleanPostgres(dockerName string) {
+	cleanCmd := exec.Command("docker", "stop", dockerName)
+	cleanCmd.Run()
+	cleanCmd = exec.Command("docker", "rm", dockerName)
+	cleanCmd.Run()
+}
+
+func PostgresDirect(query string, ip string, dbName string) error {
+	if dbs == nil {
+		dbs = make(map[string]*sql.DB)
+	}
+	db0, ok := dbs[ip+dbName]
+	if !ok {
+		fullDsn := fmt.Sprintf("postgres://%s:%s@%s/%s?connect_timeout=60&sslmode=disable",
+			os.Getenv("username"),
+			os.Getenv("password"),
+			ip,
+			dbName)
+		//fmt.Println("fullDsn",fullDsn)
+		var err error
+		db0, err = sql.Open("postgres", fullDsn)
+		if err != nil {
+			return err
+		}
+		db0.SetMaxIdleConns(0)
+		// defer db0.Close()
+		dbs[ip+dbName] = db0
+	}
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	conn0, err := db0.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn0.Close()
+	stmt0, err := conn0.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt0.Close()
+	_, err = stmt0.Exec()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func CleanMysql(dockerName string) {
 	cleanCmd := exec.Command("docker", "stop", dockerName)
 	cleanCmd.Run()
@@ -262,7 +362,7 @@ func (m *mux) StartServer() error {
 	if err != nil {
 		return err
 	}
-	if m.wType != OracleWorker {
+	if m.wType == MySQLWorker {
 		xMysql, ok := m.appcfg["x-mysql"]
 		if !ok {
 			xMysql = "auto"
