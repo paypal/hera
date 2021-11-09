@@ -4,19 +4,20 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/unittest/testutil"
-	"github.com/paypal/hera/utility/logger"
 	"os"
-	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
 //var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
-
+	fmt.Println ("setup() begin")
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
@@ -35,6 +36,9 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	} 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -104,45 +108,26 @@ END;
 /
 */
 func setupShardMap(t *testing.T) {
-	twoTask := os.Getenv("TWO_TASK")
-	if !strings.HasPrefix(twoTask, "tcp") {
-		// not mysql
-		return
-	}
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-	if err != nil {
-		t.Fatal("Error starting Mux:", err)
-		return
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	defer conn.Close()
-
+	testutil.RunDML("DROP TABLE IF EXISTS test_str_sk")
 	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
-	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
-
-	for i := 0; i < 1024; i++ {
-		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 0, 'Y', 'Y', 'Y' )", i) )
+	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
+	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id smallint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+	err := testutil.PopulateShardMap(1024)
+	if err != nil {
+		t.Fatalf("Error populating shard map %s\n", err.Error())
 	}
 }
 
 func TestShardingStr(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestShardingStr function, now setting up shard map")
+	logger.GetLogger().Log(logger.Debug, "TestShardingStr function, creating tables and setting up shard map")
 	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 
-
-	// -1 as the shard does a reset so all the automatic things should work instead of assigning to a specific shard
-	shard := -1
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname,_ := os.Hostname()
+    fmt.Println ("Hostname: ", hostname);
+	
+	db, err := sql.Open("hera", hostname + ":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -160,7 +145,7 @@ func TestShardingStr(t *testing.T) {
 
 	tx, _ := conn.BeginTx(ctx, nil)
 	// create table test_str_sk (email_addr varchar(64), note varchar(64));
-	sqlDesc := "ins:test_str_sk"
+	sqlDesc := "ins_test_str_sk"
 	stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (email_addr, note) VALUES ( :email_addr, :note)")
 	if err != nil {
 		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())

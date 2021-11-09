@@ -16,6 +16,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -139,8 +140,12 @@ func (m *mux) setupConfig() error {
 	} else {
 		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
 	} // */
-
+	// Until Migration to Github Actions 
+	if m.wType == PostgresWorker {
+		os.Symlink(os.Getenv("GOPATH")+"/bin/postgresworker", "postgresworker")
+	}
 	os.Remove("hera.log")
+	os.Remove("occ.log")
 	os.Remove("cal.log")
 	os.Remove("state.log")
 	_, err = os.Create("state.log")
@@ -255,9 +260,8 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("postgresql_ip", ipBuf.String())
 
 		return ipBuf.String()
-	} else {
-		return ""
-	}
+	} 
+	return ""
 }
 
 func CleanDB(dockerName string) {
@@ -365,7 +369,21 @@ func (m *mux) StartServer() error {
 			tableString := "create table " + tableName + " ( INST_ID INT,  MACHINE VARCHAR(512),  STATUS VARCHAR(8),  STATUS_TIME INT,  MODULE VARCHAR(64) );"
 			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
 		}
-	}
+	} else if m.wType == PostgresWorker {
+		xPostgres, ok := m.appcfg["x-postgres"]
+		if !ok {
+			xPostgres = "auto"
+		}
+		if xPostgres == "auto" {
+			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
+			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
+			twoTask := os.Getenv("TWO_TASK")
+        	os.Setenv ("TWO_TASK_0", twoTask)
+        	os.Setenv ("TWO_TASK_1", twoTask)
+			twoTask1 := os.Getenv("TWO_TASK")
+			fmt.Println ("TWO_TASK_1: ", twoTask1)
+		}
+	} 
 
 	m.wg.Add(1)
 	go func() {
@@ -406,6 +424,10 @@ func (m *mux) StopServer() {
 	if m.dbServ != nil {
 		m.dbStop()
 		syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
+	}
+
+	if m.wType == PostgresWorker {
+		CleanDB("postgres22")
 	}
 
 	timer := time.NewTimer(time.Second * 5)
