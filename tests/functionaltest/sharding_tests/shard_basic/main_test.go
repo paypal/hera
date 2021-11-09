@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/functionaltest/testutil"
-        "github.com/paypal/hera/utility/logger"
-        _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"os"
 	"testing"
 	"time"
+
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -35,6 +36,9 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	} 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
