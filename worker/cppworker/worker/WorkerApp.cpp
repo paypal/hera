@@ -32,7 +32,7 @@
 #include "worker/WorkerFactory.h"
 
 // environment vars
-#define ENV_MODULE "OCC_NAME"
+#define ENV_MODULE "HERA_NAME"
 #define ENV_LOG_PREFIX "logger.LOG_PREFIX"
 #define ENV_CAL_CLIENT_SESSION "CAL_CLIENT_SESSION"
 #define ENV_DB_HOSTNAME "DB_HOSTNAME"

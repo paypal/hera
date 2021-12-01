@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"time"
 	"testing"
+	"time"
 
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -63,7 +63,7 @@ var dbName = "failovertestdb"
 
 func TestMain(m *testing.M) {
 	// startup mysql DBs
-	ip1 := testutil.MakeMysql("mysql33", dbName)
+	ip1 := testutil.MakeDB("mysql33", dbName, testutil.MySQL)
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=11s")
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }

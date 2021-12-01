@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+
 	//"os/exec"
 	"testing"
 	"time"
@@ -53,8 +54,8 @@ var dbName = "failovertestdb"
 
 func TestMain(m *testing.M) {
 	// startup two mysql DBs
-	ip1 = testutil.MakeMysql("mysql33",dbName)
-	ip2 = testutil.MakeMysql("mysql44",dbName)
+	ip1 = testutil.MakeDB("mysql33",dbName,testutil.MySQL)
+	ip2 = testutil.MakeDB("mysql44",dbName,testutil.MySQL)
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=1s||tcp("+ip2+":3306)/"+dbName+"?timeout=1s")
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
@@ -209,7 +210,7 @@ func TestFailover3(t *testing.T) {
 
 
 func mysqlDirect(query string, t *testing.T) {
-	err := testutil.MysqlDirect(query, ip1, dbName)
+	err := testutil.DBDirect(query, ip1, dbName, testutil.MySQL)
 	if err != nil {
 		t.Fatalf("mysqlDirect "+query+ip1+dbName+err.Error())
 	}

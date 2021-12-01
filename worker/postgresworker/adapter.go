@@ -18,11 +18,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
@@ -147,8 +149,49 @@ func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
 }
 
 func (adapter *postgresAdapter) Heartbeat(db *sql.DB) bool {
-	// perhaps - select inet_server_addr()
-	return true
+	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+	writable := false
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
+		}
+		return writable
+	}
+	defer conn.Close()
+	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
+		stmt, err := conn.PrepareContext(ctx, "select pg_is_in_recovery()")
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
+			}
+			return false
+		}
+		defer stmt.Close()
+
+		rows, err := stmt.Query()
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
+			}
+			return false
+		}
+		defer rows.Close()
+		if rows.Next() {
+			var readOnly bool
+			rows.Scan(&readOnly)
+			logger.GetLogger().Log(logger.Debug,"Scanned value", readOnly)
+			if !readOnly {
+				writable = true
+			}
+		}
+
+		// read only connection
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "writable:", writable)
+		}
+	}
+	return writable
 }
 // UseBindNames return false because the SQL string uses $1 $2 for bind parameters
 func (adapter *postgresAdapter) UseBindNames() bool {

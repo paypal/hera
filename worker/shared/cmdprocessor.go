@@ -181,6 +181,8 @@ type WorkerScopeType struct {
 
 const LAST_INSERT_ID_BIND_OUT_NAME = ":p5000"
 
+const ErrInFailedTransaction = "pq: Could not complete operation in a failed transaction"
+
 // NewCmdProcessor creates the processor using th egiven adapter
 func NewCmdProcessor(adapter CmdProcessorAdapter, sockMux *os.File, sockMuxCtrl *os.File) *CmdProcessor {
 	cs := os.Getenv("CAL_CLIENT_SESSION")
@@ -438,7 +440,12 @@ outloop:
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Execute error:", err.Error())
 				}
-				if cp.inTrans {
+				// Adding additional check to see if txn is already open. cp.inTrans is set to true only when a DML ran successfully. 
+				// If the first statement in a txn fails, worker thinks that it is not in a txn and returns EOR free to mux. 
+				// The worker moves from Busy -> Finished -> Accept again. The rollback sent by the client is a NoOp and mux responds OK. 
+				// The older txn is not closed and is used for newer transactions too, thereby causing the "PSQLException: current transaction is aborted, commands ignored until end of transaction block"
+				// Adding this check ensures that the worker is moved to wait state and waits for the client to send either commit/rollback. 
+				if cp.inTrans || cp.tx != nil {
 					cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
 				} else {
 					cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
@@ -562,7 +569,7 @@ outloop:
 				// no bind outs
 				resns := netstring.NewNetstringEmbedded(nss)
 				cp.eor(common.EORInTransaction, resns)
-			} else if cp.inTrans {
+			} else if cp.inTrans || cp.tx != nil {
 				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
 			} else {
 				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
@@ -724,8 +731,18 @@ outloop:
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Commit error:", err.Error())
 				}
-				calevt.AddDataStr("RC", err.Error())
-				calevt.SetStatus(cal.TransError)
+				// This is a postgres specific error that is returned by the pq driver to the client to indicate that the client 
+				// atttempted to commit a failed transaction. It does a rollback instead of commit and returns the message. 
+				//  For more details refer: https://github.com/lib/pq/blob/master/conn.go#L571
+				if err.Error() == ErrInFailedTransaction {
+					logger.GetLogger().Log(logger.Debug, "Issued Commit in a failed transaction")
+					calevt.AddDataStr("RC", err.Error())
+					cp.tx = nil
+					err = nil
+				} else {
+					calevt.AddDataStr("RC", err.Error())
+					calevt.SetStatus(cal.TransError)
+				}
 			} else {
 				cp.tx = nil
 			}
@@ -743,6 +760,9 @@ outloop:
 			err = nil
 		}
 	case common.CmdRollback:
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "Rollback")
+		}
 		if cp.tx != nil {
 			calevt := cal.NewCalEvent("ROLLBACK", "Local", cal.TransOK, "")
 			err = cp.tx.Rollback()
