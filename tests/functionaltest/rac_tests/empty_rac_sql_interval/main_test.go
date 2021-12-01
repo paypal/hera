@@ -54,7 +54,8 @@ func TestMain(m *testing.M) {
 }
 
 /* #####################################################################################
- #  This test case tests rac feature disabled- rac_sql_interval = 0
+ #  This test case tests rac feature is enabled when rac_sql_interval = ""
+ #
  #######################################################################################*/
 
 func TestEmptyRacInterval(t *testing.T) {
@@ -73,23 +74,23 @@ func TestEmptyRacInterval(t *testing.T) {
         if err != nil {
                 t.Fatalf("Error inserting RAC maint row  %s\n", err.Error())
         }
-        time.Sleep(8000 * time.Millisecond)
+        time.Sleep(10000 * time.Millisecond)
 
 	fmt.Println ("Verify mux will NOT detect RAC status change")
-        if ( testutil.RegexCount ("Rac maint activating") > 0) {
-		 t.Fatalf ("Error: should NOT have Rac maint activating");
+        if ( testutil.RegexCount ("Rac maint activating") < 0) {
+		 t.Fatalf ("Error: should have Rac maint activating");
         }
 
-        fmt.Println ("Verify no CAL log for RAC events");
+        fmt.Println ("Verify CAL log for RAC change events");
 	count := testutil.RegexCountFile (  "E.*RACMAINT_INFO_CHANGE.*0.*inst:0 status:R.*module:HERA-TEST", "cal.log")
-        if ( count > 0 ) {
-		t.Fatalf ("Error: should NOT have Rac maint event");
+        if ( count < 0 ) {
+		t.Fatalf ("Error: should have Rac maint event");
         }
 
-        time.Sleep(4500 * time.Millisecond)
-        fmt.Printf ("Verify worker NOT retarted")
-        if ( testutil.RegexCount ("Lifespan exceeded, terminate") > 0) {
-		 t.Fatalf ("Error: should NOT have 'Lifespan exceeded, terminate' in log");
+        time.Sleep(6500 * time.Millisecond)
+        fmt.Printf ("Verify worker retarted")
+        if ( testutil.RegexCount ("Lifespan exceeded, terminate") < 0) {
+		 t.Fatalf ("Error: should have 'Lifespan exceeded, terminate' in log");
         }
 	row_count := testutil.Fetch ("Select Name from test_simple_table_2 where accountID = 12345");
         if (row_count != 1) {

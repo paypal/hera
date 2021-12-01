@@ -104,7 +104,7 @@ func TestWriteSaturation(t *testing.T) {
 	if ( testutil.RegexCountFile ("HARD_EVICTION.*1629405935", "cal.log")  < 2){
             t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count < 2) {
             t.Fatalf ("Error: expected at least 2 SATURATION_RECOVERED events")
         }
