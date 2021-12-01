@@ -98,7 +98,7 @@ func TestSaturationRecycle(t *testing.T) {
         }
 
 	fmt.Println ("Verify worker recovery events after saturation kill")
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count < 4) {
             t.Fatalf ("Error: expected at least 4 SATURATION_RECOVERED events" );
         }

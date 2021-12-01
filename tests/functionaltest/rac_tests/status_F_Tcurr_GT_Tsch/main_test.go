@@ -123,6 +123,7 @@ func TestStatusF_Tcurr_GT_Tsch(t *testing.T) {
                 t.Fatalf("Expected 1 row")
         }
 
+        time.Sleep(5000 * time.Millisecond)
  	fmt.Println ("Verify no more  RACMAINT event after worker restart");
 	if ( testutil.RegexCountFile("E.*RACMAINT_INFO_CHANGE.*F.*0", "cal.log") > count) {
            t.Fatalf ("Error: should NOT have RACMAINT event after worker restarted");

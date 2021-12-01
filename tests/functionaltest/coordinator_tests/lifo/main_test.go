@@ -21,12 +21,6 @@ var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
-
-	twoTask := os.Getenv("TWO_TASK")
-        os.Setenv ("TWO_TASK_READ", twoTask)
-        twoTask = os.Getenv("TWO_TASK_READ")
-        fmt.Println ("TWO_TASK_READ: ", twoTask)
-
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"

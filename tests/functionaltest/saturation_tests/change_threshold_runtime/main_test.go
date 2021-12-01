@@ -96,7 +96,7 @@ func TestChangeThresholdAtRuntime(t *testing.T) {
 
 	fmt.Println ("Verify SATURATION event")
 	hcount := testutil.RegexCountFile ("HARD_EVICTION", "cal.log")
-	if ( hcount < 3) {
+	if ( hcount < 1) {
             t.Fatalf ("Error: expected at least 1 HARD_EVICTION event");
         }
 	count := testutil.RegexCountFile ("STRANDED.*RECYCLED_SATURATION", "cal.log")

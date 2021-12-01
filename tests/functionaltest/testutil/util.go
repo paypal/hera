@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"bytes"
 	"bufio"
 	"context"
 	"database/sql"
@@ -21,7 +22,7 @@ var (
 	INCOMPLETE = errors.New("Incomplete row")
 )
 
-func statelogGetField(pos int) (int, error) {
+func StatelogGetField(pos int) (int, error) {
 	out, err := exec.Command("/bin/bash", "-c", "/usr/bin/tail -n 1 state.log").Output()
 	if err != nil {
 		return -1, err
@@ -50,7 +51,9 @@ func statelogGetField(pos int) (int, error) {
 func BashCmd(cmd string) ([]byte, error) {
 	return exec.Command("/bin/bash", "-c", cmd).Output()
 }
-
+/*
+* Helper function for select, can be used when error happens during Fetch
+*/
 func RunSelect(query string) {
         hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
@@ -105,10 +108,26 @@ func Fetch (query string) (int) {
         stmt, _ := conn.PrepareContext(ctx, query)
         defer stmt.Close()
         rows, _ := stmt.Query()
-        for rows.Next() {
-                count++;
+	if err != nil {
+                fmt.Println("Error while querying: ", err)
+                return count;
         }
+	if rows != nil {
+             for rows.Next() {
+                 count++;
+             }
+	}
         return count;
+}
+
+//Run mysql command line
+func RunMysql(sql string) (string, error) {
+        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
+        cmd.Stdin = strings.NewReader(sql)
+        var cmdOutBuf bytes.Buffer
+        cmd.Stdout = &cmdOutBuf
+        cmd.Run()
+        return cmdOutBuf.String(), nil
 }
 
 
@@ -123,7 +142,6 @@ func RunDML(dml string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	// cancel must be called before conn.Close()
 	defer cancel()
-	// cleanup and insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -203,6 +221,51 @@ func PopulateShardMap(max_scuttle int) error {
        	    defer stmt.Close()
             _, err = stmt.Exec()
 	}
+        if err != nil {
+                return err
+        }
+        err = tx.Commit()
+        if err != nil {
+                return err
+        }
+
+        fmt.Println ("***Done loading shard map")
+        return nil
+}
+
+func PopulateWhilelistShardMap() error {
+	var query [9]string
+	query[0] = "drop table IF EXISTS hera_whitelist"  
+	query[1] = "create table hera_whitelist (SHARD_KEY int NOT NULL, SHARD_ID int NOT NULL, ENABLE CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))"
+	query[2] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 000, 0, 'Y', 'Y' )"
+	query[3] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 111, 1, 'Y', 'Y' )"
+	query[4] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 222, 2, 'Y', 'Y' )"
+	query[5] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 333, 3, 'Y', 'Y' )"
+	query[6] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 444, 4, 'Y', 'Y' )"
+	query[7] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 555, 5, 'Y', 'Y' )"
+	query[8] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 1234, 4, 'Y', 'Y' )"
+        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
+        if err != nil {
+                return err
+        }
+        db.SetMaxIdleConns(0)
+        defer db.Close()
+
+        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+        // cancel must be called before conn.Close()
+        defer cancel()
+        // cleanup and insert one row in the table
+        conn, err := db.Conn(ctx)
+        if err != nil {
+                return err
+        }
+        defer conn.Close()
+        tx, _ := conn.BeginTx(ctx, nil)
+        for x := 0; x < len (query) ; x++ {
+            stmt, _ := tx.PrepareContext(ctx, query[x])
+            defer stmt.Close()
+            _, err = stmt.Exec() 
+        }
         if err != nil {
                 return err
         }
