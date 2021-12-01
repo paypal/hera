@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/functionaltest/testutil"
-        "github.com/paypal/hera/utility/logger"
-	"github.com/paypal/hera/client/gosqldriver"
-        _ "github.com/paypal/hera/client/gosqldriver/tcp"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/paypal/hera/client/gosqldriver"
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -36,6 +37,9 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	}
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -93,7 +97,7 @@ func TestSetResetShardID(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 
-	fmt.Println ("Set Shard ID to shard 4")
+	
 	mux := gosqldriver.InnerConn(conn)
         shards, err:= mux.GetNumShards()
         if err != nil {
@@ -103,8 +107,9 @@ func TestSetResetShardID(t *testing.T) {
                 t.Fatalf("Expected 5 shards")
         }
 
+	fmt.Println ("Set Shard ID to shard 4")
+	mux.SetShardID(4)
 	fmt.Println ("Insert using shard 4")
-        mux.SetShardID(4)
 	tx, _ := conn.BeginTx(ctx, nil)
 	stmt, _ := tx.PrepareContext(ctx, "/* TestSetResetShardID */insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
 	_, err = stmt.Exec(sql.Named("ID", "12346"), sql.Named("Name", "Steve"), sql.Named("Status", 999))

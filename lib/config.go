@@ -270,21 +270,27 @@ func InitConfig() error {
 		if gAppConfig.ChildExecutable == "" {
 			gAppConfig.ChildExecutable = "oracleworker"
 		}
-	} else {
-		if strings.EqualFold(databaseType, "mysql") {
-			gAppConfig.DatabaseType = MySQL
-			if gAppConfig.ChildExecutable == "" {
-				gAppConfig.ChildExecutable = "mysqlworker"
-			}
-		} else {
-			// db type is not supported
-			return errors.New("database type must be either Oracle or MySQL")
+	} else if strings.EqualFold(databaseType, "mysql") {
+		gAppConfig.DatabaseType = MySQL
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "mysqlworker"
 		}
+	} else if strings.EqualFold(databaseType, "postgres") {
+		gAppConfig.DatabaseType = POSTGRES
+		if gAppConfig.ChildExecutable == "" {
+			gAppConfig.ChildExecutable = "postgresworker"
+		}
+	} else {
+	// db type is not supported
+		return errors.New("database type must be either Oracle or MySQL")
 	}
 
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
 	gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
 	gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
+	if gAppConfig.EnableSharding == false || gAppConfig.UseShardMap == false {
+		gAppConfig.NumOfShards = 1
+	}
 	if (gAppConfig.NumOfShards < 1) || (gAppConfig.NumOfShards > 48) {
 		return errors.New("num_shards must be between 1 and 48")
 	}

@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/unittest/testutil"
-	"github.com/paypal/hera/utility/logger"
 	"os"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -36,6 +36,9 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	}
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -105,33 +108,13 @@ END;
 /
 */
 func setupShardMap(t *testing.T) {
-	twoTask := os.Getenv("TWO_TASK")
-	if !strings.HasPrefix(twoTask, "tcp") {
-		// not mysql
-		return
-	}
-	os.Setenv("TWO_TASK_1", twoTask)
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-	if err != nil {
-		t.Fatal("Error starting Mux:", err)
-		return
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	defer conn.Close()
-
+	testutil.RunDML("DROP TABLE IF EXISTS test_str_sk")
 	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
-	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
-
-	for i := 0; i < 1024; i++ {
-		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 1, 'Y', 'Y', 'Y' )", i) )
+	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
+	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id smallint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+	err := testutil.PopulateShardMap(1024)
+	if err != nil {
+		t.Fatalf("Error populating shard map %s\n", err.Error())
 	}
 }
 
@@ -161,7 +144,7 @@ func TestShardingSh0Def(t *testing.T) {
 	defer conn.Close()
 
 	tx, _ := conn.BeginTx(ctx, nil)
-	sqlDesc := "ins|test_str_sk"
+	sqlDesc := "ins_test_str_sk"
 	if false {
 		// create table test_str_sk (email_addr varchar(64), note varchar(64));
 		//stmt, err := tx.PrepareContext(ctx, "/*"+sqlDesc+"*/ insert into test_str_sk (email_addr, note) VALUES ( :email_addr, :note)")
@@ -186,7 +169,7 @@ func TestShardingSh0Def(t *testing.T) {
 		}
 	}
 
-	stmt, err := tx.PrepareContext(ctx, "/*sel:str_sk1*/ select email_addr from test_str_sk where email_addr= :email_addr")
+	stmt, err := tx.PrepareContext(ctx, "/*sel_str_sk1*/ select email_addr from test_str_sk where email_addr= :email_addr")
 	if err != nil {
 		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
 	}
@@ -195,16 +178,7 @@ func TestShardingSh0Def(t *testing.T) {
 		t.Fatalf("Error q %s %s\n", sqlDesc, err.Error())
 	}
 
-	stmt, err = tx.PrepareContext(ctx, "/*sel:str_sk*/ select email_addr from test_str_sk where email_addr= :email_addr")
-	if err != nil {
-		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
-	}
-	_, err = stmt.Query(sql.Named("email_addr", "NOTemail"))
-	if err != nil {
-		t.Fatalf("Error q %s %s\n", sqlDesc, err.Error())
-	}
-
-	stmt, err = tx.PrepareContext(ctx, "/*sel:str_sk*/ select note from test_str_sk where note= :note")
+	stmt, err = tx.PrepareContext(ctx, "/*sel_str_sk*/ select note from test_str_sk where note= :note")
 	if err != nil {
 		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
 	}
@@ -216,6 +190,8 @@ func TestShardingSh0Def(t *testing.T) {
 	}
 	post0note := testutil.RegexCountFile("shd0.*:note", "occ.log")
 	postNote := testutil.RegexCountFile("shd[^0].*:note", "occ.log")
+	logger.GetLogger().Log(logger.Debug, "pre0note:", pre0note,  "post0note:", post0note)
+	logger.GetLogger().Log(logger.Debug, "preNote:", preNote,  "postNote:", postNote)
 	if pre0note == post0note {
 		t.Fatalf("non shard key query did not go to sh0 even with whitelist-sh0-default")
 	}

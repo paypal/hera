@@ -16,6 +16,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -34,6 +35,15 @@ type WorkerType int
 const (
 	OracleWorker WorkerType = iota
 	MySQLWorker
+	PostgresWorker
+)
+
+type DBType int
+
+const (
+	Oracle DBType = iota
+	MySQL
+	PostgreSQL 
 )
 
 type mux struct {
@@ -87,8 +97,11 @@ func (m *mux) setupConfig() error {
 	for k,v := range m.opscfg {
 		m.appcfg[k] = v
 	}
-	if m.wType != OracleWorker {
+
+	if m.wType == MySQLWorker {
 		m.appcfg["child.executable"] = "mysqlworker"
+	} else if m.wType == PostgresWorker {
+		m.appcfg["child.executable"] = "postgresworker"
 	}
 	err := createCfg(m.appcfg, "hera")
 	if err != nil {
@@ -122,10 +135,13 @@ func (m *mux) setupConfig() error {
 
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
+	os.Remove("postgresworker")
 	if m.wType == OracleWorker {
 		os.Symlink(os.Getenv("GOPATH")+"/bin/oracleworker", "oracleworker")
-	} else {
+	} else if m.wType == MySQLWorker {
 		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
+	} else {
+		os.Symlink(os.Getenv("GOPATH")+"/bin/postgresworker", "postgresworker")
 	}
 
 	os.Remove("hera.log")
@@ -154,55 +170,94 @@ func (m *mux) cleanupConfig() error {
 	os.Remove("cal_client.txt")
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
+	os.Remove("postgresworker")
 	return nil
 }
 
-func MakeMysql(dockerName string, dbName string) (ip string) {
-	CleanMysql(dockerName)
+func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
+	CleanDB(dockerName)
+	if dbType == MySQL {
+		//Commented out temporarily so we don't have to run docker all the time
+		cmd:=exec.Command("docker","run","--name",dockerName,"-e","MYSQL_ROOT_PASSWORD=1-testDb","-e","MYSQL_DATABASE="+dbName,"-d","mysql:latest")
+		cmd.Run()
 
-	cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
-	cmd.Run()
+		// find its IP
+		cmd=exec.Command("docker","inspect","--format","{{ .NetworkSettings.IPAddress }}",dockerName)
+		var ipBuf bytes.Buffer
+		cmd.Stdout = &ipBuf
+		cmd.Run()
+		ipBuf.Truncate(ipBuf.Len()-1)
 
-	// find its IP
-	cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
-	var ipBuf bytes.Buffer
-	cmd.Stdout = &ipBuf
-	cmd.Run()
-	ipBuf.Truncate(ipBuf.Len() - 1)
+			for {
+					conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+					if err != nil {
+							time.Sleep(1 * time.Second)
+							logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
+							continue
+					} else {
+							conn.Close()
+							break
+					}
+			}
 
-	for {
-		conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+		os.Setenv("username", "root")
+		os.Setenv("password", "1-testDb")
+		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
+		logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
 		if err != nil {
-			time.Sleep(1 * time.Second)
-			logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-			continue
-		} else {
-			conn.Close()
-			break
+			logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
 		}
-	}
+		q = "GRANT ALL PRIVILEGES ON "+dbName+" . * TO 'appuser'@'%';"
+		logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
+		err = DBDirect(q, ipBuf.String(), dbName, MySQL)
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
+		} else {
+			os.Setenv("username", "appuser")
+		}
 
-	os.Setenv("username", "root")
-	os.Setenv("password", "1-testDb")
-	q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
-	//logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
-	err := MysqlDirect(q, ipBuf.String(), dbName)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
+		return ipBuf.String()
+	} else if dbType == PostgreSQL {
+		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
+		cmd.Run()
+		// find its IP
+		cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
+		var ipBuf bytes.Buffer
+		cmd.Stdout = &ipBuf
+		cmd.Run()
+		ipBuf.Truncate(ipBuf.Len() - 1)
+		for {
+			conn, err := net.Dial("tcp", ipBuf.String()+":5432")
+			if err != nil {
+				time.Sleep(1 * time.Second)
+				logger.GetLogger().Log(logger.Debug, "waiting for postgres server to come up "+ipBuf.String()+" "+dockerName)
+				continue
+			} else {
+				conn.Close()
+				break
+			}
+		}
+		os.Setenv("username", "postgres")
+		os.Setenv("password", "1-testDb")
+		q := "CREATE USER appuser PASSWORD '1-testDb'"
+		logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
+		err := DBDirect(q, ipBuf.String(), dbName, PostgreSQL)
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "set up app user:"+q+" errored "+err.Error())
+		}
+		q = "GRANT ALL PRIVILEGES ON DATABASE " + dbName + " TO appuser;"
+		err = DBDirect(q, ipBuf.String(), dbName, PostgreSQL)
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
+		} else {
+			os.Setenv("username", "appuser")
+		}
+		return ipBuf.String()
 	}
-	q = "GRANT ALL PRIVILEGES ON " + dbName + " . * TO 'appuser'@'%';"
-	//logger.GetLogger().Log(logger.Warning, "grant  app user:"+q)
-	err = MysqlDirect(q, ipBuf.String(), dbName)
-	if err != nil {
-		logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
-	} else {
-		os.Setenv("username", "appuser")
-	}
-	os.Setenv("mysql_ip", ipBuf.String())
-
-	return ipBuf.String()
+	return ""
 }
-func CleanMysql(dockerName string) {
+func CleanDB(dockerName string) {
 	cleanCmd := exec.Command("docker", "stop", dockerName)
 	cleanCmd.Run()
 	cleanCmd = exec.Command("docker", "rm", dockerName)
@@ -211,7 +266,7 @@ func CleanMysql(dockerName string) {
 
 var dbs map[string]*sql.DB
 
-func MysqlDirect(query string, ip string, dbName string) error {
+func DBDirect(query string, ip string, dbName string, dbType DBType) (error)  {
 	if dbs == nil {
 		dbs = make(map[string]*sql.DB)
 	}
@@ -228,9 +283,39 @@ func MysqlDirect(query string, ip string, dbName string) error {
 		if err != nil {
 			return err
 		}
-		db0.SetMaxIdleConns(0)
-		// defer db0.Close()
-		dbs[ip+dbName] = db0
+	}
+	if dbType == MySQL {
+		if !ok {
+			fullDsn:=fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+				os.Getenv("username"),
+				os.Getenv("password"),
+				ip,
+				dbName)
+			//fmt.Println("fullDsn",fullDsn)
+			var err error
+			db0, err = sql.Open("mysql", fullDsn)
+			if err != nil {
+				return err
+			}
+			db0.SetMaxIdleConns(0)
+			// defer db0.Close()
+			dbs[ip+dbName] = db0
+		}
+	} else if dbType == PostgreSQL {
+		if !ok {
+			fullDsn := fmt.Sprintf("postgres://%s:%s@%s/%s?connect_timeout=60&sslmode=disable",
+				os.Getenv("username"),
+				os.Getenv("password"),
+				ip,
+				dbName)
+			var err error
+			db0, err = sql.Open("postgres", fullDsn)
+			if err != nil {
+				return err
+			}
+			db0.SetMaxIdleConns(0)
+			dbs[ip+dbName] = db0
+		}
 	}
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	conn0, err := db0.Conn(ctx)
@@ -257,7 +342,7 @@ func (m *mux) StartServer() error {
 	if err != nil {
 		return err
 	}
-	if m.wType != OracleWorker {
+	if m.wType == MySQLWorker {
 		xMysql, ok := m.appcfg["x-mysql"]
 		if !ok {
 			xMysql = "auto"
@@ -284,7 +369,7 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_3", "tcp(127.0.0.1:2121)/heratestdb")
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
-			ip := MakeMysql("mysql22", "heratestdb")
+			ip := MakeDB("mysql22", "heratestdb", MySQL)
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
@@ -298,7 +383,26 @@ func (m *mux) StartServer() error {
 			}
 			tableName := pfx + "_maint"
 			tableString := "create table " + tableName + " ( INST_ID INT,  MACHINE VARCHAR(512),  STATUS VARCHAR(8),  STATUS_TIME INT,  MODULE VARCHAR(64) );"
-			MysqlDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb")
+			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
+		}
+	} else if m.wType == PostgresWorker {
+		xPostgres, ok := m.appcfg["x-postgres"]
+		if !ok {
+			xPostgres = "auto"
+		}
+		if xPostgres == "auto" {
+			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
+			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
+			twoTask := os.Getenv("TWO_TASK")
+			os.Setenv ("TWO_TASK_0", twoTask)
+			os.Setenv ("TWO_TASK_1", twoTask)
+			twoTask1 := os.Getenv("TWO_TASK")
+			fmt.Println ("TWO_TASK_1: ", twoTask1)
+			os.Setenv ("TWO_TASK_2", twoTask)
+			os.Setenv ("TWO_TASK_3", twoTask)
+			os.Setenv ("TWO_TASK_4", twoTask)
+			os.Setenv("TWO_TASK_READ", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
+			os.Setenv("TWO_TASK_STANDBY0", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 		}
 	}
 
@@ -342,7 +446,11 @@ func (m *mux) StopServer() {
 		m.dbStop()
 		syscall.Kill((*m.dbServ).Process.Pid, syscall.SIGTERM)
 	}
-	CleanMysql("mysql22")
+	if m.wType == MySQLWorker {
+		CleanDB("mysql22")
+	} else if m.wType == PostgresWorker {
+		CleanDB("postgres22")
+	}
 
 	timer := time.NewTimer(time.Second * 5)
 	go func() {
