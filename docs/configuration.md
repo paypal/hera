@@ -97,11 +97,11 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: scuttle_id
 
 #### sharding_algo
-+ The algoritm defining how to map a shard key to a scuttle ID. Currently we support two algorithms: "HASH" and "MOD". For HASH, the scuttle ID is the remainder of dividing the FNV hash of the key by the number of scuttles. MOD is suitable for number columns with distinct values (like an primary key with auto-increments), the scuttle ID is the remainder dividing the value of the key by the number of scuttles.
++ The algoritm defining how to map a shard key to a scuttle ID. Currently we support two algorithms: "HASH" and "MOD". For HASH, the scuttle ID is the remainder of dividing the  MurmurHash of the key by the number of scuttles. MOD is suitable for number columns with distinct values (like an primary key with auto-increments), the scuttle ID is the remainder dividing the value of the key by the number of scuttles.
 + default: "HASH"
 
 #### sharding_postfix
-+ If it is empty / not defined then the table for loading the shard map is "<<management_table_prefix>>hera_shard_map" otherwise is "<<management_table_prefix>>hera_shard_map_<<sharding_postfix>>".
++ If it is empty / not defined then the table for loading the shard map is "<<management_table_prefix>>_shard_map" otherwise is "<<management_table_prefix>>_shard_map_<<sharding_postfix>>".
 + default: ""
 
 #### enable_whitelist_test
@@ -122,7 +122,7 @@ There are two types of configuration parameters: static parameters and dynamic p
 
 #### management_table_prefix
 + The prefix for the managament tables: shard map config table (hera_shard_map) and rac maintenance config table (hera_maint)
-+ default: ""
++ default: "hera"
 
 #### rac_sql_interval
 + The interval to check if RAC maintenance was done and the worker need restarted.

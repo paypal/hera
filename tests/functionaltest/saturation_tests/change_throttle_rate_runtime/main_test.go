@@ -98,7 +98,8 @@ func TestChangeThrottleRateAtRuntime(t *testing.T) {
 	if ( hcount < 0) {
             t.Fatalf ("Error: expected at least 1 HARD_EVICTION event");
         }
-	count := testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+	fmt.Println ("Verify RECOVERED/RECYCLE event")
+	count := testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
 	if ( count < hcount) {
             t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
         }
@@ -133,7 +134,7 @@ func TestChangeThrottleRateAtRuntime(t *testing.T) {
         if ( hcount1 < hcount + 2) {
             t.Fatalf ("Error: expected at least 2 HARD_EVICTION events");
         }
-        count = testutil.RegexCountFile ("STRANDED.*RECOVERED_SATURATION_RECOVERED", "cal.log")
+        count = testutil.RegexCountFile ("STRANDED.*REC.*ED_SATURATION_RECOVERED", "cal.log")
         if ( count < hcount1) {
             t.Fatalf ("Error: expected %d RECOVERED_SATURATION_RECOVERED events", hcount);
         }

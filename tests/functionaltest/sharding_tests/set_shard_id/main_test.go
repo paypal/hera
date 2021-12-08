@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/functionaltest/testutil"
-        "github.com/paypal/hera/utility/logger"
-	"github.com/paypal/hera/client/gosqldriver"
-        _ "github.com/paypal/hera/client/gosqldriver/tcp"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/paypal/hera/client/gosqldriver"
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -36,6 +37,9 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	} 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -70,8 +74,6 @@ func TestMain (m *testing.M) {
  #
  #############################################################################################*/
 func TestSetShardID(t *testing.T) {
-        twoTask := os.Getenv("TWO_TASK_2")
-        fmt.Println ("TWO_TASK_2: ", twoTask)
 	fmt.Println ("TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
@@ -93,7 +95,7 @@ func TestSetShardID(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 
-	fmt.Println ("Set Shard ID to shard 4")
+	
 	mux := gosqldriver.InnerConn(conn)
         shards, err:= mux.GetNumShards()
         if err != nil {
@@ -103,8 +105,9 @@ func TestSetShardID(t *testing.T) {
                 t.Fatalf("Expected 5 shards")
         }
 
-	fmt.Println ("Insert using shard 4")
+        fmt.Println ("Set Shard ID to shard 4")
         mux.SetShardID(4)
+        fmt.Println ("Insert using shard 4")
 	tx, _ := conn.BeginTx(ctx, nil)
 	stmt, _ := tx.PrepareContext(ctx, "/* TestSetShardID */insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
 	_, err = stmt.Exec(sql.Named("ID", "12346"), sql.Named("Name", "Steve"), sql.Named("Status", 999))
@@ -123,16 +126,10 @@ func TestSetShardID(t *testing.T) {
                 t.Fatalf("Error commit %s\n", err.Error())
         }
 
-
  	fmt.Println ("Verify insert and update request is sent to shard 4")	
         count := testutil.RegexCount ("WORKER shd4.*Preparing.*TestSetShardID.*insert into test_simple_table_1")
 	if (count < 1) {
             t.Fatalf ("Error: Insert Query does NOT go to shd4");
-        }
-
-        count = testutil.RegexCount ("WORKER shd4.*Preparing.*Update test_simple_table_1")
-	if (count < 1) {
-            t.Fatalf ("Error: Update Query does NOT go to shd4");
         }
 
 	count = testutil.RegexCount ("WORKER shd4.*Preparing.*Update test_simple_table_1")
@@ -169,6 +166,12 @@ func TestSetShardID(t *testing.T) {
             t.Fatalf ("Error: Select Query does NOT go to shd4");
         }
 	
+	fmt.Println ("Verify root transaction logging in CAL for all 15 workers of all shards")
+	count = testutil.RegexCountFile ("A.*URL.*INITDB.*0", "cal.log")
+	// max_connections = 3, 5 shards
+        if (count < 15) {
+            t.Fatalf ("Error: Expected 15 CAL log lines, get %d", count);
+        }
 
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID done  -------------------------------------------------------------")

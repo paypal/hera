@@ -1,0 +1,15 @@
+1) To Connect to MYSQL DB, bring up MySQL DB container, then run this
+mysql --user=root --password=1-testDb --host=172.17.0.2 --port=3306
+use heratestdb
+
+2) To Run a functionaltest:
+cd github.com/paypal/hera/tests/functionaltest/coordinator_tests/max_lifespan_dml
+./complile.sh
+./max_lifespan_dml.test
+If the test fails, you will see from the terminal
+if output does not say "FAIL", then test passes. You can grep for "PASS" in hera.log
+
+3) To run all tests
+nohup ./runall.sh > result.txt &
+
+

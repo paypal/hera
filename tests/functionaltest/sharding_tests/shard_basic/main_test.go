@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
+        "os/exec"
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/functionaltest/testutil"
-        "github.com/paypal/hera/utility/logger"
-        _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"os"
 	"testing"
 	"time"
+
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	"github.com/paypal/hera/tests/functionaltest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -35,17 +38,56 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+		return appcfg, opscfg, testutil.PostgresWorker
+	} 
 	return appcfg, opscfg, testutil.MySQLWorker
+}
+
+//Helper function to delete and populate shard map with 128 scuttles
+func populate_cam_shard_map() (string,error) {
+	cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb", " < populate_cam_shard_map.sql")
+        //cmd.Stdin = strings.NewReader(sql)
+        var cmdOutBuf bytes.Buffer
+        cmd.Stdout = &cmdOutBuf
+        cmd.Run()
+        return cmdOutBuf.String(), nil
 }
 
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_2")
-	err2 := testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
-	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
-	testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
+	testutil.RunMysql("DROP TABLE IF EXISTS hera_shard_map;")
+	testutil.RunMysql("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500));");
+	out,err2 := testutil.RunMysql (`DELIMITER $$
+ DROP PROCEDURE IF EXISTS populate_shard_map$$
+ CREATE PROCEDURE populate_shard_map(IN num INT)
+BEGIN
+   DECLARE x INT;
+   SET x = 0;
+
+   While x < num DO
+      INSERT INTO hera_shard_map VALUES (x, mod(x,5),'Y','Y','Y','Initial');
+      SET x = x + 1;
+   END WHILE;
+   COMMIT;
+END$$
+DELIMITER ;`);
+	if err2 != nil {
+		fmt.Printf (out);
+		fmt.Printf("err after creating procedure "+err2.Error())
+		return err2
+	}
+	out3, err3 := populate_cam_shard_map()
+	if err3 != nil {
+		fmt.Printf (out3);
+		fmt.Printf("err after run populate_cam_shard_map"+err3.Error())
+		return err3
+	}
+
 	max_scuttle := 128;
-	err3  := testutil.PopulateShardMap(max_scuttle);
+	err3  = testutil.PopulateShardMap(max_scuttle);
 	if err2 != nil {
 	    return err2
 	}
@@ -73,11 +115,10 @@ func TestMain (m *testing.M) {
  #############################################################################################*/
 
 func TestShardBasic(t *testing.T) {
-        twoTask := os.Getenv("TWO_TASK_2")
-        fmt.Println ("TWO_TASK_2: ", twoTask)
 	fmt.Println ("TestShardBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-
+	time.Sleep(8 * time.Second);
+	
 	hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")

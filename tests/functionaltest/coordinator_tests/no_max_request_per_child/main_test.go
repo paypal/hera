@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -23,12 +22,6 @@ var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
-
-	twoTask := os.Getenv("TWO_TASK")
-        os.Setenv ("TWO_TASK_READ", twoTask)
-        twoTask = os.Getenv("TWO_TASK_READ")
-        fmt.Println ("TWO_TASK_READ: ", twoTask)
-
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
@@ -115,7 +108,12 @@ func TestNoMaxRequestsPerChild(t *testing.T) {
         if (count > count_s) {
             t.Fatalf ("Error: should not see new_worker_child events");
         }
-
+	
+        fmt.Println ("Check Root Transaction Logging in CAL log - max_connections=2");
+        l := testutil.RegexCountFile ("A.*URL.*INITDB.*0", "cal.log");
+        if (l < 2) {
+            t.Fatalf ("Error: should see 2 Root Transaction logging lines, but get %d ", l);
+	}
 	cancel()
 	conn.Close()
 	testutil.DoDefaultValidation(t)
