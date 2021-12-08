@@ -185,15 +185,14 @@ func (m *mux) cleanupConfig() error {
 }
 
 func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
-	if os.Getenv("GITHUB_JOB") != "" {
-		return "127.0.0.1"
-	}
 	if dbType == MySQL {
 		ipBuf := bytes.NewBufferString("127.0.0.1")
-		CleanDB(dockerName)
+		if os.Getenv("GITHUB_JOB") == "" {
+			CleanDB(dockerName)
 
-		cmd := exec.Command("docker", "run", "-p3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:5.7")
-		cmd.Run()
+			cmd := exec.Command("docker", "run", "-p3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:5.7")
+			cmd.Run()
+		}
 
 		os.Setenv("username", "root")
 		os.Setenv("password", "1-testDb")
@@ -228,6 +227,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 
 		return ipBuf.String()
 	} else if dbType == PostgreSQL {
+		// TO-DO: Migration to GitHub Actions
 		CleanDB(dockerName)
 		cmd := exec.Command("docker", "run", "-p5432:5432", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
 		cmd.Run()
