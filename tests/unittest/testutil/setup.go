@@ -131,14 +131,8 @@ func (m *mux) setupConfig() error {
 	}
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
 
-	/* // already setup by testall.sh for Github Actions
-	os.Remove("oracleworker")
-	os.Remove("mysqlworker")
-	if m.wType == OracleWorker {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/oracleworker", "oracleworker")
-	} else {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
-	} // */
+	// if not already setup by testall.sh for Github Actions
+	doBuildAndSymlink("mysqlworker")
 
 	os.Remove("hera.log")
 	os.Remove("cal.log")
@@ -146,6 +140,23 @@ func (m *mux) setupConfig() error {
 	_, err = os.Create("state.log")
 
 	return nil
+}
+func doBuildAndSymlink(binname string) {
+	var err error
+	_, err = os.Stat(binname)
+	if err != nil {
+		binpath := os.Getenv("GOPATH")+"/bin/"+binname
+		_, err = os.Stat(binpath)
+		if err != nil {
+			srcname := binname
+			if srcname != "mux" {
+				srcname = "worker/" + srcname
+			}
+			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
+			cmd.Run()
+		}
+		os.Symlink(binpath, binname)
+	}
 }
 
 func findNextChar(pos int, str string, ch byte) int {
@@ -171,36 +182,33 @@ func (m *mux) cleanupConfig() error {
 }
 
 func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
+	if os.Getenv("GITHUB_JOB") != "" {
+		return "127.0.0.1"
+	}
 	if dbType == MySQL {
-		// disable for migration to Github Actions
-		/*
+		ipBuf := bytes.NewBufferString("127.0.0.1")
 		CleanDB(dockerName)
 
-		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
+		cmd := exec.Command("docker", "run", "-p3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:5.7")
 		cmd.Run()
 
-		// find its IP
-		cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
-		var ipBuf bytes.Buffer
-		cmd.Stdout = &ipBuf
-		cmd.Run()
-		ipBuf.Truncate(ipBuf.Len() - 1)
-
+		os.Setenv("username", "root")
+		os.Setenv("password", "1-testDb")
+		waitLoop := 1
 		for {
-			conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+			err := DBDirect("select 1", "127.0.0.1", "heratestdb", MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
+				fmt.Printf("waiting for db to come up %d %s\n",waitLoop, err.Error())
+				waitLoop++
 				continue
 			} else {
-				conn.Close()
 				break
 			}
 		}
-		// */
-		ipBuf := bytes.NewBufferString("localhost")
-		os.Setenv("username", "root")
-		os.Setenv("password", "1-testDb")
+
+
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
 		if err != nil {
@@ -217,9 +225,8 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 
 		return ipBuf.String()
 	} else if dbType == PostgreSQL {
-		// TO-DO: Migration to GitHub Actions
 		CleanDB(dockerName)
-		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
+		cmd := exec.Command("docker", "run", "-p5432:5432", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
 		cmd.Run()
 		// find its IP
 		cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
@@ -276,7 +283,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 	db0, ok := dbs[ip+dbName]
 	if dbType == MySQL {
 		if !ok {
-			fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
+			fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?tls=preferred",
 				os.Getenv("username"),
 				os.Getenv("password"),
 				ip,
