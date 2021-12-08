@@ -285,7 +285,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 	db0, ok := dbs[ip+dbName]
 	if dbType == MySQL {
 		if !ok {
-			fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?tls=preferred",
+			fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
 				os.Getenv("username"),
 				os.Getenv("password"),
 				ip,
