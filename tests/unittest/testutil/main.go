@@ -20,8 +20,8 @@ func setup(cfg cfgFunc) error {
 	if err != nil {
 		return err
 	}
-
-	return mx.StartServer()
+	err = mx.StartServer()
+	return err
 }
 
 func teardown() {
@@ -63,6 +63,7 @@ func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 		saveLogs()
 		return -1
 	}
+
 	if before != nil {
 		err = before()
 		if err != nil {
@@ -71,6 +72,7 @@ func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 			return -1
 		}
 	}
+
 	code := m.Run()
 	teardown()
 	if testing.Verbose() {
