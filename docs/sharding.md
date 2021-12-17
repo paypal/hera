@@ -5,32 +5,42 @@ Hera uses shard key column bind name and value to determine how to direct the qu
 
 <img src="sharding.png">
 
-* A schema must have exactly one shard key
+# Sharding Principles
+* A schema must have exactly one shard key.
 * Each table must have the shard key column.
-* Queries must include shard key
-* Local sequences must be avoided
-* DB Transactions are restricted one one shard key until commit or rollback
-* During a typical user flow, limit the number of shards your application uses since using more shards impacts availablity
-* Hera server adds scuttle_id column and values to help with query execution
+* Queries must include shard key. 
+* Queries specifying a list of keys must be rewritten to execute SQL for each shard key one at a time.
+* Local sequences must be avoided.
+* DB Transactions are restricted one one shard key until commit or rollback.
+* During a typical user flow, limit the number of shards your application uses since using more shards impacts availablity.
+* Hera server adds scuttle_id column and values to help with query execution.
 
 # Scenario: Migrating existing application
-1. Hera turns on whitelist with 3 shards.  DBAs create shard map table. This turns on CAL sharding events when there are transactions across shards or queries with missing shard key.
-1. Application fixes commit across shards and queries with missing shard key
-1. DBAs and Application write SQL scripts to migrate data
-1. Test user logical whitelist.  Moving the data to a logical shard DB helps identify if there are issues.  A small number of test users are used to reduce impact of any bug that might occur with application data access pattern.
+1. All queries directed to shard 0. DBAs create shard map table. This turns on CAL sharding events when there are transactions across shards or queries with missing shard key.
+    <img src="sharding_2.png" width="750" height="650">
+1. Application fixes commit across shards and queries with missing shard key.
+1. DBAs and Application write SQL scripts to migrate data.
+1. Hera turns on whitelist. Moving the data to a logical shard DB helps identify if there are issues.  A small number of test users are used to reduce impact of any bug that might occur with application data access pattern.
+    <img src="sharding_3.png" width="750" height="650">
 1. Test user physical whitelist.  Moving the data to a physical shard DB helps ensure that the tables and data movement scripts are functioning properly.
+    <img src="sharding_4.png" width="850" height="650">
 1. Logical whitelist.  A larger group can help identify more infrequent code paths.
 1. Physical whitelist. Infrequently accessed data can be identified with a larger group.
 1. Logical 1 scuttle.  The 1/1024 scuttle can have over a million customers.  This is still a small fraction of live traffic.
+    <img src="sharding_5.png" width="750" height="650">
 1. Physical 1 scuttle. The production data migration scripts can be validated with this step.
 1. Done.  Hera turns off whitelist and connections are configured for DBA data distribution across shards.
 
 # Scenario: Migrating scuttle data
-1. DBAs setup data copies from source shard DB to destination shard DB
+1. DBAs setup data copies from source shard DB to destination shard DB. Typically, tables are partitioned by scuttle bins.
+    <img src="sharding_6.png" width="750" height="650">
 1. Once data copy is "complete," DBAs block writes (either using shard_map or triggers on a separate write blocking table)
+    <img src="sharding_7.png" width="750" height="650">
 1. DBAs eject long DB sessions on that scuttle
 1. DBAs confirm data copy is complete.
-1. DBAs set scuttle to allow writes
+    <img src="sharding_8.png" width="750" height="650">
+1. DBAs set scuttle to allow writes.
+    <img src="sharding_9.png" width="750" height="650">
 1. Done
 
 # Sample Query with shard_key=account_number
