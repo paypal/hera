@@ -13,7 +13,7 @@ Hera uses shard key column bind name and value to determine how to direct the qu
 * Local sequences must be avoided.
 * DB Transactions are restricted one one shard key until commit or rollback.
 * During a typical user flow, limit the number of shards your application uses since using more shards impacts availablity.
-* Hera server adds scuttle_id column and values to help with query execution.
+* Hera server adds scuttle_id column and values to help with query execution. This is applicable only for Oracle database.
 
 # Scenario: Migrating existing application
 1. All queries directed to shard 0. DBAs create shard map table. This turns on CAL sharding events when there are transactions across shards or queries with missing shard key.
