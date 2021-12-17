@@ -2,8 +2,8 @@
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
 # Hera - High Efficiency Reliable Access to data stores
 
-Hera multiplexes connections for MySQL and
-Oracle databases.  It supports sharding the databases for horizontal scaling.
+Hera multiplexes connections for MySQL, Oracle and
+PostgreSQL databases. It supports sharding the databases for horizontal scaling.
 
   * [Overview](docs/overview.md)
   * [Configuration](docs/configuration.md)
@@ -54,9 +54,9 @@ The following sections explain the process for manually building mux without Doc
 ### Install Dependencies
 
 1.  [Install Go 1.10+](http://golang.org/doc/install).
-2.  Install [MySQL](http://dev.mysql.com/downloads/mysql) or [Oracle](https://www.oracle.com/index.html).
-3.  Install the [MySQL driver](https://github.com/go-sql-driver/mysql) and the [Oracle driver](https://github.com/go-goracle/goracle)
-3.  Install Oracle instant client     
+2.  Install [MySQL](http://dev.mysql.com/downloads/mysql), [Oracle](https://www.oracle.com/index.html) or [PostgresSQL](https://www.postgresql.org/download/).
+3.  Install the [MySQL driver](https://github.com/go-sql-driver/mysql), [Oracle driver](https://github.com/go-goracle/goracle) and the [PostgreSQL driver](https://github.com/lib/pq)
+4.  Install Oracle instant client.
 
 ### Build Binaries
 
@@ -79,14 +79,15 @@ The following sections explain the process for manually building mux without Doc
     ```
     go get github.com/paypal/hera
     ```
-3.  Install the dependencies: MySQL and Oracle driver
+3.  Install the dependencies: MySQL, Oracle and PostgreSQL driver
     ```
-    go get gopkg.in/goracle.v2
     go get github.com/go-sql-driver/mysql
+    go get github.com/godror/godror
+    go get github.com/lib/pq
     ```
 4.  Build server binaries
     ```
-    go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/worker/oracleworker
+    go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker github.com/paypal/hera/worker/oracleworker github.com/paypal/hera/worker/postgresworker
     ```
 5.  Build Go test client
     ```
