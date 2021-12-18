@@ -229,7 +229,7 @@ func PopulateShardMap(max_scuttle int) error {
                 return err
         }
 
-        fmt.Println ("***Done loading shard map")
+        fmt.Println ("=== Finished loading shard map ===")
         return nil
 }
 
