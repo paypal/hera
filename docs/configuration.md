@@ -14,14 +14,15 @@ This is the database password
 
 ### TWO_TASK
 
-This is the data source information for the MySQL or Oracle database. 
+This is the data source information for the MySQL, Oracle or PostgreSQL database. 
 For Oracle the format can be in the form of '(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))'. Or it can be a name of an entry in tnsnames.ora. Please see the Oracle documentation for more details.
 
-We use the same environment name for MySQL. For example, the value can be tcp(127.0.0.1:3306)/myschema.
-Failover uses two pipes to separate entries,
-tcp(127.0.0.1:3306)/myschema?timeout=9s||tcp(127.0.0.2:3306)/myschema .
-Set environment variable certdir to load all the pem files that you can
+We use the same environment name for MySQL and PostgreSQL. 
+For MySQL, the value can be tcp(127.0.0.1:3306)/myschema. 
+Failover uses two pipes to separate entries,tcp(127.0.0.1:3306)/myschema?timeout=9s||tcp(127.0.0.2:3306)/myschema. Set environment variable certdir to load all the pem files that you can
 specify as certificate authorities for the mysql worker to accept.
+For PostgreSQL, the format can be host:port/dbName?paramspec. For example, 127.0.0.1:5431/postgres?connect_timeout=60&sslrootcert=postgres-ca.pem&sslmode=verify-ca. 
+PostgreSQL failover also uses two pipes to separate entries, 127.0.0.1:5431/postgres?connect_timeout=60||127.0.0.2:5431/postgres?connect_timeout=60.
 
 For sharding case, we need to define multiple datasources, one for each shard. The convention is to define the datasource for the first shard in TWO_TASK_0 environment variable, for the second shard in TWO_TASK_1, etc.
 
@@ -57,7 +58,7 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: ""
 
 #### cert_chain_file
-+ The name of the file comntaining the certificates chain
++ The name of the file containing the certificates chain
 + default: ""
 
 #### lifo_scheduler_enabled
@@ -71,6 +72,14 @@ There are two types of configuration parameters: static parameters and dynamic p
 #### max_stranded_time_interval
 + The timeout in milliseconds to wait for a worker to cancel a query in progress. If the timeout expires then the worker is recycled.
 + default: 2000
+
+#### state_log_interval
++ The interval in seconds to write the worker state.
++ default: 1
+
+#### database_type
++ The type of database to connect.
++ default: oracle
 
 #### enable_sharding
 + If the value is 'true' then sharding is enabled
@@ -118,6 +127,10 @@ There are two types of configuration parameters: static parameters and dynamic p
 
 #### sharding_cross_keys_err
 + If it is "true" then it will return an error if the client is attempting a query in the same shard but with a different key than the key used in the earlier query which started a transaction. If it is "false" than it will log and continue.
++ default: false
+
+#### shard_key_value_type_is_string
++ This is to indicate the type of the shard value. If the shard key value is a string, it is set to "true"
 + default: false
 
 #### management_table_prefix
@@ -168,6 +181,18 @@ There are two types of configuration parameters: static parameters and dynamic p
 + The probability to do soft eviction
 + default: 50
 
+#### bind_eviction_threshold_pct
++ A bind name+value is evicted when mux is overloaded and they occupy over bind_eviction_threshold_pct.
+ + default: 25
+
+#### bind_eviction_target_conn_pct
++ A bind name+value is evicted when mux is overloaded and they occupy over bind_eviction_threshold_pct. Their queries get blocked more when more than bind_eviction_target_conn_pct are busy or in wait state.
++ default: 50
+
+#### bind_eviction_decr_per_sec
++ If the evicted query hasn't been seen for a while, the level of blocking is reduced by this value.
++ default: 1.0
+
 #### bouncer_enabled
 + Enables bouncing connections when the number of open connections crosses the threshold 
 + default: true
@@ -183,6 +208,14 @@ There are two types of configuration parameters: static parameters and dynamic p
 #### mux_pid_file
 + The file name containing the process ID.
 + default: mux.pid
+
+#### error_code_prefix
++ The prefix to be added for all the error codes.
++ default: HERA
+
+#### state_log_prefix
++ The prefix to be added for the state log entries.
++ default: hera
 
 #### enable_danglingworker_recovery
 + If it is "true" it will terminate workers that are allocated for a long period, three times the idle timeout. 
