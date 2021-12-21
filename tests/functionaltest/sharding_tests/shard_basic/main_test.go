@@ -202,6 +202,7 @@ func TestShardBasic(t *testing.T) {
             t.Fatalf ("Error: Select Query does NOT go to shd3");
         }
 	testutil.DoDefaultValidation(t)
+	time.Sleep (time.Duration(2 * time.Second)
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic done  -------------------------------------------------------------")
 }
 
