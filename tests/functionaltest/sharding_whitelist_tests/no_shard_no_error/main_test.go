@@ -36,18 +36,25 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg := make(map[string]string)
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
+	if os.Getenv("WORKER") == "postgres" {
+                return appcfg, opscfg, testutil.PostgresWorker
+        } 
 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_2")
-	err1 := testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
-        testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	err1 := testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
 	if err1 != nil { 
 	    return err1
 	}
+	if os.Getenv("WORKER") == "postgres" {
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID BIGINT, SHARD_ID BIGINT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        } else { 
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        }
 	max_scuttle := 128;
         err2  := testutil.PopulateShardMap(max_scuttle);
         if err2 != nil {
@@ -116,6 +123,7 @@ func TestNoShardNoError(t *testing.T) {
 	cancel()
 	conn.Close()
 
+	time.Sleep (time.Duration(2) * time.Second)
  	fmt.Println ("Verify insert request is sent to shard 2")	
         count := testutil.RegexCount ("WORKER shd2.*Preparing.*insert into test_simple_table_2")
 	if (count < 1) {
