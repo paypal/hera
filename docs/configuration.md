@@ -15,20 +15,34 @@ This is the database password
 ### TWO_TASK
 
 This is the data source information for the MySQL, Oracle or PostgreSQL database. 
-For Oracle the format can be in the form of '(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))'. Or it can be a name of an entry in tnsnames.ora. Please see the Oracle documentation for more details.
+
+### Oracle
+For **Oracle** the format can be in the form of `(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=tcp)(HOST=hostname)(PORT=port)))(CONNECT_DATA=(SERVICE_NAME=sn)))`. Or it can be a name of an entry in `tnsnames.ora`. Please see the Oracle documentation for more details.
 
 We use the same environment name for MySQL and PostgreSQL. 
-For MySQL, the value can be tcp(127.0.0.1:3306)/myschema. 
-Failover uses two pipes to separate entries,tcp(127.0.0.1:3306)/myschema?timeout=9s||tcp(127.0.0.2:3306)/myschema. Set environment variable certdir to load all the pem files that you can
-specify as certificate authorities for the mysql worker to accept.
-For PostgreSQL, the format can be host:port/dbName?paramspec. For example, 127.0.0.1:5431/postgres?connect_timeout=60&sslrootcert=postgres-ca.pem&sslmode=verify-ca. 
-PostgreSQL failover also uses two pipes to separate entries, 127.0.0.1:5431/postgres?connect_timeout=60||127.0.0.2:5431/postgres?connect_timeout=60.
 
-For sharding case, we need to define multiple datasources, one for each shard. The convention is to define the datasource for the first shard in TWO_TASK_0 environment variable, for the second shard in TWO_TASK_1, etc.
+### MySql
+For **MySQL**, the value can be *tcp(127.0.0.1:3306)/myschema*. 
 
-For TAF, the data source information for the fallback database is in TWO_TASK_STANDBY0 environment variable. If we have multiple shards, then the environment variable are TWO_TASK_STANDBY0_0 (first shard), TWO_TASK_STANDBY0_1, etc.
+Failover uses two pipes to separate entries -> `tcp(127.0.0.1:3306)/myschema?timeout=9s||tcp(127.0.0.2:3306)/myschema`. 
 
-For R/W split, the data source information for a read node is in TWO_TASK_READ environment variable. If we have multiple shards, then the environment variable are TWO_TASK_READ_0 (first shard), TWO_TASK_READ_1, etc.
+Set environment variable `certdir` to load all the pem files that you can specify as certificate authorities for the mysql worker to accept.
+
+### PostgreSQL
+For **PostgreSQL**, the format can be *host:port/dbName?paramspec*. 
+
+For example, `127.0.0.1:5431/postgres?connect_timeout=60&sslrootcert=postgres-ca.pem&sslmode=verify-ca`.
+
+PostgreSQL failover also uses two pipes to separate entries -> `127.0.0.1:5431/postgres?connect_timeout=60||127.0.0.2:5431/postgres?connect_timeout=60`.
+
+### Sharding
+For **sharding** case, we need to define multiple datasources, one for each shard. The convention is to define the datasource for the first shard in `TWO_TASK_0` environment variable, for the second shard in `TWO_TASK_1`, etc.
+
+### TAF
+For TAF (Transparent Application Failover), the data source information for the fallback database is in `TWO_TASK_STANDBY0` environment variable. If we have multiple shards, then the environment variable are `TWO_TASK_STANDBY0_0` (first shard), `TWO_TASK_STANDBY0_1`, etc.
+
+### Read Write Split
+For R/W split, the data source information for a read node is in `TWO_TASK_READ` environment variable. If we have multiple shards, then the environment variable are `TWO_TASK_READ_0` (first shard), `TWO_TASK_READ_1`, etc.
 
 ### LD_LIBRARY_PATH
 
@@ -36,7 +50,7 @@ The Oracle worker uses the Oracle instant client shared libraries, so LD_LIBRARY
 
 ## hera.txt entries
 
-There are two types of configuration parameters: static parameters and dynamic parameters. The static parameters are loaded at the application startup and stay fixed until the process shuts down. The dynamic parameters are re-loaded periodically. Their name is prefixed with 'opscfg.hera.server.'
+There are two types of configuration parameters: **static parameters** and **dynamic parameters**. The static parameters are loaded at the application startup and stay fixed until the process shuts down. The dynamic parameters are re-loaded periodically. Their name is prefixed with 'opscfg.hera.server.'
 
 ### Static parameters
 
@@ -138,7 +152,7 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: "hera"
 
 #### rac_sql_interval
-+ The interval to check if RAC maintenance was done and the worker need restarted.
++ The interval, in seconds, to check if RAC maintenance was done and the worker need restarted.
 + default: 10
 
 #### rac_restart_window
@@ -146,15 +160,15 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: 240
 
 #### lifespan_check_interval 
-+ The interval to check if the workers lifespan has expired and they need to be recycled.
++ The interval, in seconds, to check if the workers lifespan has expired and they need to be recycled.
 + default: 10
 
 #### enable_taf
-+ It it is "true" then transparent failover (i.e. TAF) feature is enabled.
++ It it is "true" then Transparent Application Failover (i.e. TAF) feature is enabled.
 + default: false
 
 #### taf_timeout_ms
-+ In case of TAF, it is the timeout in milliseconds to wait for a query to complete before it is canceled to be re-tried on the falback database
++ In case of TAF (Transparent Application Failover), it is the timeout in milliseconds to wait for a query to complete before it is canceled to be re-tried on the falback database
 + default: 200
 
 #### readonly_children_pct
@@ -162,7 +176,7 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: 0
 
 #### backlog_pct
-+ Defines the threshold for the saturation recovery to start in order help with the backlog.
++ Defines the backlog queue fill percentage threshold for the saturation recovery to start in order help with the backlog.
 + default: 30
 
 #### request_backlog_timeout
@@ -248,7 +262,7 @@ There are two types of configuration parameters: static parameters and dynamic p
 + default: 0
 
 #### opscfg.hera.server.saturation_recover_threshold
-+ The threshold for saturation recovering. 
++ The threshold, in ms, for saturation recovering. The SQL eviction is invoked when backlog is higher than <<backlog_pct>> and SQL is found to be running higher than saturation_recover_threshold
 + default: 200
 
 #### opscfg.hera.server.saturation_recover_throttle_rate
