@@ -117,6 +117,8 @@ The main configuration file is hera.txt, which must contain the TCP port where t
     echo 'opscfg.hera.server.max_connections=2' >> hera.txt
     # if using mysql run this
     # echo 'database_type=mysql' >> hera.txt
+    # if using postgres run this
+    # echo 'database_type=postgres' >> hera.txt
 
     # create minimal CAL configuration, needed by ops config
     echo 'cal_pool_name=stage_hera' > cal_client.txt
@@ -131,9 +133,16 @@ The main configuration file is hera.txt, which must contain the TCP port where t
     #    (PORT=12345)))(CONNECT_DATA=(SERVICE_NAME=sn)))'.
     # for Oracle only add to LD_LIBRARY_PATH environment variable the path to the shared libraries of the
     #    Oracle instant client
+    # for postgress format can be like : export TWO_TASK='127.0.0.1:5432/user?connect_timeout=60'
 
     # start
     ./mux --name hera-test
+    
+    # to validate HERA is running fine tail 'state-log' file and check 2 connections in 'acpt' state.
+    # 01/07/2022 18:28:39: -----------  init  acpt  wait  busy  schd  fnsh  quce  asgn  idle  bklg  strd
+    # 01/07/2022 18:28:39: hera            0     2     0     0     0     0     0     0     0     0     0
+    
+    # incase connections are not in accept state, check the hera.log file for errors
 ```    
 For details about the parameters see [configuration](docs/configuration.md)
 
