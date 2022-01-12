@@ -1,6 +1,0 @@
-database_type=postgres
-bind_ip=0.0.0.0
-log_level=5
-bind_port=11111
-rac_sql_interval=0
-opscfg.hera-test.server.max_connections=2

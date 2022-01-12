@@ -3,7 +3,11 @@ FILE="/usr/local/openresty/nginx/sbin/get_ports.py"
 if test -f "$FILE"; then
   python3 /usr/local/openresty/nginx/sbin/get_ports.py
 else
-  sed -i "s/WHAT_TO_LISTEN/listen 10102 ssl;/g" /usr/local/openresty/nginx/conf/nginx.conf;
+  if [ "${HERA_ENABLE_SSL}" = true ] ; then
+    sed -i "s/WHAT_TO_LISTEN/listen 10102 ssl;/g" /usr/local/openresty/nginx/conf/nginx.conf;
+  else
+    sed -i "s/WHAT_TO_LISTEN/listen 10102;/g" /usr/local/openresty/nginx/conf/nginx.conf;
+  fi
 fi
 
 /usr/local/openresty/nginx/sbin/heartbeat.sh &
