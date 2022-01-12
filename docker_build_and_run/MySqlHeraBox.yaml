@@ -40,7 +40,6 @@ services:
       - HERA_DB_SCHEMA=${HERA_DB_SCHEMA}
       - HERA_DB_USER=${HERA_DB_USER}
       - HERA_ENABLE_SSL=${HERA_ENABLE_SSL}
-      - HERA_RUN_WITH_HERA_MOCK=${HERA_RUN_WITH_HERA_MOCK}
 
     links:
       - mysqldb

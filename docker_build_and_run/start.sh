@@ -13,9 +13,8 @@ then
   echo "3. HERA_DB_SCHEMA - Default is 'testschema'"
   echo "4. HERA_DB_USER - Default is 'herauser'"
   echo "5. HERA_DB_PASSWORD - Default is 'herapassword'"
-  echo "6. RUN_WITH_HERA_MOCK - Default is 'false'"
-  echo "7. HERA_ENABLE_SSL - Default is 'true'"
-  echo "8. HERA_RUN_WITH_HERA_MOCK - Default is 'true'"
+  echo "6. HERA_ENABLE_SSL - Default is 'true'"
+  echo "7. HERA_RUN_WITH_MOCK - Default is 'true'"
   echo "********************==========********************"
   exit
 fi
@@ -26,7 +25,7 @@ HERA_DB_SCHEMA=${HERA_DB_SCHEMA:-testschema}
 HERA_DB_USER=${HERA_DB_USER:-herauser}
 HERA_DB_PASSWORD=${HERA_DB_PASSWORD:-herapassword}
 HERA_ENABLE_SSL=${HERA_ENABLE_SSL:-true}
-HERA_RUN_WITH_HERA_MOCK=${HERA_RUN_WITH_HERA_MOCK:-true}
+HERA_RUN_WITH_MOCK=${HERA_RUN_WITH_MOCK:-true}
 
 export HERA_DB_ROOT_PASSWORD
 export MYSQL_VERSION
@@ -34,7 +33,7 @@ export HERA_DB_SCHEMA
 export HERA_DB_USER
 export HERA_DB_PASSWORD
 export HERA_ENABLE_SSL
-export HERA_RUN_WITH_HERA_MOCK
+export HERA_RUN_WITH_MOCK
 
 echo "Starting MySQL and hera ..."
 if [ "$HERA_ENABLE_SSL" = true ] ; then
@@ -42,7 +41,7 @@ if [ "$HERA_ENABLE_SSL" = true ] ; then
 else
   echo "SSL disabled"
 fi
-if [ "$HERA_RUN_WITH_HERA_MOCK" = true ] ; then
+if [ "$HERA_RUN_WITH_MOCK" = true ] ; then
   echo "Mock enabled"
   docker-compose -f MySqlHeraMockHeraBox.yaml up -d --remove-orphans
 else
