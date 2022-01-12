@@ -265,10 +265,15 @@ local function get_upstream_socket()
 	else
 		temp_id = get_id(up_sock)
 	end
-	local _, up_err = up_sock:sslhandshake()
-	if up_err then
-		log_to_file(ngx.ERR, temp_id .. " upstream handshake failed " .. up_err .. " for ip " .. upstream_ip .. ":" .. port)
-		return nil, upstream_ip
+	local ssl_enabled = os.getenv("HERA_ENABLE_SSL")
+	if ssl_enabled == nil or ssl_enabled == "false" then
+	    log_to_file(ngx.INFO, temp_id .. " SSL Disabled for  connection " .. upstream_ip .. ":" .. port)
+	else
+        local _, up_err = up_sock:sslhandshake()
+        if up_err then
+            log_to_file(ngx.ERR, temp_id .. " upstream handshake failed " .. up_err .. " for ip " .. upstream_ip .. ":" .. port)
+            return nil, upstream_ip
+        end
 	end
 	log_to_file(ngx.DEBUG, temp_id .. " new upstream socket connection" .. " for ip " .. upstream_ip .. ":" .. port)
 	return up_sock, upstream_ip

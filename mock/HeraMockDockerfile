@@ -17,7 +17,7 @@
 
 FROM openresty/openresty
 
-# prepare the image with required softwares
+# prepare the image with required software
 RUN apt update
 RUN apt install redis-server -y
 RUN apt install python3 -y
@@ -64,6 +64,8 @@ RUN apt-get install procps -y
 RUN apt-get install vim -y
 RUN apt install iputils-ping -y
 
+# ready the environment
 RUN cd /opt/ && javac SQLHashGen.java
 
+# entry point
 CMD ["/usr/local/openresty/nginx/sbin/hera_mock_start.sh"]
