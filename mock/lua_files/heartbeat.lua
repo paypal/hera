@@ -9,10 +9,15 @@ local function trim(s)
     return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
-package.path = '/usr/local/openresty/nginx/lua_files/?.lua;' .. package.path
-local ilogger = require("ilogger")
+local function has_logger()
+    package.path = '/usr/local/openresty/nginx/lua_files/?.lua;' .. package.path
+    local ilogger = require("ilogger")
+end
 
-if (ilogger ~= nill) then
+
+if (pcall(has_logger)) then
+    package.path = '/usr/local/openresty/nginx/lua_files/?.lua;' .. package.path
+    local ilogger = require("ilogger")
     local host =  trim(capture("/sbin/ip route|awk '/src/ { print $9 }'"))
     local ns = os.getenv("namespace")
     if ns ~= nil then
