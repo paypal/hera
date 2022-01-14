@@ -42,7 +42,7 @@ export TWO_TASK="tcp($HERA_DB_VIP:3306)/$HERA_DB_SCHEMA"
 #export TWO_TASK_STANDBY0_1=tcp($HERA_DB_VIP:3306)/$HERA_DB_SCHEMA
 
 export username=$HERA_DB_USER
-if [ "${HERA_ENABLE_SSL}" = true ] ; then
+if [ "${HERA_DISABLE_SSL}" = false ] ; then
   echo "cert_chain_file=srvChain.crt" >> hera.txt
   echo "key_file=srv2.key" >> hera.txt
 fi

@@ -68,6 +68,5 @@ if (ngx.shared.response_status:get(d2) ~= nil) then
     ngx.shared.response_status:delete(d2)
 end
 
-
 send_data(sock, "upstream_request", string.len(resp), resp);
 
