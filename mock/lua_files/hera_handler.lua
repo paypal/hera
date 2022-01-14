@@ -265,8 +265,8 @@ local function get_upstream_socket()
 	else
 		temp_id = get_id(up_sock)
 	end
-	local ssl_enabled = os.getenv("HERA_ENABLE_SSL")
-	if ssl_enabled == nil or ssl_enabled == "false" then
+	local ssl_disable = os.getenv("HERA_DISABLE_SSL")
+	if ssl_disable ~= nil and ssl_disable == "true" then
 	    log_to_file(ngx.INFO, temp_id .. " SSL Disabled for  connection " .. upstream_ip .. ":" .. port)
 	else
         local _, up_err = up_sock:sslhandshake()

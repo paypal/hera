@@ -39,7 +39,7 @@ services:
       - HERA_DB_VIP=mysqldb
       - HERA_DB_SCHEMA=${HERA_DB_SCHEMA}
       - HERA_DB_USER=${HERA_DB_USER}
-      - HERA_ENABLE_SSL=${HERA_ENABLE_SSL}
+      - HERA_DISABLE_SSL=${HERA_DISABLE_SSL}
 
     links:
       - mysqldb
