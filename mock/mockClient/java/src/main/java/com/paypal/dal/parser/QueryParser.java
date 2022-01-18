@@ -43,7 +43,7 @@ public class QueryParser {
                         response.append("0 ");
                     for (SelectItemMetaData itemMetaData : parser.sqlMetaData.getSelectMetaData().getSelectItemMetaDataList()) {
                         if (itemMetaData.getSelectLevel() == 1) {
-                            String startKey = itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
+                            String startKey = " " + itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
                             String endKey = " " + itemMetaData.getColumnName().toUpperCase() + "_END_HERA_MOCK ";
                             if (values.contains(startKey) && values.contains(endKey)) {
                                 String value = values.split(startKey)[1].split(endKey)[0];
@@ -98,10 +98,10 @@ public class QueryParser {
             if (parser.sqlMetaData.getSqlType().equals(Select.class.getSimpleName())) {
                 for (SelectItemMetaData itemMetaData : parser.sqlMetaData.getSelectMetaData().getSelectItemMetaDataList()) {
                     if (itemMetaData.getSelectLevel() == 1) {
-                        String startKey = itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
-                        String endKey = itemMetaData.getColumnName().toUpperCase() + "_END_HERA_MOCK ";
+                        String startKey = " " + itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
+                        String endKey = "," + itemMetaData.getColumnName().toUpperCase() + "_END_HERA_MOCK ";
                         if(metaData.contains(startKey) && metaData.contains(endKey)) {
-                            response.append(metaData.split(startKey)[1].split(endKey)[0]);
+                            response.append(metaData.split(startKey)[1].split(endKey)[0] + ",");
                             counter++;
                         } else if (itemMetaData.getColumnName().equals("*"))
                         {
