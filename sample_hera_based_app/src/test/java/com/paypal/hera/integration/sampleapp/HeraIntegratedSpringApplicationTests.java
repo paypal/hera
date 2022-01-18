@@ -17,13 +17,17 @@ class HeraIntegratedSpringApplicationTests {
     void testConnection() throws SQLException {
         String message = "";
         try {
+            Boolean disableSSL = false;
+            String sslEnv = System.getenv("HERA_DISABLE_SSL");
+            if (sslEnv != null && sslEnv.equalsIgnoreCase("true"))
+                disableSSL = true;
             String host = "1:127.0.0.1:10101";
             Properties props = new Properties();
             System.setProperty("javax.net.ssl.trustStore", "src/main/resources/cert/hera.jks");
             System.setProperty("javax.net.ssl.trustStorePassword", "herabox");
 
-            // Override any default property
-            props.setProperty(HeraClientConfigHolder.CONNECTION_FACTORY_PROPERTY, HeraTLSConnectionFactory.class.getCanonicalName());
+            if(!disableSSL)
+                props.setProperty(HeraClientConfigHolder.CONNECTION_FACTORY_PROPERTY, HeraTLSConnectionFactory.class.getCanonicalName());
             props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
             Connection dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
