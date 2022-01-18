@@ -8,6 +8,7 @@
 BUILD_HERA=${BUILD_HERA:-true}
 BUILD_HERA_MOCK=${BUILD_HERA_MOCK:-true}
 BASE_IMAGE=${BASE_IMAGE:-"openresty/openresty"}
+BUILD_SAMPLE_APP=${BUILD_SAMPLE_APP:-true}
 export BASE_IMAGE
 
 # Copy the hera source code to compile hera and create hera container
@@ -24,4 +25,11 @@ if [ "$BUILD_HERA_MOCK" = true ] ; then
   cd ../mock
   cd mockClient/java && mvn clean -DskipTests install ; cd ../../
   docker build --build-arg BASE_IMAGE=${BASE_IMAGE} -f HeraMockDockerfile -t hera-mock .
+fi
+
+if [ "$BUILD_SAMPLE_APP" = true ] ; then
+  echo "Building HeraMock Code ..."
+  # build the heramock and create the container
+  cd ../sample_hera_based_app/
+  mvn clean install -DskipTests;
 fi

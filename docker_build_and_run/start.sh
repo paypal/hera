@@ -16,6 +16,7 @@ then
   echo "6. HERA_DISABLE_SSL - Default is 'false'"
   echo "7. HERA_RUN_WITH_MOCK - Default is 'true'"
   echo "8. HERA_TIME_ZONE - Default is 'America/Los_Angeles'"
+  echo "9. START_HERA_SAMPLE_APP - Default is 'true'"
   echo "********************==========********************"
   exit
 fi
@@ -28,6 +29,7 @@ HERA_DB_PASSWORD=${HERA_DB_PASSWORD:-herapassword}
 HERA_DISABLE_SSL=${HERA_DISABLE_SSL:-false}
 HERA_RUN_WITH_MOCK=${HERA_RUN_WITH_MOCK:-true}
 HERA_TIME_ZONE="America/Los_Angeles"
+START_HERA_SAMPLE_APP=${START_HERA_SAMPLE_APP:-true}
 
 export HERA_DB_ROOT_PASSWORD
 export MYSQL_VERSION
@@ -41,9 +43,12 @@ export HERA_TIME_ZONE
 echo "Starting MySQL and hera ..."
 echo "*****************************"
 echo "Settings: "
-echo "MYSQL VERIONS: "$MYSQL_VERSION", MOCK_ENABLED: "$HERA_RUN_WITH_MOCK
-echo "DB USER: "$HERA_DB_USER", SCHEMA: "$HERA_DB_SCHEMA
-echo "DISABLE SSL: "$HERA_DISABLE_SSL", TIMEZONE: "$HERA_TIME_ZONE
+echo "MYSQL VERIONS: "$MYSQL_VERSION
+echo "MOCK_ENABLED: "$HERA_RUN_WITH_MOCK
+echo "DB USER: "$HERA_DB_USER
+echo "SCHEMA: "$HERA_DB_SCHEMA
+echo "DISABLE SSL: "$HERA_DISABLE_SSL
+echo "TIMEZONE: "$HERA_TIME_ZONE
 echo "*****************************"
 
 if [ "$HERA_RUN_WITH_MOCK" = true ] ; then
@@ -57,3 +62,5 @@ case "${unameOut}" in
     MING*)    winpty docker exec -it hera_mysql mysql -u root -p$HERA_DB_ROOT_PASSWORD  -e "Use $HERA_DB_SCHEMA; $(cat ./initialize.sql)";;
     *)        docker exec -it hera_mysql mysql -u root -p$HERA_DB_ROOT_PASSWORD  -e "Use $HERA_DB_SCHEMA; $(cat ./initialize.sql)"
 esac
+
+cd ../sample_hera_based_app/ && mvn spring-boot:run > app.log &
