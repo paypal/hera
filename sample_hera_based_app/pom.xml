@@ -13,10 +13,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.paypal</groupId>
-    <artifactId>heraclient</artifactId>
+    <artifactId>herabasedapp</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>heraclient</name>
-    <description>heraclient</description>
+    <name>herabasedapp</name>
+    <description>herabasedapp</description>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
