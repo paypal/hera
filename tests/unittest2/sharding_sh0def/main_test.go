@@ -112,9 +112,8 @@ func setupShardMap(t *testing.T) {
 	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
 	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id smallint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
-	err := testutil.PopulateShardMap(1024)
-	if err != nil {
-		t.Fatalf("Error populating shard map %s\n", err.Error())
+	for i := 0; i < 1024; i++ {
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 1, 'Y', 'Y', 'Y' )", i) )
 	}
 }
 

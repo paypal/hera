@@ -22,7 +22,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
-	appcfg["log_file"] = "occ.log"
+	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["enable_sharding"] = "true"
@@ -112,9 +112,8 @@ func setupShardMap(t *testing.T) {
 	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
 	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id smallint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
-	err := testutil.PopulateShardMap(1024)
-	if err != nil {
-		t.Fatalf("Error populating shard map %s\n", err.Error())
+	for i := 0; i < 1024; i++ {
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 0, 'Y', 'Y', 'Y' )", i) )
 	}
 }
 
@@ -135,7 +134,7 @@ func TestShardingStr(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -150,25 +149,27 @@ func TestShardingStr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error prep %s %s\n", sqlDesc, err.Error())
 	}
-	//_, err = stmt.Exec("FutureString", "not an email", sql.Named("email_addr", ")
 	_, err = stmt.Exec(sql.Named("email_addr", "FutureString"), sql.Named("note", "not an email"))
 	if err != nil {
 		t.Fatalf("Error exec %s %s\n", sqlDesc, err.Error())
 	}
-	if testutil.RegexCountFile("bucket = 786", "occ.log") != 1 {
+	if testutil.RegexCountFile("bucket = 786", "hera.log") != 1 {
 		t.Fatalf("Error did not map to proper scuttle bucket")
 	}
 	_, err = stmt.Exec(sql.Named("email_addr", "FutureStringWithMod1024"), sql.Named("note", "not an email"))
 	if err != nil {
 		t.Fatalf("Error exec2 %s %s\n", sqlDesc, err.Error())
 	}
-	if testutil.RegexCountFile("bucket = 362", "occ.log") != 1 {
+	if testutil.RegexCountFile("bucket = 362", "hera.log") != 1 {
 		t.Fatalf("Error2 did not map to proper scuttle bucket")
 	}
 	err = tx.Commit()
 	if err != nil {
 		t.Fatalf("Error commit %s %s\n", sqlDesc, err.Error())
 	}
+	stmt.Close()
+	cancel()
+	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr done  -------------------------------------------------------------")
 }
