@@ -1,0 +1,83 @@
+version: "2.1"
+services:
+  # do not change the name from mysqldb - local hera currently hardcoded to connect this container
+  mysqldb:
+    image: "mysql:${MYSQL_VERSION}"
+    container_name: hera_mysql
+    restart: always
+    environment:
+      # create a db which is set in env variable when container starts
+      MYSQL_DATABASE: "${HERA_DB_SCHEMA}"
+
+      # do not change this username or password as hera uses them to connect to db
+      MYSQL_USER: "${HERA_DB_USER}"
+      MYSQL_PASSWORD: "${HERA_DB_PASSWORD}"
+
+      # feel free to change your local mysql's root password
+      MYSQL_ROOT_PASSWORD: "${HERA_DB_ROOT_PASSWORD}"
+    ports:
+      - '3306:3306'
+    expose:
+      - '3306'
+    healthcheck:
+        test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+        timeout: 20s
+        retries: 10
+  hera:
+    image: hera-oss
+    stdin_open: true
+    container_name: testRunHeraOss
+    security_opt:
+      - seccomp:unconfined
+
+    expose:
+      - '10101'
+    ports:
+      - '10101:10101'
+    environment:
+      - password=${HERA_DB_PASSWORD}
+      - HERA_DB_VIP=mysqldb
+      - HERA_DB_SCHEMA=${HERA_DB_SCHEMA}
+      - HERA_DB_USER=${HERA_DB_USER}
+      - HERA_DISABLE_SSL=${HERA_DISABLE_SSL}
+      - TZ=${HERA_TIME_ZONE}
+
+    links:
+      - mysqldb
+    labels:
+      primary.container: "true"
+    depends_on:
+      mysqldb:
+        condition: service_healthy
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      test: "pgrep mysqlworker > /dev/null 2>&1"
+
+  hera-mock:
+    image: hera-mock
+    stdin_open: true
+    container_name: testRunHeraMock
+    security_opt:
+      - seccomp:unconfined
+
+    expose:
+      - '13916'
+      - '10102'
+    ports:
+      - '13916:13916'
+      - '10102:10102'
+    environment:
+      - HERA_DISABLE_SSL=${HERA_DISABLE_SSL}
+      - TZ=${HERA_TIME_ZONE}
+    links:
+      - hera
+    depends_on:
+      hera:
+        condition: service_healthy
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      test: "pgrep nginx > /dev/null 2>&1"
