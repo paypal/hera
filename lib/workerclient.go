@@ -124,6 +124,11 @@ type WorkerClient struct {
 	//
 	// for bind eviction
 	sqlBindNs atomic.Value // *netstring.Netstring
+	
+	//
+	// should use pointer or copy-by-value
+	clientAZ atomic.Value //  string 
+	clientApp atomic.Value // string
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.
 	// reset to 0 after eor meaning no sql running (same as start_time_offset_ms in c++).
@@ -363,18 +368,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	envUpsert(&attr, "password2", dbPassword2)
 	envUpsert(&attr, "password3", dbPassword3)
 	envUpsert(&attr, "mysql_datasource", twoTask)
-	if len(twoTask) > 0 && twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
-		tnsnames, err := FindTns()
-		if err == nil {
-			dsn, ok := tnsnames[twoTask]
-			if ok {
-				envUpsert(&attr, "mysql_datasource", dsn)
-				logger.GetLogger().Log(logger.Debug, "looked up datasource "+twoTask+" in tnsnames "+dsn)
-			} else {
-				logger.GetLogger().Log(logger.Alert, "mux could not lookup "+twoTask+" in tnsnames, hoping client library can lookup")
-			}
-		}
-	}
 
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
@@ -531,7 +524,11 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
 	}
 
+	//
+	// Notes: AZ isolation, reset the clientAZ
+	//
 	worker.setState(wsAcpt)
+
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
 	if err != nil {

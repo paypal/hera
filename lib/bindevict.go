@@ -151,3 +151,9 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 	// nothing matched
 	return false, nil
 }
+
+//func (be *BindEvict) ShouldBlockAZ(sqlhash uint32, srcAZ string){
+//	// The idea is to block excessive use from a certain AZ.
+//	// Can we quickly disable the feature?
+//
+//} 

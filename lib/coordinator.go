@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,12 +50,15 @@ type Coordinator struct {
 
 	corrID         *netstring.Netstring
 	preppendCorrID bool
+	clientAZ        string
+	clientHostName  string
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
 	id        string
 	sqlhash   int32
-	shard     *shardInfo
+	poolName  string
+        shard     *shardInfo
 	prevShard *shardInfo
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
@@ -136,7 +140,6 @@ func (crd *Coordinator) Run() {
 				logger.GetLogger().Log(logger.Debug, crd.id, "coordinator run got client request.")
 			}
 			crd.nss = nil
-			// new session
 			handle, _ := crd.handleMux(ns)
 			if !handle {
 				// not handled by mux, it means it is a worker command
@@ -375,6 +378,8 @@ func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool,
 func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 	crd.isRead = false
 	crd.preppendCorrID = (crd.worker == nil)
+	// assuming that we could trust client info in a composite request, 
+	// standalone 
 	if request.IsComposite() {
 		// TODO: avoid full parsing if necessary
 		// if this is a worker command, only a shallow parse might be needed (if sharding is enabled, full parsing still needed anyway)
@@ -402,7 +407,8 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 				}
 				return handled, err
 			}
-
+			// only process the source AZ and app in a session.
+			// pass the flag to tell the difference ?
 			handled, err := crd.processMuxCommand(ns)
 			if !handled {
 				if nss[0].Cmd == common.CmdClientCalCorrelationID {
@@ -494,21 +500,68 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		cal.GetCalClientInstance().GetPoolName(), hostname)
 	ns := netstring.NewNetstringFrom(common.RcOK, []byte(serverInfo))
 	crd.respond(ns.Serialized)
-	var poolName string
+	// var poolName string
 	prefix := "Poolname: "
 	pos := strings.LastIndex(clientInfo, prefix)
 	if pos != -1 {
 		pos += len(prefix)
-		poolName = clientInfo[pos:]
-		end := strings.Index(poolName, ",")
+		crd.poolName = clientInfo[pos:]
+		end := strings.Index(crd.poolName, ",")
 		if end != -1 {
-			poolName = poolName[:end]
+			crd.poolName = crd.poolName[:end]
 		}
 	} else {
-		poolName = "UNKNOWN"
+		crd.poolName = "UNKNOWN"
 	}
 
-	et := cal.NewCalEvent(cal.EventTypeClientInfo, poolName, cal.TransOK, "mux")
+
+/*
+Example in CAL:
+E16:00:09.63	CLIENT_INFO	riskdataprocessmsgd	0	mux&raddr=10.125.249.18:60510&PoolStack=riskudfundsavailserv:v1.realtimedataserv.query*CalThreadId=886*TopLevelTxnStartTime=17b3f7a3793*Host=dcg02riskudfundsavailserv6*pid=5274, Name: ^occ-idis00:CLIENT_INFO*CalThreadId=0*TopLevelTxnStartTime=TopLevelTxn not set*Host=ccg13occ-idis001&corr_id=NotSet
+
+raw payload
+83:11 PID: 12139, HOST: hyperlvs72, EXEC: ./simple_client, Poolname: , Command: init, ,
+*/
+	if crd.clientAZ == "" { 
+		prefix = "HOST: "
+		pos = strings.LastIndex(clientInfo, prefix)
+		// In order to make discovery work correctly, the client host's name must start with AZ
+		// for off-live, does ccg/dcg apply to dev zone?
+		ccgregexp := regexp.MustCompile("^ccg[0-9]+") // using the prefix of the hostname
+		dcgregexp := regexp.MustCompile("^dcg[0-9]+")
+		if pos != -1 {
+			pos += len(prefix)
+			crd.clientHostName = clientInfo[pos:]
+			end := strings.Index(crd.clientHostName, ",")
+			if end != -1 {
+				crd.clientHostName = crd.clientHostName[:end]
+				crd.clientHostName = strings.ToLower(strings.TrimSpace(crd.clientHostName))
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "clienthost:", crd.clientHostName)
+				}
+				var tmpaz [] string
+				if tmpaz = ccgregexp.FindStringSubmatch(crd.clientHostName); tmpaz != nil  {
+					crd.clientAZ = tmpaz[0]
+				} else if tmpaz = dcgregexp.FindStringSubmatch(crd.clientHostName); tmpaz != nil  {
+					crd.clientAZ = tmpaz[0]
+				} else {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "client host is not ccg nor dcg")
+					}
+					// data falls outsize the recognized pattern 
+					crd.clientAZ = "others"
+				}
+			} else {
+				// no client host info available
+				crd.clientAZ = "Unknown"
+			}
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, "clientAZ: [", crd.clientAZ, "]")
+			}
+		}
+	}
+
+	et := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, cal.TransOK, "mux")
 	et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 	// TODO: cal pool stack stuff
 	calInstance := cal.GetCalClientInstance()
@@ -518,7 +571,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		if pos != -1 {
 			pos += len(prefix)
 			parentPoolStack := clientInfo[pos:]
-			end := strings.Index(poolName, ",")
+			end := strings.Index(crd.poolName, ",")
 			if end != -1 {
 				parentPoolStack = parentPoolStack[:end]
 			}
@@ -602,7 +655,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
 			logger.GetLogger().Log(logger.Verbose, msg)
 		}
-		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
+		bindkv := parseBinds(request)
+		// srcAZApp looks up the AZ + App name
+		bindkv["srcAZApp"] = fmt.Sprintf("%s|%s", crd.clientAZ, crd.poolName)
+		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
@@ -620,10 +676,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			crd.respond(ns.Serialized)
 			crd.conn.Close()
 			return fmt.Errorf("bind throttle block")
-		} else {
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "bind throttle allow",uint32(crd.sqlhash))
-			}
+		}
+
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "proceed AZ checking given bind throttle allowed ",uint32(crd.sqlhash))
 		}
 	}
 
@@ -696,14 +752,15 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			}
 		}
 	}
-
-	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+        wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
 	if !xShardRead {
 		if wait {
 			crd.worker = worker
 			crd.workerpool = workerpool
 			crd.ticket = ticket
+			worker.clientAZ.Store(crd.clientAZ)
+		        worker.clientApp.Store(crd.poolName)
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dispatchrequest: waiting for client.")
 			}
@@ -880,6 +937,9 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	// dosession.
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+	// lock still locked, is there any concern of corrupted data?
+	worker.clientAZ.Store(crd.clientAZ)
+        worker.clientApp.Store(crd.poolName)
 	worker.sqlBindNs.Store(request)
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
