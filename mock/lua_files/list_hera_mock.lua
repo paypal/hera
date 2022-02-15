@@ -54,6 +54,8 @@ if keys then
                 value = backed_by
             end
         end
+        v = v:gsub("=", "heraMockEqual")
+        value = value:gsub("=", "heraMockEqual")
         resp = resp .. v .. "=" .. value .. " NEXT_LINE ";
     end
 end

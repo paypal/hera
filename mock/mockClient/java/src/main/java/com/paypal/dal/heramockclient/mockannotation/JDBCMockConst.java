@@ -14,7 +14,7 @@ public class JDBCMockConst {
     public static final String NEW_LINE = " NEXT_NEWSTRING ";
     public static final String RESPONSE = " START_RESPONSE ";
     public static final String REQUEST = "NEW_REQUEST ";
-    public static final String REPLAY_REQ = " DALHERAMOCK_NEW_SOCK ";
+    public static final String REPLAY_REQ = " HERAMOCK_NEW_SOCK ";
     public static final String MOCK_COMMIT_FOREVER = "MOCK_COMMIT_FOREVER";
     public static final String MOCK_ROLLBACK_FOREVER = "MOCK_ROLLBACK_FOREVER";
     public static final String MOCK_DELAYED_RESPONSE = " MOCK_DELAYED_RESPONSE ";
