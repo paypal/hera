@@ -108,7 +108,7 @@ public class SQLExpressionVisitor implements ExpressionVisitor {
                 insertItemMetaData.setConstantValue(constantValue);
             } else {
                 SelectItemMetaData selectItemMetaData = new SelectItemMetaData(null, null, null,
-                        level);
+                        level, null);
                 ConstantValue constantValue = new ConstantValue();
                 constantValue.setValue(function.getMultipartName().get(0));
                 constantValue.setType(LongValue.class.getSimpleName());
@@ -198,7 +198,7 @@ public class SQLExpressionVisitor implements ExpressionVisitor {
         else if(selectItem) {
             if(!this.selectColumnAdded) {
                 selectItemMetaDataList.add(new SelectItemMetaData(jdbcNamedParameter.getName(), null,
-                        null, level));
+                        null, level, null));
             }
             WhereBindInMeta whereBindInMeta = new WhereBindInMeta();
             whereBindInMeta.getVariableName().add(jdbcNamedParameter.getName());
@@ -299,7 +299,7 @@ public class SQLExpressionVisitor implements ExpressionVisitor {
             whereBindInMeta.setConstantValue(constantValue);
         } else if (selectItem) {
             SelectItemMetaData selectItemMetaData = new SelectItemMetaData(null,
-                    null, null, level);
+                    null, null, level, null);
             ConstantValue constantValue = new ConstantValue();
             constantValue.setValue(stringValue.getValue());
             constantValue.setType(LongValue.class.getSimpleName());
@@ -495,7 +495,7 @@ public class SQLExpressionVisitor implements ExpressionVisitor {
 
             if(!selectColumnAdded) {
                 SelectItemMetaData selectItemMetaData = new SelectItemMetaData(column.getColumnName(), tableName,
-                        column.getColumnName(), level);
+                        column.getColumnName(), level, null);
                 selectItemMetaDataList.add(selectItemMetaData);
             }
         } else if (whereBind || (updateBind && !this.type.equals("EXPRESSION_VISITOR_UPDATE_SELECT_BINDS"))) {
@@ -512,7 +512,7 @@ public class SQLExpressionVisitor implements ExpressionVisitor {
             if(column.getTable() != null)
                 tableName = column.getTable().getName();
             selectItemMetaDataList.add(new SelectItemMetaData(
-                    column.getColumnName(), tableName, column.getColumnName(), level));
+                    column.getColumnName(), tableName, column.getColumnName(), level, null));
         } else if (this.sqlMetaData.getSqlType().equals("Merge") && insertBind){
             insertItemMetaDataList.get(insertItemMetaDataList.size() - 1).setBindIn(false);
             insertItemMetaDataList.get(insertItemMetaDataList.size() - 1).setVariableName(column.getColumnName());

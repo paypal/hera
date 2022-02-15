@@ -7,12 +7,19 @@ public class SelectItemMetaData {
     private String tableName;
     private int selectLevel;
     private ConstantValue constantValue;
+    private String originalColumnName;
 
-    public SelectItemMetaData(String columnName, String tableName, String columnType, int selectLevel) {
+    public SelectItemMetaData(String columnName, String tableName, String columnType, int selectLevel,
+                              String originalColumnName) {
         this.columnName = columnName;
         this.selectLevel = selectLevel;
         this.tableName = tableName;
         this.columnType = columnType;
+        if(originalColumnName == null) {
+            this.originalColumnName = columnName;
+        } else {
+            this.originalColumnName = originalColumnName;
+        }
     }
 
     public ConstantValue getConstantValue() {
@@ -55,6 +62,9 @@ public class SelectItemMetaData {
         return columnName;
     }
 
+    public String getOriginalColumnName() {
+        return originalColumnName;
+    }
 
     @Override
     public String toString() {
@@ -64,6 +74,7 @@ public class SelectItemMetaData {
                 ", tableName='" + tableName + '\'' +
                 ", selectLevel=" + selectLevel +
                 ", constantValue=" + constantValue +
+                ", originalColumnName=" + originalColumnName +
                 '}';
     }
 }

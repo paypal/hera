@@ -65,7 +65,8 @@ local div = "heramockdiv"
 if d ~= nil then
     local sp, _ = string.find(d, div);
     local key = string.sub(d, sp+10)
-
+    key = key:gsub("heraMockEqual", "=")
+    key = key:gsub("heraMockUnaryAnd", "&")
     local tmp_val = ngx.shared.mock_response:get(key)
     if tmp_val == nil then
         tmp_val = 'nil'

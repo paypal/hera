@@ -1,5 +1,4 @@
 package com.paypal.dal.heramockclient;
-
 import com.paypal.infra.util.netstring.NetStringObj;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -110,7 +109,7 @@ public class NSReader {
     }
 
     JSONArray reverseResponse(JSONObject responseObject,
-                                 JSONObject requestObject) {
+                              JSONObject requestObject) {
         JSONArray response = new JSONArray();
         int numberOfColumns = -1;
         String query = "";
@@ -143,6 +142,7 @@ public class NSReader {
                 }
             }
             response.put(resp.toString() + ",");
+            response.put("6,");
 
         } else if (responseObject.has("recordsAffected")){
             JSONObject recordsAffected = responseObject.getJSONObject("recordsAffected");
@@ -167,7 +167,7 @@ public class NSReader {
                 }
             }
             if (hasFetch) {
-                response.put("6,");
+                response.put("6, ");
             }
         }
 
@@ -265,7 +265,7 @@ public class NSReader {
                         bindType = data;
                     } else {
                         throw new IOException("Unable to find bind value for " + previousKey);
-                }
+                    }
                 else if (key.equals(22l))
                     tags.put(commandMap.get(key));
                 else if (key.equals(7l)) {
@@ -525,7 +525,7 @@ class ColumnCache {
         JSONArray jsonArray = new JSONArray();
         if(cache.containsKey(key)) {
             for (Column c : cache.get(key)) {
-               jsonArray.put(c.getJson());
+                jsonArray.put(c.getJson());
             }
         }
 

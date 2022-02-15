@@ -4,6 +4,7 @@ import com.paypal.dal.heramockclient.mockannotation.JDBCMockConst;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONTokener;
+import javax.persistence.Column;
 
 import java.io.*;
 import java.lang.reflect.*;
@@ -13,6 +14,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
 
+import static com.paypal.dal.heramockclient.DataTypeMetaMap.bufferCaseToVariableCase;
 import static com.paypal.dal.heramockclient.HERAMockAction.ADD_MOCK_CONSTRAINT;
 import static com.paypal.dal.heramockclient.HERAMockAction.NEXT_QUERY;
 import static com.paypal.dal.heramockclient.mockannotation.JDBCMockConst.NEW_LINE;
@@ -97,7 +99,8 @@ public class HERAMockHelper {
             while((readline = in.readLine()) != null) {
                 String[] mocks = readline.split("=");
                 if (mocks.length > 1)
-                    response.put(mocks[0], mocks[1]);
+                    response.put(mocks[0].replace("heraMockEqual", "="),
+                            mocks[1].replace("heraMockEqual", "="));
                 else
                     response.put(mocks[0], "");
             }
@@ -341,7 +344,7 @@ public class HERAMockHelper {
                 resp.append(e.getString("captureId")).append(" HERAMOCK_CAPTURE_ID ");
             }
             if(e.has("heraPort")) {
-                resp.append(e.getString("heraPort")).append(" HERAMOCK_PORT ");
+                resp.append(e.getString("heraPort")).append(" HERA_MOCK_PORT ");
             }
             if(e.has("rawRequest")) {
                 resp.append(JDBCMockConst.getCmd(e.getString("rawRequest")));
@@ -444,9 +447,9 @@ public class HERAMockHelper {
                 heraMockCaptureId = rawRequest.split(" HERAMOCK_CAPTURE_ID ")[0].trim();
                 rawRequest = rawRequest.split(" HERAMOCK_CAPTURE_ID ")[1].trim();
             }
-            if (rawRequest.contains("HERAMOCK_PORT ")) {
-                heraMockPort = rawRequest.split("HERAMOCK_PORT ")[0].trim();
-                rawRequest = rawRequest.split("HERAMOCK_PORT ")[1].trim();
+            if (rawRequest.contains("HERA_MOCK_PORT ")) {
+                heraMockPort = rawRequest.split("HERA_MOCK_PORT ")[0].trim();
+                rawRequest = rawRequest.split("HERA_MOCK_PORT ")[1].trim();
             }
             if (decode) {
                 decodedRequest = new NSReader().parseRequest(rawRequest);
@@ -678,9 +681,9 @@ public class HERAMockHelper {
             heraMockCaptureId = request.split(" HERAMOCK_CAPTURE_ID ")[0].trim();
             request = request.split(" HERAMOCK_CAPTURE_ID ")[1].trim();
         }
-        if (request.contains("HERAMOCK_PORT ")) {
-            heraMockPort = request.split("HERAMOCK_PORT ")[0].trim();
-            request = request.split("HERAMOCK_PORT ")[1].trim();
+        if (request.contains("HERA_MOCK_PORT ")) {
+            heraMockPort = request.split("HERA_MOCK_PORT ")[0].trim();
+            request = request.split("HERA_MOCK_PORT ")[1].trim();
         }
 
         JSONObject requestObject = nsReader.parseRequest(request);
@@ -739,7 +742,7 @@ public class HERAMockHelper {
     }
 
     public static boolean addMock(String key, Object objectToRespond, int nThOccurance, int timeout) throws HERAMockException {
-        return addMock(key, objectToRespond, nThOccurance, timeout, 0);
+        return addMock(key, objectToRespond, nThOccurance, timeout, false);
     }
 
     public static boolean addMock(String key, Object objectToRespond) throws HERAMockException {
@@ -747,24 +750,30 @@ public class HERAMockHelper {
     }
 
     private static void getSingleObjectMock(Object objectToRespond,
-                                              StringBuilder value,
-                                              StringBuilder columnMeta,
-                                              boolean isFirst) throws HERAMockException {
+                                            StringBuilder value,
+                                            StringBuilder columnMeta,
+                                            boolean isFirst,
+                                            boolean noDataFound) throws HERAMockException {
         try {
             Field[] fields = objectToRespond.getClass().getDeclaredFields();
             for (Field f : fields) {
                 if (Modifier.isStatic(f.getModifiers()))
                     continue;
+                String fieldName = f.getName();
+                if (f.isAnnotationPresent(Column.class)) {
+                    Column c = f.getAnnotation(Column.class);
+                    fieldName = bufferCaseToVariableCase(c.name());
+                }
                 if (isFirst)
-                    columnMeta.append(DataTypeMetaMap.getEquivalent(f.getName(), f.getType().getSimpleName()));
+                    columnMeta.append(DataTypeMetaMap.getEquivalent(fieldName, f.getType().getSimpleName()));
                 f.setAccessible(true);
                 String fieldValue;
-                if (f.get(objectToRespond) != null) {
-                    String bufferCase = DataTypeMetaMap.variableCaseToBufferCase(f.getName());
+                if (f.get(objectToRespond) != null && !noDataFound) {
+                    String bufferCase = DataTypeMetaMap.variableCaseToBufferCase(fieldName);
                     String fieldStart = bufferCase + "_START_HERA_MOCK ";
                     String fieldEnd = " " + bufferCase + "_END_HERA_MOCK ";
                     fieldValue = f.get(objectToRespond).toString();
-                    value.append(fieldStart + fieldValue + fieldEnd);
+                    value.append(fieldStart).append(fieldValue).append(fieldEnd);
                 }
             }
         }catch (IllegalAccessException e) {
@@ -772,25 +781,27 @@ public class HERAMockHelper {
         }
     }
 
-    public static String getObjectMock(Object objectToRespond, int delayMs) throws HERAMockException {
+    public static String getObjectMock(Object objectToRespond, boolean noDataFound, int delayMs) throws HERAMockException {
         boolean firstObject = true;
         StringBuilder value = new StringBuilder();
         StringBuilder columnMeta = new StringBuilder();
         if(objectToRespond.getClass().getSuperclass().getSimpleName().equals(AbstractList.class.getSimpleName())) {
             List objects = (List)objectToRespond;
             for(Object obj : objects) {
-                getSingleObjectMock(obj, value, columnMeta, firstObject);
+                getSingleObjectMock(obj, value, columnMeta, firstObject, noDataFound);
                 firstObject = false;
                 value.append(NEW_LINE);
             }
         } else {
-            getSingleObjectMock(objectToRespond, value, columnMeta, true);
+            getSingleObjectMock(objectToRespond, value, columnMeta, true, noDataFound);
             value.append(NEW_LINE);
         }
         String firstLine = "";
         if(delayMs > 0)
             firstLine = delayMs + JDBCMockConst.MOCK_DELAYED_RESPONSE;
         firstLine += "HERAMOCK_OBJECT_MOCK_META ";
+        if(value.toString().isEmpty())
+            value.append(" NO_DATA_FOUND ");
         return  firstLine + columnMeta  +
                 NEW_LINE + value;
     }
@@ -811,10 +822,14 @@ public class HERAMockHelper {
                 0, -1);
     }
 
-    public static boolean addMock(String key, Object objectToRespond, int nThOccurance, int timeout, int delayMs) throws HERAMockException {
+    public static boolean addMock(String key, Object objectToRespond, int nThOccurance, int timeout, boolean noDataFound) throws HERAMockException {
+        return addMock(key, objectToRespond, nThOccurance, timeout, noDataFound, 0);
 
+    }
+
+    public static boolean addMock(String key, Object objectToRespond, int nThOccurance, int timeout, boolean noDataFound, int delayMs) throws HERAMockException {
         try {
-            addMock(key, getObjectMock(objectToRespond, delayMs), nThOccurance, timeout);
+            addMock(key, getObjectMock(objectToRespond, noDataFound, delayMs), nThOccurance, timeout);
             return true;
         }catch (Exception e) {
             throw new HERAMockException(e);
@@ -839,8 +854,10 @@ public class HERAMockHelper {
         }
         newValue.append(value);
         try {
-            String params = key.replace("=", "heraMockEqual") + "=" +
-                    newValue.toString().replace("=", "heraMockEqual");
+            String params = key.replace("=", "heraMockEqual").
+                    replace("&", "heraMockUnaryAnd") + "=" +
+                    newValue.toString().replace("=", "heraMockEqual")
+                            .replace("&", "heraMockUnaryAnd");
 
             String timeoutKey = "expire_time_in_sec";
             params += "&" + timeoutKey + "=" + timeout;
@@ -864,7 +881,8 @@ public class HERAMockHelper {
     public static boolean removeMock(String key) {
         boolean response = true;
         try{
-            String params = "key=" + key;
+            String params = "key=" + key.replace(" H", "HERA_MOCK_SPACE_H")
+                    .replace("=", "occMockEqual").replace("&", "occMockUnaryAnd");
             URL url = new URL(getMockRemoveURL() + "?" + params);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("DELETE");

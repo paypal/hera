@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class DataTypeMetaMap {
@@ -45,6 +46,23 @@ public class DataTypeMetaMap {
             output.append(ch);
         }
         return output.toString().toUpperCase();
+    }
+
+    public static String bufferCaseToVariableCase(String input){
+        StringBuilder output = new StringBuilder();
+        boolean nextUpper = false;
+        for(char ch : input.toLowerCase(Locale.ROOT).toCharArray()) {
+            if (ch == '_') {
+                nextUpper = true;
+                continue;
+            }
+            if (nextUpper)
+                output.append( Character.toUpperCase(ch));
+            else
+                output.append(ch);
+            nextUpper = false;
+        }
+        return output.toString();
     }
 
     public static String getEquivalent(String name, String dataType) throws HERAMockException {
