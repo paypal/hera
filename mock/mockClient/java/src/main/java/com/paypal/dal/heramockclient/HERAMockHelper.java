@@ -882,7 +882,7 @@ public class HERAMockHelper {
         boolean response = true;
         try{
             String params = "key=" + key.replace(" H", "HERA_MOCK_SPACE_H")
-                    .replace("=", "occMockEqual").replace("&", "occMockUnaryAnd");
+                    .replace("=", "heraMockEqual").replace("&", "heraMockUnaryAnd");
             URL url = new URL(getMockRemoveURL() + "?" + params);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("DELETE");
