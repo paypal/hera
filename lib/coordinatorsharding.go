@@ -81,7 +81,12 @@ func (crd *Coordinator) getShardRec(key0 interface{}) *ShardMapRecord {
 			key = uint64(Murmur3(bytes))
 		}
 	} else {
-		key = key0.(uint64)
+		if GetConfig().ShardKeyValueTypeIsString {
+			keyStr := key0.(string)
+			key = uint64(Murmur3([]byte(keyStr)))
+		} else {
+			key = key0.(uint64)
+		}
 	}
 	bucket := key % uint64(GetConfig().MaxScuttleBuckets)
 	shardRec := GetShardingCfg().records[bucket]
