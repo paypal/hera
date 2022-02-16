@@ -94,7 +94,7 @@ local d1 = string.sub(d, 1, sp-1)
 local d2 = string.sub(d, sp+11)
 local t1 = string.sub(t, et+1)
 d1 = d1:gsub("heraMockEqual", "=")
- d1 = d1:gsub("heraMockUnaryAnd", "&")
+d1 = d1:gsub("heraMockUnaryAnd", "&")
 d2 = d2:gsub("heraMockEqual", "=")
 d2 = d2:gsub("heraMockUnaryAnd", "&")
 
