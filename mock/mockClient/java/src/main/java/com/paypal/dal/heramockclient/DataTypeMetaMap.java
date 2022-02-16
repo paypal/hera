@@ -64,7 +64,6 @@ public class DataTypeMetaMap {
         }
         return output.toString();
     }
-
     public static String getEquivalent(String name, String dataType) throws HERAMockException {
         String bufferCase = variableCaseToBufferCase(name);
         String temp = "3 " + bufferCase;
