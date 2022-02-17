@@ -182,4 +182,4 @@ if d1 == "DALHERAMOCK_SERVERIP" or d1 == "PORT_DALHERAMOCK_SERVERIP" then
         end
     end
     ngx.thread.spawn(reload)
-end
+end 
