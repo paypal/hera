@@ -62,24 +62,14 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.ebay.aero</groupId>
-            <artifactId>cal-client-impl</artifactId>
-            <version>3.8.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.paypal.usf</groupId>
-            <artifactId>commons</artifactId>
-            <version>1.4.0</version>
-        </dependency>
-        <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.2.4</version>
         </dependency>
         <dependency>
-            <groupId>com.paypal.usf</groupId>
-            <artifactId>netstring</artifactId>
-            <version>1.6.8</version>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20201115</version>
         </dependency>
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
@@ -97,16 +87,28 @@
             <artifactId>javax.persistence-api</artifactId>
             <version>2.2</version>
         </dependency>
+        <dependency>
+            <groupId>com.paypal.hera</groupId>
+            <artifactId>hera-jdbc</artifactId>
+            <version>0.0.24</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.13.1</version>
+        </dependency>
     </dependencies>
     <distributionManagement>
         <repository>
             <id>${env.MOCK_RELEASE_ID}</id>
+            <!--suppress UnresolvedMavenProperty -->
             <url>
                 ${env.MOCK_CLIENT_RELEASE_PATH}
             </url>
         </repository>
         <snapshotRepository>
-            <id>raptor.snapshots</id>
+            <id>${env.MOCK_SNAPSHOT_ID}</id>
+            <!--suppress UnresolvedMavenProperty -->
             <url>
                 ${env.MOCK_CLIENT_SNAPSHOT_PATH}
             </url>

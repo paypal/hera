@@ -1,6 +1,6 @@
 package com.paypal.dal.heramockclient;
 
-import com.paypal.infra.util.netstring.NetStringObj;
+import com.paypal.hera.util.NetStringObj;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
