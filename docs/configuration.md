@@ -148,7 +148,7 @@ There are two types of configuration parameters: **static parameters** and **dyn
 + default: false
 
 #### management_table_prefix
-+ The prefix for the managament tables: shard map config table (hera_shard_map) and rac maintenance config table (hera_maint)
++ The prefix for the managament tables: shard map config table (hera_shard_map), rac maintenance config table (hera_maint), rate limiter config table (hera_rate_limiter)
 + default: "hera"
 
 #### rac_sql_interval
@@ -162,6 +162,14 @@ There are two types of configuration parameters: **static parameters** and **dyn
 #### lifespan_check_interval 
 + The interval, in seconds, to check if the workers lifespan has expired and they need to be recycled.
 + default: 10
+
+#### enable_query_bind_blocker
++ This is in addition to the automatic bind eviction. It helps the DBAs to block/throttle a SQL with a specific bind variable value. Database will have a table name called <<management_table_prefix>>_rate_limiter,  For sharded databases, this needs to be on sh0 and will block queries headed to any shard.
++ default: false
+
+#### query_bind_blocker_min_sql_prefix
++ SQLs with sqltext under this length will not be considered for rate limiting.
++ default: 20
 
 #### enable_taf
 + It it is "true" then Transparent Application Failover (i.e. TAF) feature is enabled.
