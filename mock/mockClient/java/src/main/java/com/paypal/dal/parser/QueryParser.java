@@ -26,7 +26,9 @@ public class QueryParser {
         Parser parser = new Parser();
         StringBuilder response = new StringBuilder();
         boolean isMeta = true;
+        boolean noDataFound = false;
         int counter = 0;
+        int currentLevel = 1;
         try {
             parser.parse(sql);
             if (parser.sqlMetaData.getSqlType().equals(Select.class.getSimpleName())) {
@@ -42,31 +44,28 @@ public class QueryParser {
                     else
                         response.append("0 ");
                     for (SelectItemMetaData itemMetaData : parser.sqlMetaData.getSelectMetaData().getSelectItemMetaDataList()) {
-                        if (itemMetaData.getSelectLevel() == 1) {
-                            String startKey = " " + itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
-                            String endKey = " " + itemMetaData.getColumnName().toUpperCase() + "_END_HERA_MOCK ";
-                            if (values.contains(startKey) && values.contains(endKey)) {
+                        if (itemMetaData.getSelectLevel() == currentLevel) {
+                            String startKey = " " + itemMetaData.getOriginalColumnName().toUpperCase() + "_START_HERA_MOCK ";
+                            String endKey = " " + itemMetaData.getOriginalColumnName().toUpperCase() + "_END_HERA_MOCK ";
+                            if ((values.contains(startKey) || values.startsWith(startKey.substring(1))) &&
+                                    values.contains(endKey)) {
+                                if(values.startsWith(startKey.substring(1)))
+                                    startKey = startKey.substring(1);
                                 String value = values.split(startKey)[1].split(endKey)[0];
                                 String temp = "3";
                                 if (value.length() > 0)
                                     temp += " " + value;
                                 response.append(temp.length()).append(":").append(temp).append(",");
                                 counter++;
-                            } else if (itemMetaData.getColumnName().equals("*")) {
-                                for (String token : mockData.split("NEXT_NEWSTRING ")[0].split(" ")) {
-                                    if (token.endsWith("_START_HERA_MOCK")) {
-                                        String endToken = token.split("_START_HERA_MOCK")[0] + "_END_HERA_MOCK";
-                                        String temp = "3";
-                                        if (values.contains(token + " ") && values.contains(" " + endToken)) {
-                                            String value = values.split(token + " ")[1].split(" " + endToken)[0];
-                                            if (value.length() > 0)
-                                                temp += " " + value;
-                                        }
-                                        response.append(temp.length()).append(":").append(temp).append(",");
-                                        counter++;
-                                    }
-                                }
-                            } else {
+                            } else if (itemMetaData.getOriginalColumnName().equals("*")) {
+                                currentLevel++;
+                            } else if (values.equals(" NO_DATA_FOUND ") || values.equals(" NO_DATA_FOUND ,")) {
+                                response = new StringBuilder();
+                                response.append("6,");
+                                noDataFound = true;
+                                counter++;
+                            }
+                            else {
                                 response.append("1:3,");
                                 counter++;
                             }
@@ -78,14 +77,19 @@ public class QueryParser {
             return e.getMessage();
         }
 
-        if(!alongWithMeta) {
-            String firstLine = "0";
-            String temp = "3 " + counter;
-            firstLine += " " + temp.length() + ":" + temp + ",3:3 0,, NEXT_NEWSTRING ";
-            return firstLine + response + ", NEXT_NEWSTRING 6,";
+        String noMoreData = ", NEXT_NEWSTRING 6,";
+        String numOfRowColDetails = "0";
+        String temp = "3 " + counter;
+        numOfRowColDetails += " " + temp.length() + ":" + temp + ",3:3 0,, NEXT_NEWSTRING ";
+        String finalResponse = "";
+        if (!alongWithMeta)  {
+            finalResponse = numOfRowColDetails;
         }
-
-        return response + ", NEXT_NEWSTRING 6,";
+        finalResponse += response;
+        if (!noDataFound) {
+            finalResponse += noMoreData;
+        }
+        return finalResponse;
     }
 
     public static String getMockMetaForQuery(String sql, String metaData) {
@@ -93,25 +97,26 @@ public class QueryParser {
         StringBuilder response = new StringBuilder();
         String header = "0";
         int counter = 0;
+        int currentLevel = 1;
         try {
             parser.parse(sql);
             if (parser.sqlMetaData.getSqlType().equals(Select.class.getSimpleName())) {
                 for (SelectItemMetaData itemMetaData : parser.sqlMetaData.getSelectMetaData().getSelectItemMetaDataList()) {
-                    if (itemMetaData.getSelectLevel() == 1) {
-                        String startKey = " " + itemMetaData.getColumnName().toUpperCase() + "_START_HERA_MOCK ";
-                        String endKey = "," + itemMetaData.getColumnName().toUpperCase() + "_END_HERA_MOCK ";
+                    if (itemMetaData.getSelectLevel() == currentLevel) {
+                        String startKey = " " + itemMetaData.getOriginalColumnName().toUpperCase() + "_START_HERA_MOCK ";
+                        String endKey = "," + itemMetaData.getOriginalColumnName().toUpperCase() + "_END_HERA_MOCK ";
                         if(metaData.contains(startKey) && metaData.contains(endKey)) {
-                            response.append(metaData.split(startKey)[1].split(endKey)[0] + ",");
-                            counter++;
-                        } else if (itemMetaData.getColumnName().equals("*"))
-                        {
-                            for(String token : metaData.split("NEXT_NEWSTRING ")[0].split(" ")){
-                                if (token.endsWith("_START_HERA_MOCK")) {
-                                    String endToken = token.split("_START_HERA_MOCK")[0] + "_END_HERA_MOCK";
-                                    response.append(metaData.split(token + " ")[1].split(endToken + " ")[0]);
-                                    counter++;
-                                }
+                            String tempMeta = metaData.split(startKey)[1].split(endKey)[0];
+                            if(!itemMetaData.getColumnName().equals(itemMetaData.getOriginalColumnName())) {
+                                tempMeta = tempMeta.replace(itemMetaData.getOriginalColumnName(), itemMetaData.getColumnName());
+                                int newLength = tempMeta.split(":")[1].split(",")[0].length();
+                                tempMeta = newLength +  tempMeta.substring(tempMeta.indexOf(":"));
                             }
+                            response.append(tempMeta).append(",");
+                            counter++;
+                        } else if (itemMetaData.getOriginalColumnName().equals("*"))
+                        {
+                            currentLevel++;
                         }
                         else if (startKey.equals("NEXTVAL_START_HERA_MOCK ")) {
                             startKey = "NEXT_VAL_START_HERA_MOCK ";
@@ -122,7 +127,7 @@ public class QueryParser {
                             }
                         }
                         else{
-                            return "Missing MetaData for " + itemMetaData.getColumnName();
+                            return "Missing MetaData for " + itemMetaData.getOriginalColumnName();
                         }
                     }
                 }

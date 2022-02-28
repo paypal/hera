@@ -35,9 +35,9 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.paypal</groupId>
+			<groupId>com.paypal.hera</groupId>
 			<artifactId>hera-jdbc</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
+			<version>0.0.24</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jmockit</groupId>
