@@ -50,6 +50,8 @@ for key, val in pairs(args) do
     end
 end
 
+p = p:gsub( "HERA_MOCK_SPACE_H", " H")
+
 local d = "Please provide the key to delete mock data";
 local s;
 
