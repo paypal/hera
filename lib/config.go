@@ -20,12 +20,13 @@ package lib
 import (
 	"errors"
 	"fmt"
-	"github.com/paypal/hera/config"
-	"github.com/paypal/hera/utility/logger"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+
+	"github.com/paypal/hera/config"
+	"github.com/paypal/hera/utility/logger"
 )
 
 //The Config contains all the static configuration
@@ -147,6 +148,8 @@ type Config struct {
 	numWorkersCh chan int
 
 	EnableConnLimitCheck bool
+	EnableQueryBindBlocker bool
+	QueryBindBlockerMinSqlPrefix int
 
 	// taf testing
 	TestingEnableDMLTaf bool
@@ -420,6 +423,8 @@ func InitConfig() error {
 	gAppConfig.lifeSpanCheckInterval = cdb.GetOrDefaultInt("lifespan_check_interval", 10)
 
 	gAppConfig.EnableConnLimitCheck = cdb.GetOrDefaultBool("enable_connlimit_check", false)
+	gAppConfig.EnableQueryBindBlocker = cdb.GetOrDefaultBool("enable_query_bind_blocker", false)
+	gAppConfig.QueryBindBlockerMinSqlPrefix = cdb.GetOrDefaultInt("query_bind_blocker_min_sql_prefix", 20)
 	gAppConfig.TestingEnableDMLTaf = cdb.GetOrDefaultBool("testing_enable_dml_taf", false)
 	gAppConfig.EnableDanglingWorkerRecovery = cdb.GetOrDefaultBool("enable_danglingworker_recovery", false)
 

@@ -117,6 +117,9 @@ func Run() {
 	GoStats()
 
 	RegisterLoopDriver(HandleConnection)
+	if GetConfig().EnableQueryBindBlocker {
+		InitQueryBindBlocker(*namePtr)
+	}
 
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
