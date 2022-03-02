@@ -89,7 +89,7 @@ class NetString:
             else:
                 rec[idx] = val
             idx += 1
-            if l > 0 and idx > l-1:
+            if 0 < l <= idx:
                 values.append(rec)
                 rec = dict()
                 idx = 0
