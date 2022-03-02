@@ -2,6 +2,7 @@ version: "2.1"
 services:
   # do not change the name from mysqldb - local hera currently hardcoded to connect this container
   mysqldb:
+    platform: linux/x86_64
     image: "mysql:${MYSQL_VERSION}"
     container_name: hera_mysql
     restart: always

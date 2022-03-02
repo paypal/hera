@@ -53,4 +53,41 @@ public class HERAMockImplHelperTest {
         Assert.assertTrue("Failed to set custom auth failure", HERAMockHelper.removeConnectionMock());
         Assert.assertNotEquals("1010 simulating clockskew", HERAMockHelper.getMock("accept"));
     }
+
+    @Test
+    public void testAddMockKeySpace() {
+        String key ="10101" + HERAMockAction.ADD_MOCK_CONSTRAINT +
+                "HibernateR1FailoverTest_testQueryTimeout_1_1719891628";
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.addMock(key, "test key"));
+        Assert.assertTrue("Failed to remove mock", HERAMockHelper.removeMock(key));
+
+        Assert.assertNotEquals("test key", HERAMockHelper.getMock(key));
+    }
+
+    @Test
+    public void testKeyValueEqual() {
+        String key ="10101=";
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.addMock(key, "test=key"));
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.getMock(key).equals("test=key"));
+        Assert.assertTrue("Failed to remove mock", HERAMockHelper.removeMock(key));
+
+        Assert.assertNotEquals("test=key", HERAMockHelper.getMock(key));
+    }
+
+    @Test
+    public void testKeyValueUnaryAnd() {
+        String key ="&10101&";
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.addMock(key, "&test&key"));
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.getMock(key).equals("&test&key"));
+        Assert.assertTrue("Failed to remove mock", HERAMockHelper.removeMock(key));
+
+        Assert.assertNotEquals("&test&key", HERAMockHelper.getMock(key));
+
+        key ="port=10101&service=paymentserv";
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.addMock(key, "key=value&payload=make"));
+        Assert.assertTrue("Failed to add Mock", HERAMockHelper.getMock(key).equals("key=value&payload=make"));
+        Assert.assertTrue("Failed to remove mock", HERAMockHelper.removeMock(key));
+
+        Assert.assertNotEquals("key=value&payload=make", HERAMockHelper.getMock(key));
+    }
 }

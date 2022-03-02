@@ -30,7 +30,7 @@ public class SQLSelectItemVisitor implements SelectItemVisitor {
     @Override
     public void visit(AllColumns allColumns) {
         SelectItemMetaData selectItemMetaData = new SelectItemMetaData(allColumns.toString(), null,
-                "AllColumns", level);
+                "AllColumns", level, null);
         sqlMetaData.getSelectMetaData().getSelectItemMetaDataList().add(selectItemMetaData);
     }
 
@@ -41,7 +41,7 @@ public class SQLSelectItemVisitor implements SelectItemVisitor {
             tableName = allTableColumns.getTable().getName();
         }
         SelectItemMetaData selectItemMetaData = new SelectItemMetaData(allTableColumns.toString(), tableName,
-                "AllColumns", level);
+                "AllColumns", level, null);
         sqlMetaData.getSelectMetaData().getSelectItemMetaDataList().add(selectItemMetaData);
     }
 
@@ -53,8 +53,12 @@ public class SQLSelectItemVisitor implements SelectItemVisitor {
                         new InsertItemMetaData(null, selectExpressionItem.getAlias().getName()));
             } else {
                 List<SelectItemMetaData> selectItemMetaDataList = sqlMetaData.getSelectMetaData().getSelectItemMetaDataList();
+                String originalColumnName = null;
+                if(selectExpressionItem.getExpression() instanceof Column) {
+                    originalColumnName = ((Column) selectExpressionItem.getExpression()).getColumnName();
+                }
                 selectItemMetaDataList.add(new SelectItemMetaData(selectExpressionItem.getAlias().getName(), null,
-                        null, level));
+                        null, level, originalColumnName));
             }
         }
         if(this.type.equals(MetaDataConstant.SELECT_VISITOR)) {
