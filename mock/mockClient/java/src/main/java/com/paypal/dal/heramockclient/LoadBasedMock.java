@@ -25,7 +25,7 @@ public class LoadBasedMock {
         this.key = key;
         this.maxRange = maxRange;
         this.minRange = minRange;
-        this.successResponse = HERAMockHelper.getObjectMock(successObject, 0);
+        this.successResponse = HERAMockHelper.getObjectMock(successObject, false, 0);
     }
 
     public String getKey() {

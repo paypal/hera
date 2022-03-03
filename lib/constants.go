@@ -76,6 +76,7 @@ var (
 	ErrAutodiscoverWhileSetShardID,
 	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
+	ErrQueryBindBlocker,
 	ErrOther,
 	ErrReqParseFail error
 )
@@ -104,6 +105,7 @@ func MkErr(prefix string) {
 	ErrAutodiscoverWhileSetShardID = errors.New(prefix + "-374: autodiscover while set shard id")
 	ErrNoShardValue = errors.New(prefix + "-375: no shard value or wrong sharKey array binding")
 	ErrCrossKeysDML = errors.New(prefix + "-206: cross key dml")
+	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
 }

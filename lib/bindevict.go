@@ -123,6 +123,13 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		/* matched bind name and value
 		we stop searching and should return something */
 
+		// update based on usage
+		if heavyUsage {
+			entry.incrAllowEveryX()
+		} else {
+			entry.decrAllowEveryX(2)
+		}
+
 		// check if not used in a while
 		now := time.Now()
 		recent := entry.RecentAttempt.Load().(*time.Time)
@@ -138,13 +145,6 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 			return true/*block*/, entry
 		}
 		entry.AllowEveryXCount = 0
-
-		// update based on usage
-		if heavyUsage {
-			entry.incrAllowEveryX()
-		} else {
-			entry.decrAllowEveryX(2)
-		}
 
 		return false, nil
 	}
