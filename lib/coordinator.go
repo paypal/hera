@@ -388,6 +388,15 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 			return false, err
 		}
 		crd.nss = nss
+		if GetConfig().EnableQueryBindBlocker {
+			block, _ := crd.PreprocessQueryBindBlocker(nss)
+			if block {
+				ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrQueryBindBlocker.Error()))
+				crd.respond(ns.Serialized)
+				crd.conn.Close()
+				return true/*handled*/, nil
+			}
+		} // end GetConfig().EnableQueryBindBlocker
 		for _, ns := range nss {
 			if (ns.Cmd == common.CmdPrepare) || (ns.Cmd == common.CmdPrepareV2) || (ns.Cmd == common.CmdPrepareSpecial) {
 				crd.sqlhash = int32(utility.GetSQLHash(string(ns.Payload)))
