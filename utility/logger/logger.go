@@ -123,7 +123,8 @@ func (logger *logger) Log(severity int32, a ...interface{}) {
 		logger.fileLogger.Println(a...)
 		if severity == Alert {
 			evt := cal.NewCalEvent("LOGGER", "ALERT", cal.TransOK, "")
-			evt.AddDataStr("Data", fmt.Sprint(a...))
+			aJoined := fmt.Sprintln(a...)
+			evt.AddDataStr("Data", aJoined[:len(aJoined)-1])
 			evt.Completed()
 		}
 	}
