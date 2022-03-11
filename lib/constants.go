@@ -133,3 +133,7 @@ const (
 	envHeraName         = "HERA_NAME"
 	envTwoTask          = "TWO_TASK"
 )
+
+const (
+	SrcAZAppKey string = "srcAZApp"
+)

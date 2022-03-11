@@ -157,12 +157,6 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		}
 		usqlhash := uint32(worker.sqlHash)
 		sqlhash := atomic.LoadUint32(&(usqlhash))
-		// this is in a lock, do we really need use atomic ?
-		// if really so, maybe use interface to load sqlHash, clientAZ, clientApp
-		// The info is from dispatcherWorkers, workerclient.
-		// Adding the AZ and APP info into the bindKV
-                sqlsrcAZ := worker.clientAZ.Load().(string)
-                sqlsrcApp := worker.clientApp.Load().(string)
 		_, ok := GetBindEvict().BindThrottle[sqlhash]
 		if ok {
 			continue // don't repeatedly bind evict something already evicted
@@ -174,13 +168,16 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			}
 			continue
 		}
-		// return structure map[string]string
-		// If we did not modify the request before passing to this function, we need to append the AZ, APP info 
-		// at end of the KV list. 
                 contextBinds := parseBinds(request)
-                // adding one more bindName and bindValue. (k,v)=("srcAZApp", info) 
-                // Be aware of below checking will skip the checking if bindvalue length is less than 8.
-		contextBinds["srcAZApp"] = fmt.Sprintf("%s|%s", sqlsrcAZ, sqlsrcApp)
+                sqlsrcAZ := worker.clientAZ.Load().(string)
+                sqlsrcApp := worker.clientApp.Load().(string)
+		if sqlsrcAZ != "" {
+			contextBinds[SrcAZAppKey] = fmt.Sprintf("%s|%s", sqlsrcAZ, sqlsrcApp)
+			if logger.GetLogger().V(logger.Debug) {
+                                msg := fmt.Sprintf("AZApp: Add AZ+App in eval: %s|%s", sqlsrcAZ, sqlsrcApp)
+                                logger.GetLogger().Log(logger.Debug, msg)
+			}
+		}
 		for bindName0, bindValue := range contextBinds {
 			/* avoid too short status values
 			D=deleted, P=pending, C=confirmed

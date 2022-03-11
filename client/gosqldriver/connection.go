@@ -172,3 +172,4 @@ func (c *heraConnection) ResetShardKeyPayload() {
 func (c *heraConnection) SetCalCorrID(corrID string) {
 	c.corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte(fmt.Sprintf("CorrId=%s", corrID)))
 }
+

@@ -124,9 +124,8 @@ type WorkerClient struct {
 	//
 	// for bind eviction
 	sqlBindNs atomic.Value // *netstring.Netstring
-	
-	//
-	// should use pointer or copy-by-value
+
+	// for SQL eviction and throttle by AZ
 	clientAZ atomic.Value //  string 
 	clientApp atomic.Value // string
 	//
@@ -524,11 +523,7 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
 	}
 
-	//
-	// Notes: AZ isolation, reset the clientAZ
-	//
 	worker.setState(wsAcpt)
-
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
 	if err != nil {
