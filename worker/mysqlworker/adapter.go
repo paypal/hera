@@ -94,8 +94,13 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			attempt = attempt + 1
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("Attempt=%d", attempt))
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt-1))
 			}
+
+			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt-1))
+			evt.SetStatus(cal.TransError)
+			evt.Completed()
+
 			pwdStr := fmt.Sprintf("password%d", attempt)
 			pass = os.Getenv(pwdStr)
 		}
