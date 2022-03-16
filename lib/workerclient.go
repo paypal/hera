@@ -352,12 +352,11 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 	}
 
-	_, ok := os.LookupEnv("username")
-	if !ok {
+	if dbUserName != "" {
 		envUpsert(&attr, "username", dbUserName)
 	}
-	_, ok = os.LookupEnv("password")
-	if !ok {
+
+	if dbPassword != "" {
 		envUpsert(&attr, "password", dbPassword)
 	}
 	envUpsert(&attr, "password2", dbPassword2)
