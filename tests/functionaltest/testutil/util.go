@@ -14,6 +14,7 @@ import (
 	"time"
 	"strings"
 	"testing"
+        "github.com/paypal/hera/client/gosqldriver"
 	_"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -72,6 +73,11 @@ func RunSelect(query string) {
         defer conn.Close()
         // cancel must be called before conn.Close()
         defer cancel()
+        mux := gosqldriver.InnerConn(conn)
+        err= mux.SetClientInfo(GetClientInfo().Appname, GetClientInfo().Host)
+        if err != nil {
+                fmt.Println("Error sending Client Info:", err)
+        }
         stmt, err := conn.PrepareContext(ctx, query)
 	if err != nil {
                 fmt.Println("Error Pereparing context:", err)
@@ -147,6 +153,11 @@ func RunDML(dml string) error {
 		return err
 	}
 	defer conn.Close()
+        mux := gosqldriver.InnerConn(conn)
+        err= mux.SetClientInfo(GetClientInfo().Appname, GetClientInfo().Host)
+        if err != nil {
+               fmt.Println("Error sending Client Info:", err)
+        }
 	tx, _ := conn.BeginTx(ctx, nil)
 	stmt, _ := tx.PrepareContext(ctx, dml)
 	defer stmt.Close()
@@ -182,6 +193,11 @@ func RunDML1(dml string) error {
         defer conn.Close()
         // cancel must be called before conn.Close()
         defer cancel()
+        mux := gosqldriver.InnerConn(conn)
+        err= mux.SetClientInfo(GetClientInfo().Appname, GetClientInfo().Host)
+        if err != nil {
+               fmt.Println("Error sending Client Info:", err)
+        }
         tx, _ := conn.BeginTx(ctx, nil)
         stmt, _ := tx.PrepareContext(ctx, dml)
         defer stmt.Close()

@@ -135,5 +135,5 @@ const (
 )
 
 const (
-	SrcAZAppKey string = "srcAZApp"
+	SrcPrefixAppKey string = "srcPrefixApp"
 )
