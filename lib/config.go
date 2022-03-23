@@ -55,6 +55,8 @@ type Config struct {
 	BindEvictionDecrPerSec      float64
 	BindEvictionNames           string
 	BindEvictionMaxThrottle     int
+	SkipEvictRegex              string
+	EvictRegex                  string
 	//
 	//
 	//
@@ -401,10 +403,15 @@ func InitConfig() error {
 	gAppConfig.SoftEvictionProbability = cdb.GetOrDefaultInt("soft_eviction_probability", 50)
 	gAppConfig.BindEvictionTargetConnPct = cdb.GetOrDefaultInt("bind_eviction_target_conn_pct", 50)
 	gAppConfig.BindEvictionMaxThrottle = cdb.GetOrDefaultInt("bind_eviction_max_throttle", 20)
-	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", "id,num")
+	default_evict_names := fmt.Sprintf("id,num,%s", SrcPrefixAppKey)
+	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", default_evict_names)
 	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 25)
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "1.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
+
+	gAppConfig.SkipEvictRegex= cdb.GetOrDefaultString("skip_eviction_host_prefix","")
+	gAppConfig.EvictRegex= cdb.GetOrDefaultString("eviction_host_prefix", "")
+
 
 	gAppConfig.BouncerEnabled = cdb.GetOrDefaultBool("bouncer_enabled", true)
 	gAppConfig.BouncerStartupDelay = cdb.GetOrDefaultInt("bouncer_startup_delay", 10)

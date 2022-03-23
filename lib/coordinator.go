@@ -50,7 +50,7 @@ type Coordinator struct {
 
 	corrID         *netstring.Netstring
 	preppendCorrID bool
-	clientAZ        string
+	clientHostPrefix        string
 	clientHostName  string
 	poolName  string
 	// tells if the current request is SELECT
@@ -520,43 +520,53 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 	}
 
 
-	if crd.clientAZ == "" { 
-		prefix = "HOST: "
-		pos = strings.LastIndex(clientInfo, prefix)
-		// In order to make discovery work correctly, the client host's name must start with AZ
-		// This assumption is not applied to off-live the dev zone.
-		// Exclude ccg due to batch apps - 
-		ccgregexp := regexp.MustCompile("^ccg[0-9]+") // using the prefix of the hostname
-		dcgregexp := regexp.MustCompile("^dcg[0-9]+")
-		if pos != -1 {
-			pos += len(prefix)
-			crd.clientHostName = clientInfo[pos:]
-			end := strings.Index(crd.clientHostName, ",")
-			if end != -1 {
-				crd.clientHostName = crd.clientHostName[:end]
-				crd.clientHostName = strings.ToLower(strings.TrimSpace(crd.clientHostName))
+	prefix = "HOST: "
+	pos = strings.LastIndex(clientInfo, prefix)
+	if pos != -1 {
+		pos += len(prefix)
+		crd.clientHostName = clientInfo[pos:]
+		end := strings.Index(crd.clientHostName, ",")
+		if end != -1 {
+			crd.clientHostName = crd.clientHostName[:end]
+			crd.clientHostName = strings.ToLower(strings.TrimSpace(crd.clientHostName))
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Req info: host is", crd.clientHostName)
+			}
+			if GetConfig().EvictRegex == "" || GetConfig().SkipEvictRegex == "" {
 				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, "clienthost:", crd.clientHostName)
-				}
-				var tmpaz [] string
-				if tmpaz = ccgregexp.FindStringSubmatch(crd.clientHostName); tmpaz != nil  {
-					crd.clientAZ = "" // we don't throttle or evict on ccg 
-				} else if tmpaz = dcgregexp.FindStringSubmatch(crd.clientHostName); tmpaz != nil  {
-					crd.clientAZ = tmpaz[0]
-				} else {
-					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, "clienthost is not ccg nor dcg")
-					}
-					// unrecognized pattern will be evaluated
-					crd.clientAZ = "others"
+					logger.GetLogger().Log(logger.Verbose, "Req info: skip host prefix eviction due to insufficient pattern", crd.clientHostName)
 				}
 			} else {
-				// client info is unavailable, case will be evaluated
-				crd.clientAZ = "unavbl"
+
+				//skipregexp := regexp.MustCompile("^ccg[0-9]+")
+				//evalregexp := regexp.MustCompile("^dcg[0-9]+")
+				skipregexp := regexp.MustCompile(GetConfig().SkipEvictRegex)
+				evalregexp := regexp.MustCompile(GetConfig().EvictRegex)
+				var match [] string
+				if match = skipregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "Req info: skip ccg host")
+					}
+					crd.clientHostPrefix = "" // we don't throttle or evict on ccg 
+				} else if match = evalregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+					crd.clientHostPrefix = match[0]
+				} else {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "Req info: host is not ccg nor dcg")
+					}
+				// unrecognized pattern will be evaluated
+					crd.clientHostPrefix = "others"
+				}
 			}
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "AZApp: request source AZ: [", crd.clientAZ, "]")
+		} else {
+			// client info is unavailable, case will be evaluated
+			crd.clientHostPrefix = "unavbl"
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Req info: host is unavailable")
 			}
+		}
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "Req info: request source AZ: [", crd.clientHostPrefix, "]")
 		}
 	}
 
@@ -655,11 +665,11 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			logger.GetLogger().Log(logger.Verbose, msg)
 		}
 		bindkv := parseBinds(request)
-		// srcAZApp to looks up the AZ + App name
-		if crd.clientAZ != "" {
-			bindkv[SrcAZAppKey] = fmt.Sprintf("s|%s", crd.clientAZ, crd.poolName)
+		// srcHostPrefixApp to looks up the request's host prefix + App name
+		if crd.clientHostPrefix != "" {
+			bindkv[SrcPrefixAppKey] = fmt.Sprintf("%s&%s", crd.clientHostPrefix, crd.poolName)
 			if logger.GetLogger().V(logger.Debug) {
-				msg := fmt.Sprintf("AZApp: bind throttle set az|app: %s|%s", crd.clientAZ, crd.poolName)
+				msg := fmt.Sprintf("Req info: bind throttle set az-app: %s", bindkv[SrcPrefixAppKey])
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
@@ -938,13 +948,13 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	// dosession.
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
-	worker.clientAZ.Store(crd.clientAZ)
+	worker.clientHostPrefix.Store(crd.clientHostPrefix)
         worker.clientApp.Store(crd.poolName)
 	worker.sqlBindNs.Store(request)
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), 
 								"sqltime=", timesincestart,
-								"srcAZ=", worker.clientAZ,
+								"srcHostPrefix=", worker.clientHostPrefix,
 								"reqapp=", worker.clientApp )
 	}
 

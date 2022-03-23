@@ -125,8 +125,8 @@ type WorkerClient struct {
 	// for bind eviction
 	sqlBindNs atomic.Value // *netstring.Netstring
 
-	// for SQL eviction and throttle by AZ
-	clientAZ atomic.Value //  string 
+	// for SQL eviction and throttle by host prefix 
+	clientHostPrefix atomic.Value //  string 
 	clientApp atomic.Value // string
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.

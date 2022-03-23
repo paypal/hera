@@ -12,6 +12,12 @@ type beforeFunc func() error
 
 var mx Mux
 var localFolder, runFolder string
+type clientinfo struct {
+	Appname string
+	Host string
+}
+
+var source clientinfo
 
 func setup(cfg cfgFunc) error {
 	appcfg, opscfg, wType := cfg()
@@ -22,6 +28,11 @@ func setup(cfg cfgFunc) error {
 	}
 
 	return mx.StartServer()
+}
+
+
+func GetClientInfo() *clientinfo {
+	return &source
 }
 
 func teardown() {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 	"time"
+        "github.com/paypal/hera/client/gosqldriver"
         _"github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/functionaltest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -18,7 +19,7 @@ No setup needed
 */
 
 var mx testutil.Mux
-
+var appname string
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg := make(map[string]string)
@@ -37,7 +38,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "5"
 	opscfg["opscfg.default.server.log_level"] = "5"
-
+	appname = "simple_evict"
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -51,8 +52,8 @@ func setupDb() error {
 --------------------------------------------*/
 func insert_row_delay_commit (id string, wait_second int) error {
         fmt.Println ("Insert a row, commit later")
-	status := 999
-	hostname,_ := os.Hostname()
+        status := 999
+        hostname,_ := os.Hostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -67,8 +68,14 @@ func insert_row_delay_commit (id string, wait_second int) error {
         if err != nil {
                 return err
         }
+ 
         defer conn.Close()
         defer cancel()
+        mux := gosqldriver.InnerConn(conn)
+        err= mux.SetClientInfo(appname, hostname)
+        if err != nil {
+                fmt.Println("Error sending Client Info:", err)
+        }
         tx, _ := conn.BeginTx(ctx, nil)
         stmt, _ := tx.PrepareContext(ctx, "insert into test_simple_table_1 (ID, Name, Status) VALUES(:ID, :Name, :Status)")
         if err != nil {
@@ -110,6 +117,12 @@ func update_row_delay_commit (id string, wait_second int) error {
         defer conn.Close()
         // cancel must be called before conn.Close()
         defer cancel()
+        mux := gosqldriver.InnerConn(conn)
+        err= mux.SetClientInfo(appname, hostname)
+        if err != nil {
+                fmt.Println("Error sending Client Info:", err)
+        }
+
         tx, _ := conn.BeginTx(ctx, nil)
         stmt, _ := tx.PrepareContext(ctx, "update test_simple_table_1 set Name='Steve' where ID=:ID")
 	if err != nil {
