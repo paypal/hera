@@ -4432,7 +4432,7 @@ unsigned long long OCCChild::fetch(const std::string& count)
 							value.resize(buffer_size);
 							rc = OCILobRead2(svchp, errhp, output.lob, &byte_amt, &char_amt, 1,
 									(void*)(value.c_str()), buffer_size, OCI_ONE_PIECE, 0, 0, 0, SQLCS_IMPLICIT);
-							lob_size_read = (unsigned int) char_amt;
+							lob_size_read = (unsigned int) byte_amt;
 
 							if(rc!=OCI_SUCCESS) {
 								value.resize(0);
