@@ -46,17 +46,19 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_1")
-	err1 := testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
-	testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	if os.Getenv("WORKER") == "postgres" {
+		testutil.RunDML("CREATE TABLE test_simple_table_1 (ID BIGINT PRIMARY KEY, NAME VARCHAR(128), STATUS BIGINT, PYPL_TIME_TOUCHED BIGINT)")
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID BIGINT, SHARD_ID BIGINT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        } else { 
+		testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
+		testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	}
 	max_scuttle := 128;
-	err3  := testutil.PopulateShardMap(max_scuttle);
+	err1  := testutil.PopulateShardMap(max_scuttle);
 	if err1 != nil { 
 	    return err1
 	}
-	if err3 != nil {
-            return err3
-        }
 	return err1
 }
 
