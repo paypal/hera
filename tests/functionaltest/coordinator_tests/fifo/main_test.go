@@ -36,13 +36,19 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "8"
 	opscfg["opscfg.default.server.log_level"] = "5"
+	if os.Getenv("WORKER") == "postgres" {
+                return appcfg, opscfg, testutil.PostgresWorker
+        } 
 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func setupDb() error {
         testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_1")
-        return testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
+	if os.Getenv("WORKER") == "postgres" {
+        	return testutil.RunDML("CREATE TABLE test_simple_table_1 (ID NUMERIC PRIMARY KEY, NAME VARCHAR(128), STATUS NUMERIC, PYPL_TIME_TOUCHED NUMERIC)")
+        } 
+       	return testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
 }
 
 

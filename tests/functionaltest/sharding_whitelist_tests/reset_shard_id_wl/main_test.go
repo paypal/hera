@@ -36,20 +36,25 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg := make(map[string]string)
         opscfg["opscfg.default.server.max_connections"] = "4"
         opscfg["opscfg.default.server.log_level"] = "5"
+	if os.Getenv("WORKER") == "postgres" {
+                return appcfg, opscfg, testutil.PostgresWorker
+        } 
 
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_1")
-	err1 := testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
-        testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	if os.Getenv("WORKER") == "postgres" {
+                testutil.RunDML("CREATE TABLE test_simple_table_1 (ID BIGINT PRIMARY KEY, NAME VARCHAR(128), STATUS BIGINT, PYPL_TIME_TOUCHED BIGINT)")
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID BIGINT, SHARD_ID BIGINT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        } else { 
+                testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        }
         max_scuttle := 128;
 	err2  := testutil.PopulateShardMap(max_scuttle);
-	if err1 != nil { 
-	    return err1
-	}
 	if err2 != nil {
 	    return err2
 	}
@@ -57,7 +62,7 @@ func setupDb() error {
 	if err3 != nil {
 	    return err3
 	}
-	return err1
+	return err3
 }
 
 
@@ -123,6 +128,7 @@ func TestSetResetShardID(t *testing.T) {
                 t.Fatalf("Error commit %s\n", err.Error())
         }
 
+	time.Sleep (time.Duration(2) * time.Second)
 	fmt.Println ("Verify insert request is sent to shard 3")
 	count := testutil.RegexCount ("WORKER shd3.*Preparing.*TestSetResetShardID.*insert into test_simple_table_1")
         if (count < 1) {
