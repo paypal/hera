@@ -37,18 +37,24 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         opscfg["opscfg.default.server.max_connections"] = "3"
         opscfg["opscfg.default.server.log_level"] = "5"
 
+	if os.Getenv("WORKER") == "postgres" {
+                return appcfg, opscfg, testutil.PostgresWorker
+        } 
+
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
 
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_1")
-	err1 := testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
-	if err1 != nil {
-	    return err1
-	}
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
-        testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	if os.Getenv("WORKER") == "postgres" {
+                testutil.RunDML("CREATE TABLE test_simple_table_1 (ID BIGINT PRIMARY KEY, NAME VARCHAR(128), STATUS BIGINT, PYPL_TIME_TOUCHED BIGINT)")
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID BIGINT, SHARD_ID BIGINT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        } else { 
+                testutil.RunDML("CREATE TABLE test_simple_table_1 (ID INT PRIMARY KEY, NAME VARCHAR(128), STATUS INT, PYPL_TIME_TOUCHED INT)")
+                testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+        }
         max_scuttle := 128;
         err2  := testutil.PopulateShardMap(max_scuttle);
 	if err2 != nil {
@@ -58,7 +64,7 @@ func setupDb() error {
         if err3 != nil {
             return err3
         }
-	return err1
+	return err3
 }
 
 
@@ -153,8 +159,6 @@ func TestSetShardID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected values %s", err.Error())
 	}
-	//testutil.AssertEqual(t, name, "Steve");
-	//testutil.AssertEqual(t, status, 100);
 	rows.Close()
 	stmt.Close()
 
@@ -163,7 +167,7 @@ func TestSetShardID(t *testing.T) {
 
 	fmt.Println ("Verify select request is sent to shard 4")
         if ( testutil.RegexCount ("WORKER shd4.*Preparing.*TestSetShardID.*Select name, status from test_simple_table_1") < 1) {
-	      t.Fatalf ("Error: select query should got to shard4")
+	      t.Fatalf ("Error: select query should go to shard4")
         }
 	count = testutil.RegexCountFile ("T.*API.*CLIENT_SESSION_4", "cal.log")
         if (count < 2) {
@@ -171,6 +175,8 @@ func TestSetShardID(t *testing.T) {
         }
 
 	testutil.DoDefaultValidation(t)
+
+	time.Sleep (time.Duration(2) * time.Second)
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID done  -------------------------------------------------------------")
 }
 

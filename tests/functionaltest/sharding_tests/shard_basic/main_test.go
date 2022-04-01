@@ -58,43 +58,15 @@ func populate_cam_shard_map() (string,error) {
 func setupDb() error {
 	testutil.RunDML("DROP TABLE IF EXISTS test_simple_table_2")
 	testutil.RunDML("CREATE TABLE test_simple_table_2 (accountID VARCHAR(64) PRIMARY KEY, NAME VARCHAR(64), STATUS VARCHAR(64), CONDN VARCHAR(64))")
-	testutil.RunMysql("DROP TABLE IF EXISTS hera_shard_map;")
-	testutil.RunMysql("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500));");
-	out,err2 := testutil.RunMysql (`DELIMITER $$
- DROP PROCEDURE IF EXISTS populate_shard_map$$
- CREATE PROCEDURE populate_shard_map(IN num INT)
-BEGIN
-   DECLARE x INT;
-   SET x = 0;
-
-   While x < num DO
-      INSERT INTO hera_shard_map VALUES (x, mod(x,5),'Y','Y','Y','Initial');
-      SET x = x + 1;
-   END WHILE;
-   COMMIT;
-END$$
-DELIMITER ;`);
-	if err2 != nil {
-		fmt.Printf (out);
-		fmt.Printf("err after creating procedure "+err2.Error())
-		return err2
+	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
+	if os.Getenv("WORKER") == "postgres" {
+        	testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID BIGINT, SHARD_ID BIGINT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
+	} else { 
+        testutil.RunDML("CREATE TABLE hera_shard_map (SCUTTLE_ID INT, SHARD_ID INT, STATUS CHAR(1), READ_STATUS CHAR(1), WRITE_STATUS CHAR(1), REMARKS VARCHAR(500))");
 	}
-	out3, err3 := populate_cam_shard_map()
-	if err3 != nil {
-		fmt.Printf (out3);
-		fmt.Printf("err after run populate_cam_shard_map"+err3.Error())
-		return err3
-	}
-
 	max_scuttle := 128;
-	err3  = testutil.PopulateShardMap(max_scuttle);
-	if err2 != nil {
-	    return err2
-	}
-	if err3 != nil {
-            return err3
-        }
-	return err2
+        err  := testutil.PopulateShardMap(max_scuttle);
+        return err
 }
 
 
@@ -230,6 +202,7 @@ func TestShardBasic(t *testing.T) {
             t.Fatalf ("Error: Select Query does NOT go to shd3");
         }
 	testutil.DoDefaultValidation(t)
+	time.Sleep (time.Duration(2 * time.Second)
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic done  -------------------------------------------------------------")
 }
 
