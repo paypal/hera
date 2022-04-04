@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -116,6 +117,11 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		}
 	}
 	calTrans.Completed()
+	if err != nil {
+		spread := 11 * time.Second + time.Duration(rand.Intn(11000999888)/*ns*/)
+		logger.GetLogger().Log(logger.Warning, "onErr sleeping "+spread.String())
+		time.Sleep(spread)
+	}
 	return db, err
 }
 
