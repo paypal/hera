@@ -19,6 +19,7 @@ package shared
 
 import (
 	"fmt"
+	"math/rand"
 	"path/filepath"
 	"os"
 	"os/signal"
@@ -86,6 +87,7 @@ func Start(adapter CmdProcessorAdapter) {
 	if err != nil {
 		return
 	}
+	rand.Seed(time.Now().UnixNano())
 	//
 	// extracting environment parameter.
 	//
