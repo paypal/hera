@@ -538,21 +538,19 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 				}
 			} else {
 
-				//skipregexp := regexp.MustCompile("^ccg[0-9]+")
-				//evalregexp := regexp.MustCompile("^dcg[0-9]+")
 				skipregexp := regexp.MustCompile(GetConfig().SkipEvictRegex)
 				evalregexp := regexp.MustCompile(GetConfig().EvictRegex)
 				var match [] string
 				if match = skipregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, "Req info: skip ccg host")
+						logger.GetLogger().Log(logger.Verbose, "Req info: skiphost", crd.clientHostName)
 					}
 					crd.clientHostPrefix = "" // we don't throttle or evict on ccg 
 				} else if match = evalregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
 					crd.clientHostPrefix = match[0]
 				} else {
 					if logger.GetLogger().V(logger.Verbose) {
-						logger.GetLogger().Log(logger.Verbose, "Req info: host is not ccg nor dcg")
+						logger.GetLogger().Log(logger.Verbose, "Req info: unrecognized host name pattern")
 					}
 				// unrecognized pattern will be evaluated
 					crd.clientHostPrefix = "others"
@@ -667,9 +665,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		bindkv := parseBinds(request)
 		// srcHostPrefixApp to looks up the request's host prefix + App name
 		if crd.clientHostPrefix != "" {
-			bindkv[SrcPrefixAppKey] = fmt.Sprintf("%s&%s", crd.clientHostPrefix, crd.poolName)
+			bindkv[SrcPrefixAppKey] = fmt.Sprintf("%s%s", crd.clientHostPrefix, crd.poolName)
 			if logger.GetLogger().V(logger.Debug) {
-				msg := fmt.Sprintf("Req info: bind throttle set az-app: %s", bindkv[SrcPrefixAppKey])
+				msg := fmt.Sprintf("Req info: bind throttle set source info: %s", bindkv[SrcPrefixAppKey])
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}

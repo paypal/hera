@@ -121,11 +121,11 @@ func TestEvictSource(t *testing.T) {
             t.Fatalf ("Error: expected BIND_THROTTLE events");
         }
 	fmt.Println ("Verify bind throttle decr")
-	cnt := testutil.RegexCount ("decr hash:3378653297 bindName:srcPrefixApp# val:herab333&userapp2 allowEveryX:31-6" )
+	cnt := testutil.RegexCount ("decr hash:3378653297 bindName:srcPrefixApp# val:herab333userapp2 allowEveryX:31-6" )
 	if ( cnt < 1) {
             t.Fatalf ("Error: expected bind throttle decr - allowEveryX:31-6")
         }
-	cnt = testutil.RegexCount ("bind throttle decr hash:3378653297 bindName:srcPrefixApp# val:herab333&userapp2 allowEveryX:25-2" )
+	cnt = testutil.RegexCount ("bind throttle decr hash:3378653297 bindName:srcPrefixApp# val:herab333userapp2 allowEveryX:25-2" )
 	if ( cnt < 1) {
             t.Fatalf ("Error: expected bind throttle decr - allowEveryX:25-2");
         }
