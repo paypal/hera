@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -49,12 +50,15 @@ type Coordinator struct {
 
 	corrID         *netstring.Netstring
 	preppendCorrID bool
+	clientHostPrefix        string
+	clientHostName  string
+	poolName  string
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
 	id        string
 	sqlhash   int32
-	shard     *shardInfo
+        shard     *shardInfo
 	prevShard *shardInfo
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
@@ -135,8 +139,8 @@ func (crd *Coordinator) Run() {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, crd.id, "coordinator run got client request.")
 			}
-			crd.nss = nil
 			// new session
+			crd.nss = nil
 			handle, _ := crd.handleMux(ns)
 			if !handle {
 				// not handled by mux, it means it is a worker command
@@ -411,7 +415,6 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 				}
 				return handled, err
 			}
-
 			handled, err := crd.processMuxCommand(ns)
 			if !handled {
 				if nss[0].Cmd == common.CmdClientCalCorrelationID {
@@ -503,21 +506,69 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		cal.GetCalClientInstance().GetPoolName(), hostname)
 	ns := netstring.NewNetstringFrom(common.RcOK, []byte(serverInfo))
 	crd.respond(ns.Serialized)
-	var poolName string
 	prefix := "Poolname: "
 	pos := strings.LastIndex(clientInfo, prefix)
 	if pos != -1 {
 		pos += len(prefix)
-		poolName = clientInfo[pos:]
-		end := strings.Index(poolName, ",")
+		crd.poolName = clientInfo[pos:]
+		end := strings.Index(crd.poolName, ",")
 		if end != -1 {
-			poolName = poolName[:end]
+			crd.poolName = crd.poolName[:end]
 		}
 	} else {
-		poolName = "UNKNOWN"
+		crd.poolName = "UNKNOWN"
 	}
 
-	et := cal.NewCalEvent(cal.EventTypeClientInfo, poolName, cal.TransOK, "mux")
+
+	prefix = "HOST: "
+	pos = strings.LastIndex(clientInfo, prefix)
+	if pos != -1 {
+		pos += len(prefix)
+		crd.clientHostName = clientInfo[pos:]
+		end := strings.Index(crd.clientHostName, ",")
+		if end != -1 {
+			crd.clientHostName = crd.clientHostName[:end]
+			crd.clientHostName = strings.ToLower(strings.TrimSpace(crd.clientHostName))
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Req info: host is", crd.clientHostName)
+			}
+			if GetConfig().EvictRegex == "" || GetConfig().SkipEvictRegex == "" {
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "Req info: skip host prefix eviction due to insufficient pattern", crd.clientHostName)
+				}
+			} else {
+
+				skipregexp := regexp.MustCompile(GetConfig().SkipEvictRegex)
+				evalregexp := regexp.MustCompile(GetConfig().EvictRegex)
+				var match [] string
+				if match = skipregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "Req info: skiphost", crd.clientHostName)
+					}
+					crd.clientHostPrefix = "" // we don't throttle or evict on ccg 
+				} else if match = evalregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+					crd.clientHostPrefix = match[0]
+				} else {
+					if logger.GetLogger().V(logger.Verbose) {
+						logger.GetLogger().Log(logger.Verbose, "Req info: unrecognized host name pattern")
+					}
+				// unrecognized pattern will be evaluated
+					crd.clientHostPrefix = "others"
+				}
+			}
+		} else {
+			// client info is unavailable, case will be evaluated
+			crd.clientHostPrefix = "unavbl"
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "Req info: host is unavailable")
+			}
+		}
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "Req info: request source AZ: [", crd.clientHostPrefix, "]")
+		}
+	}
+
+	et := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, cal.TransOK, "mux")
 	et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
 	// TODO: cal pool stack stuff
 	calInstance := cal.GetCalClientInstance()
@@ -527,7 +578,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		if pos != -1 {
 			pos += len(prefix)
 			parentPoolStack := clientInfo[pos:]
-			end := strings.Index(poolName, ",")
+			end := strings.Index(crd.poolName, ",")
 			if end != -1 {
 				parentPoolStack = parentPoolStack[:end]
 			}
@@ -611,7 +662,16 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
 			logger.GetLogger().Log(logger.Verbose, msg)
 		}
-		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), parseBinds(request), heavyUsage)
+		bindkv := parseBinds(request)
+		// srcHostPrefixApp to looks up the request's host prefix + App name
+		if crd.clientHostPrefix != "" {
+			bindkv[SrcPrefixAppKey] = fmt.Sprintf("%s%s", crd.clientHostPrefix, crd.poolName)
+			if logger.GetLogger().V(logger.Debug) {
+				msg := fmt.Sprintf("Req info: bind throttle set source info: %s", bindkv[SrcPrefixAppKey])
+				logger.GetLogger().Log(logger.Debug, msg)
+			}
+		}
+		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
@@ -629,11 +689,8 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 			crd.respond(ns.Serialized)
 			crd.conn.Close()
 			return fmt.Errorf("bind throttle block")
-		} else {
-			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "bind throttle allow",uint32(crd.sqlhash))
-			}
 		}
+
 	}
 
 	if worker == nil {
@@ -706,7 +763,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 	}
 
-	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+        wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
 	if !xShardRead {
 		if wait {
@@ -889,9 +946,14 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	// dosession.
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
+	worker.clientHostPrefix.Store(crd.clientHostPrefix)
+        worker.clientApp.Store(crd.poolName)
 	worker.sqlBindNs.Store(request)
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), "sqltime=", timesincestart)
+		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), 
+								"sqltime=", timesincestart,
+								"srcHostPrefix=", worker.clientHostPrefix,
+								"reqapp=", worker.clientApp )
 	}
 
 	logmsg := fmt.Sprintf("worker (type%d,inst%d,id%d) %d", worker.Type, worker.instID, worker.ID, worker.pid)

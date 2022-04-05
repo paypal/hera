@@ -43,6 +43,8 @@ type HeraConn interface {
 
 	// Identifier used for logging, specific to a session of SQLs
 	SetCalCorrID(corrID string)
+
+	SetClientInfo(poolname string, host string) error
 }
 
 // HeraStmt is an API extension for *sql.Stmt

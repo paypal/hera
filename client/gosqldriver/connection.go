@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
@@ -39,6 +40,7 @@ type heraConnection struct {
 	shardKeyPayload []byte
 	// correlation id
 	corrID *netstring.Netstring
+	clientinfo *netstring.Netstring
 }
 
 // NewHeraConnection creates a structure implementing a driver.Con interface
@@ -49,6 +51,7 @@ func NewHeraConnection(conn net.Conn) driver.Conn {
 	}
 	return hera
 }
+
 
 // Prepare returns a prepared statement, bound to this connection.
 func (c *heraConnection) Prepare(query string) (driver.Stmt, error) {
@@ -171,4 +174,37 @@ func (c *heraConnection) ResetShardKeyPayload() {
 // implementing the extension HeraConn interface
 func (c *heraConnection) SetCalCorrID(corrID string) {
 	c.corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte(fmt.Sprintf("CorrId=%s", corrID)))
+}
+
+// SetClientInfo actually sends it over to Hera server
+func (c *heraConnection) SetClientInfo(poolName string, host string)(error){
+	if len(poolName) <= 0 && len(host) <= 0 {
+		return nil
+	}
+
+	pid := os.Getpid()
+	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, Command: SetClientInfo,", pid, host, poolName)
+        c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
+                if logger.GetLogger().V(logger.Verbose) {
+                        logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
+                }
+
+        _, err := c.conn.Write(c.clientinfo.Serialized)
+        if err != nil {
+                if logger.GetLogger().V(logger.Warning) {
+                        logger.GetLogger().Log(logger.Warning, "Failed to send client info")
+                }
+                return errors.New("Failed custom auth, failed to send client info")
+        }
+        ns, err := c.reader.ReadNext()
+        if err != nil {
+                if logger.GetLogger().V(logger.Warning) {
+                        logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+                }
+                return errors.New("Failed to read server info")
+        }
+        if logger.GetLogger().V(logger.Debug) {
+                logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
+        }
+	return nil
 }

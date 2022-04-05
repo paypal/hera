@@ -168,7 +168,16 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			}
 			continue
 		}
-		contextBinds := parseBinds(request)
+                contextBinds := parseBinds(request)
+                sqlsrcPrefix := worker.clientHostPrefix.Load().(string)
+                sqlsrcApp := worker.clientApp.Load().(string)
+		if sqlsrcPrefix != "" {
+			contextBinds[SrcPrefixAppKey] = fmt.Sprintf("%s%s", sqlsrcPrefix, sqlsrcApp)
+			if logger.GetLogger().V(logger.Debug) {
+                                msg := fmt.Sprintf("Req info: Add AZ+App to contextBinds: %s", contextBinds[SrcPrefixAppKey])
+                                logger.GetLogger().Log(logger.Debug, msg)
+			}
+		}
 		for bindName0, bindValue := range contextBinds {
 			/* avoid too short status values
 			D=deleted, P=pending, C=confirmed
@@ -178,7 +187,6 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 			if len(bindValue) <= 7 {
 				continue
 			}
-
 			/* select * from .. where id in ( :bn1, :bn2, bn3.. )
 			bind names are all normalized to bn#
 			bind values may repeat */
@@ -187,7 +195,10 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 				continue
 			}
 			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
-
+			if logger.GetLogger().V(logger.Debug) {
+                                msg := fmt.Sprintf("Req info: lookup concatKey = %s in bindCounts", concatKey)
+                                logger.GetLogger().Log(logger.Debug, msg)
+			}
 			entry, ok := bindCounts[concatKey]
 			if !ok {
 				entry = &BindCount{
