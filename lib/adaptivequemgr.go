@@ -172,7 +172,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
                 sqlsrcPrefix := worker.clientHostPrefix.Load().(string)
                 sqlsrcApp := worker.clientApp.Load().(string)
 		if sqlsrcPrefix != "" {
-			contextBinds[SrcPrefixAppKey] = fmt.Sprintf("%s&%s", sqlsrcPrefix, sqlsrcApp)
+			contextBinds[SrcPrefixAppKey] = fmt.Sprintf("%s%s", sqlsrcPrefix, sqlsrcApp)
 			if logger.GetLogger().V(logger.Debug) {
                                 msg := fmt.Sprintf("Req info: Add AZ+App to contextBinds: %s", contextBinds[SrcPrefixAppKey])
                                 logger.GetLogger().Log(logger.Debug, msg)
