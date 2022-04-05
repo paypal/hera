@@ -65,7 +65,7 @@ func (driver *heraDriver) Open(url string) (driver.Conn, error) {
 		logger.GetLogger().Log(logger.Debug, "Connected to hera server:", url)
 	}
 
-	reader := netstring.NewNetstringReader(conn)
+       reader := netstring.NewNetstringReader(conn)
 
 	// send client info
 	pid := os.Getpid()
