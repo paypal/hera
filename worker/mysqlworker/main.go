@@ -64,10 +64,13 @@ func main() {
 		serverName := os.Getenv("ServerCertCN")
 		if serverName != "" {
 			mysql.RegisterTLSConfig(shortName, &tls.Config{RootCAs: rootCertPool, ServerName: serverName})
+			log.Print("added cert with name" + certfile)
 		} else {
 			mysql.RegisterTLSConfig(shortName, &tls.Config{RootCAs: rootCertPool})
+			log.Print("added cert " + certfile)
 		}
 	}
+	log.Print("searched certs " + certdir)
 	workerservice.Start(&mysqlAdapter{})
 }
 
