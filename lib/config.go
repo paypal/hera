@@ -405,7 +405,7 @@ func InitConfig() error {
 	gAppConfig.BindEvictionMaxThrottle = cdb.GetOrDefaultInt("bind_eviction_max_throttle", 20)
 	default_evict_names := fmt.Sprintf("id,num,%s", SrcPrefixAppKey)
 	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", default_evict_names)
-	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 25)
+	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 60)
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "1.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
