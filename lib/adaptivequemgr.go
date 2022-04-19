@@ -458,19 +458,19 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 				}
 			}
 		} else {
-		if worker != nil && worker.Status == wsFnsh  {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
+			if worker != nil && worker.Status == wsFnsh  {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
+				}
+			} else {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "removing nil worker in aq for ticket", ticket)
+				}
+				//
+				// deleting nil from map works as usual.
+				//
+				delete(mgr.dispatchedWorkers, worker)
 			}
-		} else {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "removing nil worker in aq for ticket", ticket)
-			}
-			//
-			// deleting nil from map works as usual.
-			//
-			delete(mgr.dispatchedWorkers, worker)
-		}
 		}
 	}
 	if logger.GetLogger().V(logger.Verbose) {
