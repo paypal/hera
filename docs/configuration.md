@@ -205,7 +205,7 @@ There are two types of configuration parameters: **static parameters** and **dyn
 
 #### bind_eviction_threshold_pct
 + A bind name+value is evicted when mux is overloaded and they occupy over bind_eviction_threshold_pct.
- + default: 25
+ + default: 60
 
 #### bind_eviction_target_conn_pct
 + A bind name+value is evicted when mux is overloaded and they occupy over bind_eviction_threshold_pct. Their queries get blocked more when more than bind_eviction_target_conn_pct are busy or in wait state.
