@@ -1,17 +1,18 @@
-#Building as HeraBox
+# Building as HeraBox
 This folder helps in building
 1. hera
 2. HeraMock
 3. heraclient jar
 4. Hera integrated sample Raptor Application
 
-`./build.sh
+```./build.sh
 Parameters that controls build
 BUILD_HERA - default to true
 BUILD_HERA_MOCK - default to true
 BUILD_SAMPLE_APP - default to true (requirement java)
-`
-#Running as HeraBox
+```
+
+# Running as HeraBox
 The docker files helps to run MySQL, Hera, HeraMock and TestApplication
 
 1. ./start.sh - should be run after building
