@@ -1,11 +1,10 @@
-# worker-go
-worker connecting to mysql implemented in golang
+1. mysqlworker - written in go
+2. cppworker - for Oracle in C++ (preferred over oracleworker)
+3. oracleworker - written in go (lacks sql rewrite for sharding, oci break..)
+4. postgresworker - written in go
 
-version 0.1
-===========
-
-notes:
----------
+mysqlworker
+-----------
 1. dependencies: 
    - go get -u github.com/go-sql-driver/mysql
 
@@ -29,4 +28,24 @@ notes:
 lower_case_table_names = 1
 
 in /etc/my.cnf
+```
+
+
+```
+// debugging some security and connectivity between db and hera
+//mismatch ca
+14:00:19.886927 warn: [WORKER 1 619757 adapter.go:129] could not get connection x509: certificate signed by unknown authority
+
+//mismatch SAN/CN
+13:41:00.034136 warn: [WORKER 4 616871 adapter.go:129] could not get connection x509: certificate is valid for mysql.server.example.com, not mismatch.mysqldb.example.com
+
+//mismatch cert file
+13:33:08.643969 warn: [WORKER 3 615657 adapter.go:129] could not get connection x509: cannot validate certificate for 10.11.22.33 because it doesn't contain any IP SANs
+
+//missing cert file
+13:17:02.958192 warn: [WORKER 0 2032 adapter.go:97] recycling, got read-only conn retry-attempt=1
+13:17:02.958277 warn: [WORKER 0 2032 adapter.go:97] recycling, got read-only conn retry-attempt=2
+13:17:02.958443 warn: [WORKER 0 2032 adapter.go:97] recycling, got read-only conn retry-attempt=3
+13:17:02.958872 warn: [WORKER 0 2032 cmdprocessor.go:812] driver error cannot use read-only conn tcp(10.11.22.33:3306)/worldreadydb?timeout=9s&clientFou
+13:17:02.959123 warn: [WORKER 0 2032 workerservice.go:130] Can't connect to DB: cannot use read-only conn tcp(10.11.22.33:3306)/binkywinkydb?timeout=9s&
 ```
