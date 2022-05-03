@@ -165,7 +165,7 @@ func (adapter *postgresAdapter) Heartbeat(db *sql.DB) bool {
 		return writable
 	}
 	defer conn.Close()
-	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
+	if strings.Contains(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
 		stmt, err := conn.PrepareContext(ctx, "select pg_is_in_recovery()")
 		if err != nil {
 			if logger.GetLogger().V(logger.Warning) {
