@@ -138,7 +138,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 	}
 	defer conn.Close()
 
-	if strings.HasPrefix(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
+	if strings.Contains(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
 		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
 		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
 		if err != nil {
