@@ -13,7 +13,7 @@ import java.util.Properties;
 public class HeraDatabaseMetadataTest {
 
     private static HeraConnection dbConn;
-    private static String host = System.getProperty("SERVER_URL", "1:127.0.0.1:10101");
+    private static String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
     private static String table = System.getProperty("TABLE_NAME", "jdbc_hera_test");
 
 
