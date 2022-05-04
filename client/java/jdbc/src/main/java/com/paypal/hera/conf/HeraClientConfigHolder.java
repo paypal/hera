@@ -1,7 +1,6 @@
 package com.paypal.hera.conf;
 
-import java.util.HashMap;
-import java.util.Properties;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,8 +43,21 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 
 	public static final String DEFAULT_CONNECTION_FACTORY="com.paypal.hera.conn.HeraTCPConnectionFactory";
 	public static enum E_DATASOURCE_TYPE {
-		MYSQL,
-		ORACLE
+		MySQL ,
+		ORACLE,
+		HERA;
+
+		public static E_DATASOURCE_TYPE validateAndReturnMatching(String label, E_DATASOURCE_TYPE defaultType) {
+			if(label != null) {
+				List<E_DATASOURCE_TYPE> allDS = new ArrayList<>(Arrays.asList(E_DATASOURCE_TYPE.values()));
+				for (E_DATASOURCE_TYPE ds : allDS) {
+					if (label.equalsIgnoreCase(ds.name())) {
+						return ds;
+					}
+				}
+			}
+			return defaultType;
+		}
 	}
 	//public static final String DEFAULT_CONNECTION_FACTORY="com.paypal.hera.conn.HeraTLSConnectionFactory";
 	// mvn3 -Djavax.net.ssl.trustStore=src/test/resources/TlsClientKeystore.jks -Djavax.net.ssl.trustStorePassword=61-Moog
@@ -99,17 +111,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		enableParamNameBinding = validateAndReturnDefaultBoolean(ENABLE_PARAM_NAME_BINDING, DEFAULT_ENABLE_PARAM_NAME_BINDING);
 		isDBEncodingUTF8 = validateAndReturnDefaultBoolean(DB_ENCODING_UTF8, DEFAULT_DB_ENCODING_UTF8);
 		enableDateNullFix = validateAndReturnDefaultBoolean(ENABLE_DATE_NULL_FIX, DEFAULT_ENABLE_DATE_NULL_FIX);
-		datasourceType = validateAndReturnDefaultDatasource(DATASOURCE_TYPE, E_DATASOURCE_TYPE.MYSQL);
-	}
-
-
-	private E_DATASOURCE_TYPE validateAndReturnDefaultDatasource(String pr, E_DATASOURCE_TYPE type) {
-		String sval = config.getProperty(pr);
-		E_DATASOURCE_TYPE val = type;
-		if (sval != null) {
-			val = sval.equals("mysql") ? E_DATASOURCE_TYPE.MYSQL : sval.equals("oracle") ? E_DATASOURCE_TYPE.ORACLE : E_DATASOURCE_TYPE.MYSQL;
-		}
-		return val;
+		datasourceType = E_DATASOURCE_TYPE.validateAndReturnMatching(config.getProperty(DATASOURCE_TYPE), E_DATASOURCE_TYPE.HERA);
 	}
 
 	public Integer getResponseTimeoutMs() {
