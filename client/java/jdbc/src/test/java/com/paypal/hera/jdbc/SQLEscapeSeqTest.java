@@ -41,7 +41,7 @@ public class SQLEscapeSeqTest {
 	public void test_mysql_sqlEscaping(){
 		String sql = "{ call DALCERT_INSERT_EMPLOYEE() }";
 		String outputExpected = "CALL DALCERT_INSERT_EMPLOYEE() ;";
-		Assert.assertTrue("MySql escape seq SQL ", preprocessEscapeCall(sql, E_DATASOURCE_TYPE.MYSQL).equals(outputExpected));		
+		Assert.assertTrue("MySql escape seq SQL ", preprocessEscapeCall(sql, E_DATASOURCE_TYPE.MySQL).equals(outputExpected));
 	}
 
 }
