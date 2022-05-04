@@ -1,12 +1,8 @@
 package com.paypal.hera.jdbc;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.RowIdLifetime;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
+import java.sql.*;
 
+import com.paypal.hera.conf.HeraClientConfigHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,11 +51,19 @@ public class HeraDatabaseMetadata implements DatabaseMetaData {
 
 	public String getDatabaseProductName() throws SQLException {
 		connection.checkOpened();
-		return "Hera Server";
+		return connection.getDataSource().name();
 	}
 
 	public String getDatabaseProductVersion() throws SQLException {
-		return getDatabaseProductName() + " v 1.0";  
+		connection.checkOpened();
+		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.MySQL)) {
+			PreparedStatement pst = connection.prepareStatement("select @@version");
+			ResultSet rs = pst.executeQuery();
+			if (rs.next()) {
+				return rs.getString(1);
+			}
+		}
+		return HeraClientConfigHolder.E_DATASOURCE_TYPE.HERA + " v 1.0";
 	}
 
 	public String getDriverName() throws SQLException {
