@@ -561,9 +561,9 @@ func (worker *WorkerClient) Close() {
  */
 func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool) <-chan time.Time {
 	dice := rand.Intn(100)
-	load := 100*p.activeQ.Len()/p.desiredSize
+	freePct := 100*p.activeQ.Len()/p.desiredSize
 	var rv <-chan time.Time
-	if load > GetConfig().HighLoadPct {
+	if 100-freePct > GetConfig().HighLoadPct {
 		rv = time.After(time.Millisecond * time.Duration((GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs))))
 		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
 			if logger.GetLogger().V(logger.Info) {
