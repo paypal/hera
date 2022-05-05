@@ -559,11 +559,26 @@ func (worker *WorkerClient) Close() {
 /**
  * Sends the recover signal to the worker
  */
-func (worker *WorkerClient) initiateRecover(param int) {
+func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool) <-chan time.Time {
+	dice := rand.Intn(100)
+	load := 100*p.activeQ.Len()/p.desiredSize
+	var rv <-chan time.Time
+	if load > GetConfig().HighLoadPct {
+		rv = time.After(time.Millisecond * time.Duration((GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs))))
+		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, load, "is high, skipping initiateRecover() dice:", dice, "workerID:", worker.ID)
+			}
+			return rv
+		}
+	} else {
+		rv = time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+	}
 	buff := []byte{byte(param), byte((worker.rqId & 0xFF000000) >> 24), byte((worker.rqId & 0x00FF0000) >> 16),
 		byte((worker.rqId & 0x0000FF00) >> 8), byte((worker.rqId & 0x000000FF))}
 	ns := netstring.NewNetstringFrom(common.CmdInterruptMsg, buff)
 	worker.workerOOBConn.Write(ns.Serialized)
+	return rv
 }
 
 /**
@@ -628,8 +643,7 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 		killparam = param[0]
 	}
 	worker.callogStranded("RECOVERING", info) // TODO: should we have this?
-	worker.initiateRecover(killparam)
-	workerRecoverTimeout := time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+	workerRecoverTimeout := worker.initiateRecover(killparam, p)
 	for {
 		select {
 		case <-workerRecoverTimeout:
