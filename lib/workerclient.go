@@ -567,7 +567,7 @@ func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool) <-chan tim
 		rv = time.After(time.Millisecond * time.Duration((GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs))))
 		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, load, "is high, skipping initiateRecover() dice:", dice, "workerID:", worker.ID)
+				logger.GetLogger().Log(logger.Info, 100-freePct, "is high load, skipping initiateRecover() dice:", dice, "workerID:", worker.ID)
 			}
 			return rv
 		}
