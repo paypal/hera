@@ -1537,6 +1537,13 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 						(ub4) OCI_DEFAULT);
 			if(rc == OCI_SUCCESS) {
 				break;
+			} else {
+				std::string text;
+				int code = get_oracle_error(rc, text);
+				if (code == 1017) { // only continue on bad password
+					continue;
+				}
+				break;
 			}
 		}
 	}
