@@ -24,6 +24,7 @@ FROM golang:1.14.3
 ADD src /go/src
 ADD srv /srv
 
+RUN git config --global http.sslVerify "false"
 RUN go get github.com/go-sql-driver/mysql
 RUN go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker
 
