@@ -24,7 +24,7 @@ FROM golang:1.14.3
 ADD src /go/src
 ADD srv /srv
 
-RUN git config --global http.sslVerify "false"
+RUN echo $(echo -n | openssl s_client -showcerts -connect www.github.com:443 2>/dev/null  | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p') >> /etc/ssl/certs/ca-certificates.crt
 RUN go get github.com/go-sql-driver/mysql
 RUN go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker
 
