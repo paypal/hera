@@ -30,7 +30,9 @@ You can build mux using either [Docker](#docker-build) or [manual](#manual-build
 
 ## Docker Build
 
-For development, the following docker commands can help get started
+For development, the following docker commands for the appropriate environment can help get started
+
+Linux
 
     git clone https://github.com/paypal/hera.git
     docker run --network host --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
@@ -40,6 +42,20 @@ For development, the following docker commands can help get started
     rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
     docker build -t hera-oss .
     docker run -it --rm --name testRunHeraOss --network host -e password=62-AntHill hera-oss
+
+Mac
+
+    git clone https://github.com/paypal/hera.git
+    docker network create my-network
+    docker run --network my-network --name mysql-11 -e MYSQL_ROOT_PASSWORD=62-AntHill -d mysql:latest
+    cd hera/tests/devdocker
+    docker exec -i mysql-11 mysql -u root -h 127.0.0.1 -p62-AntHill -t < sample.sql
+    mkdir -p src/github.com/paypal/hera
+    rsync -av --exclude tests/devdocker ../.. src/github.com/paypal/hera
+    sed -i.bak -e 's/127.0.0.1/mysql-11/g' srv/start.sh
+    docker build -t hera-oss .
+    docker run -it --rm --name testRunHeraOss --network my-network -p 10101:10101 -e password=62-AntHill hera-oss
+
 
 To test it, in a separate terminal:
 
