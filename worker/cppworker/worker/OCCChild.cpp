@@ -430,7 +430,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	resize_oracle_fd_buffer();
 
 	// enable_hb_fix
-	enable_hb_fix = config->is_switch_enabled("enable_heartbeat_fix", FALSE);
+	enable_hb_fix = config->is_switch_enabled("enable_heartbeat_fix", TRUE);
 
 	// enable_hb_fix is meaningful in only blocking mode
 	if (!use_nonblock && enable_hb_fix) {
