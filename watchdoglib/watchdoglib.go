@@ -127,20 +127,20 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 	if processData.cmd != nil {
 		processData.cmd.Process.Release()
 	}
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf(" debug: about to start '%s'", processData.PathToChildExecutable))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("about to start '%s'", processData.PathToChildExecutable))
 	processCommand := exec.Command(processData.PathToChildExecutable, processData.Args...)
 	processCommand.Stdout = os.Stdout
 	err := processCommand.Start()
 	if err != nil {
 		processData.err = err
 		processData.processStartFailed = true
-		logger.GetLogger().Log(logger.Alert, fmt.Sprintf(" Failed to start process '%s' err: %v", processData.PathToChildExecutable, err))
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("failed to start process '%s' err: %v", processData.PathToChildExecutable, err))
 		return err
 	}
 	processData.cmd = processCommand
 	processData.currPid = processData.cmd.Process.Pid
 	processData.startCount++
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf(" Start number %d: Watchdog Process: %d started Process: %d / new process '%s'", processData.startCount, parentProcessId, processData.currPid, processData.PathToChildExecutable))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("start number %d: watchdog Process: %d started Process: %d / new process '%s'", processData.startCount, parentProcessId, processData.currPid, processData.PathToChildExecutable))
 	return nil
 }
 
@@ -178,7 +178,7 @@ func (w *Watchdog) Start() {
 			}
 		}
 		if processStartFailureCount == len(w.processList) {
-			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Starting of all child processes failed"))
+			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("starting of all child processes failed"))
 			return
 		}
 		var ws syscall.WaitStatus
@@ -186,10 +186,10 @@ func (w *Watchdog) Start() {
 		for {
 			select {
 			case <-w.ReqStopWatchdog:
-				logger.GetLogger().Log(logger.Info, "ReqStopWatchdog noted, exiting watchdog.Start() loop")
+				logger.GetLogger().Log(logger.Info, "request to stop watchdog noted, exiting watchdog.start() loop")
 				return
 			case <-signalChild:
-				logger.GetLogger().Log(logger.Info, " debug: got signal <-signalChild")
+				logger.GetLogger().Log(logger.Debug, "got signal <-signalChild")
 				for i := 0; i < 1000; i++ {
 					pid, err := syscall.Wait4(-1, &ws, syscall.WNOHANG, nil)
 					// pid > 0 => pid is the ID of the child that died, but
@@ -202,13 +202,13 @@ func (w *Watchdog) Start() {
 					switch {
 					case err != nil:
 						err = fmt.Errorf("wait4() got error back: '%s' and ws:%v", err, ws)
-						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("warning in reaploop, wait4(WNOHANG) returned error: '%s'. ws=%v", err, ws))
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("warning in reaploop, wait4 returned error: '%s'. ws=%v", err, ws))
 						w.SetErr(err)
 						continue reaploop
 					case pid > 0:
 						for index := range w.processList {
 							if pid == w.processList[index].currPid {
-								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Watchdog saw OUR current w.cmd.Process.Pid %d/process '%s' finish with waitstatus: %v.", pid, w.processList[index].PathToChildExecutable, ws))
+								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw its child pid: %d, process '%s' finish with waitstatus: %v.", pid, w.processList[index].PathToChildExecutable, ws))
 								w.mut.Lock()
 								w.processList[index].currPid = 0
 								startError := w.processList[index].startProcess(w.pid)
@@ -229,14 +229,14 @@ func (w *Watchdog) Start() {
 						// Note that on OSX we never get a SIGCONT signal.
 						// Under WNOHANG, pid == 0 means there is nobody left to wait for,
 						// so just go back to waiting for another SIGCHLD.
-						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("pid == 0 on wait4, (perhaps SIGSTOP?): nobody left to wait for, keep looping. ws = %v", ws))
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("pid=0 on wait4, (perhaps SIGSTOP?): nobody left to wait for, keep looping. ws = %v", ws))
 						continue reaploop
 					default:
-						logger.GetLogger().Log(logger.Alert, " warning in reaploop: wait4() negative or not our pid, sleep and try again")
+						logger.GetLogger().Log(logger.Alert, " warning in reaploop: wait4 negative or not our pid, sleep and try again")
 						time.Sleep(time.Millisecond)
 					}
 				} // end for i
-				w.SetErr(fmt.Errorf("could not reap child PID %d or obtain wait4(WNOHANG)==0 even after 1000 attempts", w.pid))
+				w.SetErr(fmt.Errorf("could not reap child pid %d or obtain wait4(WNOHANG)==0 even after 1000 attempts", w.pid))
 				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("%s", w.err))
 				return
 			} // end select
