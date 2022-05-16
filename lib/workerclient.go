@@ -363,8 +363,15 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	if dbPassword != "" {
 		envUpsert(&attr, "password", dbPassword)
 	}
-	envUpsert(&attr, "password2", dbPassword2)
-	envUpsert(&attr, "password3", dbPassword3)
+
+	if dbPassword2 != "" {
+		envUpsert(&attr, "password2", dbPassword2)
+	}
+
+	if dbPassword3 != "" {
+		envUpsert(&attr, "password3", dbPassword3)
+	}
+
 	envUpsert(&attr, "mysql_datasource", twoTask)
 	if twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
 		tnsnames, err := FindTns()
