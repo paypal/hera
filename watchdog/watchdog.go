@@ -43,7 +43,7 @@ func main() {
 	configData, configerr := initializeConfig()
 	if configerr != nil {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "Watchdog: failed to initialize configuration:", configerr.Error())
+			logger.GetLogger().Log(logger.Alert, "watchdog: failed to initialize configuration:", configerr.Error())
 		}
 		os.Exit(1)
 	}
@@ -51,12 +51,12 @@ func main() {
 	//Initialize Statelog in watchdog. watchdog will have reference for statelog's fd. So statelog won't get exit if mux dies.
 	stateLogErr := initializeStateLog()
 	if stateLogErr != nil {
-		logger.GetLogger().Log(logger.Alert, "Watchdog: failed to initialize statelog:", stateLogErr.Error())
+		logger.GetLogger().Log(logger.Alert, "watchdog: failed to initialize statelog:", stateLogErr.Error())
 	}
 
-	muxpath := fmt.Sprintf("%s/mux", currentDir)
+	muxpath := filepath.Join(currentDir, "mux")
 	if !isExist(&muxpath) {
-		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("OCC Mux Process File path: %s doesn't exist", muxpath))
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("occ mux process file path: %s doesn't exist", muxpath))
 		os.Exit(1)
 	}
 	//Set OCCAPP environment variable
@@ -64,7 +64,7 @@ func main() {
 	//Write watchdog processId to a file
 	pidErr := writePidToFile(currentDir, configData)
 	if pidErr != nil {
-		logger.GetLogger().Log(logger.Alert, "Watchdog process already running:", pidErr.Error())
+		logger.GetLogger().Log(logger.Alert, "watchdog process already running:", pidErr.Error())
 		os.Exit(1)
 	}
 	processList := [][]string{}
@@ -78,11 +78,11 @@ func main() {
 	time.Sleep(2 * time.Millisecond)
 	select {
 	case <-parentSignal:
-		logger.GetLogger().Log(logger.Info, "Received Terminal Signal.")
+		logger.GetLogger().Log(logger.Info, "received terminal signal.")
 		watcher.ReqStopWatchdog <- true
-		logger.GetLogger().Log(logger.Info, "Watchdog process got killed, sent stop signal to its children process as well.")
+		logger.GetLogger().Log(logger.Info, "watchdog process got killed, sent stop signal to its children process as well.")
 	case <-watcher.Done:
-		logger.GetLogger().Log(logger.Info, "Watchdog exited.")
+		logger.GetLogger().Log(logger.Info, "watchdog exited.")
 	}
 }
 
