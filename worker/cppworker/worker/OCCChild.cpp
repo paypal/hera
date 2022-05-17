@@ -5363,7 +5363,9 @@ int OCCChild::get_db_charset(std::string& _charset)
 	std::string tmp;
 	StringUtil::fmt_int(tmp, m_connected_id);
 	CalEvent e_rac_id("RAC_ID_START", tmp, CAL::TRANS_OK);
+	e_rac_id.AddData("HOST", m_dbhost_name);
 	CalEvent e_uname("DB_UNAME_START", m_db_uname, CAL::TRANS_OK);
+	e_uname.AddData("HOST", m_dbhost_name);
 
 	return 0;
 }
