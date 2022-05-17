@@ -66,6 +66,8 @@ const (
 	DataTypeClob        = 5
 	DataTypeTimestamp   = 6
 	DataTypeTimestampTZ = 7
+	DataTypeBool        = 8
+	DataTypeInt 	    = 9
 )
 
 // ServerCommands
