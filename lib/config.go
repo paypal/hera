@@ -268,8 +268,8 @@ func InitConfig() error {
 	gAppConfig.StrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("max_stranded_time_interval", 2000)
 	gAppConfig.HighLoadStrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("high_load_max_stranded_time_interval", 600111)
 	gAppConfig.HighLoadSkipInitiateRecoverPct = cdb.GetOrDefaultInt("high_load_skip_initiate_recover_pct", 80)
-	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 30)
-	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 25)
+	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130) // >100 disabled
+	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 125) // >100 disabled
 
 
 	gAppConfig.StateLogInterval = cdb.GetOrDefaultInt("state_log_interval", 1)
