@@ -66,8 +66,8 @@ func (adapter *oracleAdapter) UseBindQuestionMark() bool {
 /**
  * @TODO
  */
-func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (bool) {
-	return true
+func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (error) {
+	return nil
 }
 /**
  * @TODO infra.hera.jdbc.HeraResultSetMetaData mysql type to java type map.

@@ -2,7 +2,6 @@ package main
 
 import (
 	//"fmt"
-//	"os"
 	"testing"
 	"time"
 
@@ -10,6 +9,11 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
+// This test is for DB in master-slave setup
+// 1. Heartbeat is used during init so multiple passwords while only one of them is correct
+// 2. Regular heartbeat
+// 3. Regular heartbeat allows read connections 
+ 
 var mx testutil.Mux
 var racmaint bool
 
@@ -41,7 +45,6 @@ func before() error {
 }
 
 func TestMain(m *testing.M) {
-	//os.Exit(testutil.UtilMain(m, cfg, before))
 	racmaint = false
 	testutil.UtilMain(m, cfg, before)
 }
