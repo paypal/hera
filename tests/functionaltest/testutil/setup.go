@@ -14,7 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
+	"strconv"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	"github.com/paypal/hera/lib"
@@ -174,6 +174,53 @@ func (m *mux) cleanupConfig() error {
 	return nil
 }
 
+func UpdateDBState(dbIP string, dbName string, dbType DBType, state int) error {
+	if dbIP == "" {
+		return errors.New("dbIP is nil")
+	}
+	preUser := os.Getenv("username")
+	prePwd := os.Getenv("password")
+	os.Setenv("username", "root")
+	os.Setenv("password", "1-testDB")
+	var err error
+	if dbType == MySQL {	
+		q := fmt.Sprintf("SET GLOBAL read_only = %d", state)
+		err := DBDirect(q, dbIP, dbName, dbType)
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "update " + dbName + " GLOBAL readonly to " + strconv.Itoa(state) + " failed." + err.Error())
+		}
+	}
+	os.Setenv("username", preUser)
+	os.Setenv("password", prePwd)
+	return err
+}
+
+
+func setupReadOnly(dbIP string, dbName string, dbType DBType) error {
+	if dbIP == "" {
+		return errors.New("dbIP is nil")
+	}
+	if os.Getenv("username") == "" || os.Getenv("password")=="" {
+		return errors.New("Failed to set up DB user")
+	}
+
+	var err error
+	preUser := os.Getenv("username")
+	prePwd := os.Getenv("password")
+	os.Setenv("username", "root")
+	os.Setenv("password", "1-testDB")
+	if dbType == MySQL {
+		q := "SET GLOBAL read_only = 1;"
+		err = DBDirect(q, dbIP, dbName, dbType)
+		if err != nil {
+			logger.GetLogger().Log(logger.Warning, "set " + dbName + " GLOBAL readonly errored "+err.Error())
+		}
+	}
+	os.Setenv("username", preUser)
+	os.Setenv("password", prePwd)
+	return err
+}
+
 func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 	CleanDB(dockerName)
 	if dbType == MySQL {
@@ -219,7 +266,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 
 		return ipBuf.String()
 	} else if dbType == PostgreSQL {
-		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
+		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:14-alpine")
 		cmd.Run()
 		// find its IP
 		cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
@@ -370,11 +417,22 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
-			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
-			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
-			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
-			os.Setenv("TWO_TASK_3", "tcp("+ip+":3306)/heratestdb")
-			os.Setenv("TWO_TASK_4", "tcp("+ip+":3306)/heratestdb")
+			readpct, err := strconv.Atoi(m.appcfg["readonly_children_pct"])
+			if err == nil && readpct > 0 { 
+				ipReadonly := MakeDB("mysql23", "heratestdbr", MySQL)
+				err = setupReadOnly(ipReadonly, "heratestdbr", MySQL )
+				if err == nil {
+					os.Setenv("MYSQLR_IP", ipReadonly)
+					os.Setenv("TWO_TASK", fmt.Sprintf("tcp(%s:3306)/heratestdb||tcp(%s:3306)/heratestdbr", ip, ipReadonly))
+					os.Setenv("TWO_TASK_READ", fmt.Sprintf("tcp(%s:3306)/heratestdbr||tcp(%s:3306)/heratestdb", ipReadonly, ip))
+				}
+			} else {
+				os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
+				os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
+				os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
+				os.Setenv("TWO_TASK_3", "tcp("+ip+":3306)/heratestdb")
+				os.Setenv("TWO_TASK_4", "tcp("+ip+":3306)/heratestdb")
+			}
 			os.Setenv("MYSQL_IP", ip)
 			// Set up the rac_maint table
 			pfx := os.Getenv("MGMT_TABLE_PREFIX")
@@ -384,6 +442,11 @@ func (m *mux) StartServer() error {
 			tableName := pfx + "_maint"
 			tableString := "create table " + tableName + " ( INST_ID INT,  MACHINE VARCHAR(512),  STATUS VARCHAR(8),  STATUS_TIME INT,  MODULE VARCHAR(64) );"
 			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
+			if readpct > 0 {
+				readTable := "create table TABLEINREPLICA (ID INT, STATUS VARCHAR(8), STATUS_TIME INT);"
+				DBDirect(tableString, os.Getenv("MYSQLR_IP"), "heratestdbr", MySQL)
+				DBDirect(readTable, os.Getenv("MYSQLR_IP"), "heratestdbr", MySQL)
+			}
 		}
 	} else if m.wType == PostgresWorker {
 		xPostgres, ok := m.appcfg["x-postgres"]
@@ -392,16 +455,27 @@ func (m *mux) StartServer() error {
 		}
 		if xPostgres == "auto" {
 			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
-			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
-			twoTask := os.Getenv("TWO_TASK")
-			os.Setenv ("TWO_TASK_0", twoTask)
-			os.Setenv ("TWO_TASK_1", twoTask)
-			twoTask1 := os.Getenv("TWO_TASK")
-			fmt.Println ("TWO_TASK_1: ", twoTask1)
-			os.Setenv ("TWO_TASK_2", twoTask)
-			os.Setenv ("TWO_TASK_3", twoTask)
-			os.Setenv ("TWO_TASK_4", twoTask)
-			os.Setenv("TWO_TASK_READ", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
+			readpct, err := strconv.Atoi(m.appcfg["readonly_children_pct"])
+			if err == nil && readpct > 0 { 
+				ipReadonly := MakeDB("postgres23", "heratestdbr", PostgreSQL)
+				err = setupReadOnly(ipReadonly, "heratestdbr", PostgreSQL)
+				if err == nil {
+					os.Setenv("PGR_IP", ipReadonly)
+					os.Setenv("TWO_TASK", fmt.Sprintf("%s/heratestdb?connect_timeout=60&sslmode=disable||%s/heratestdbr?connect_timeout=60&sslmode=disable", ip, ipReadonly))
+					os.Setenv("TWO_TASK_READ", fmt.Sprintf("%s/heratestdbr?connect_timeout=60&sslmode=disable||%s/heratestdb?connect_timeout=60&sslmode=disable", ipReadonly, ip))
+				}
+			} else {
+				os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
+				twoTask := os.Getenv("TWO_TASK")
+				os.Setenv ("TWO_TASK_0", twoTask)
+				os.Setenv ("TWO_TASK_1", twoTask)
+				twoTask1 := os.Getenv("TWO_TASK")
+				fmt.Println ("TWO_TASK_1: ", twoTask1)
+				os.Setenv ("TWO_TASK_2", twoTask)
+				os.Setenv ("TWO_TASK_3", twoTask)
+				os.Setenv ("TWO_TASK_4", twoTask)
+			}
+			os.Setenv("PG_IP", ip)
 			os.Setenv("TWO_TASK_STANDBY0", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 		}
 	}
@@ -448,8 +522,10 @@ func (m *mux) StopServer() {
 	}
 	if m.wType == MySQLWorker {
 		CleanDB("mysql22")
+		CleanDB("mysql23")
 	} else if m.wType == PostgresWorker {
 		CleanDB("postgres22")
+		CleanDB("postgres23")
 	}
 
 	timer := time.NewTimer(time.Second * 5)

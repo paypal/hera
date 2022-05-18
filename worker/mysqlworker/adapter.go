@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"strconv"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -35,146 +36,195 @@ import (
 )
 
 type mysqlAdapter struct {
+	ReadOnMaster bool
+	MasterDs string
 }
 
 func (adapter *mysqlAdapter) MakeSqlParser() (common.SQLParser, error) {
 	return common.NewRegexSQLParser()
 }
 
-// InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
-// "mysql_datasource" parameters
-func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
-	user := os.Getenv("username")
-	pass := os.Getenv("password")
-	ds := os.Getenv("mysql_datasource")
-	calTrans := cal.NewCalTransaction(cal.TransTypeURL, "INITDB", cal.TransOK, "", cal.DefaultTGName)
-	if user == "" {
-		calTrans.AddDataStr("m_err", "USERNAME_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.AddDataStr("m_datasource", ds)
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'username' from env")
-	}
-	if pass == "" {
-		calTrans.AddDataStr("m_err", "PASSWORD_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.AddDataStr("m_datasource", ds)
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'password' from env")
-	}
-	if ds == "" {
-		calTrans.AddDataStr("m_err", "DATASOURCE_NOT_FOUND")
-		calTrans.AddDataStr("m_errtype", "CONNECT")
-		calTrans.SetStatus(cal.TransFatal)
-		calTrans.Completed()
-		return nil, errors.New("Can't get 'mysql_datasource' from env")
-	}
 
-	var db *sql.DB
-	var err error
-	for idx, curDs := range strings.Split(ds, "||") {
-		user := os.Getenv("username")
-		pass := os.Getenv("password")
-		attempt := 1
-		is_writable := false
-		for attempt <= 3 {
-			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
-			if err == nil {
-				is_writable = adapter.Heartbeat(db)
-				if is_writable {
-					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
-					}
-					err = nil
-					break
+func (adapter *mysqlAdapter) initHelper(urlDs string) (*sql.DB, error) {
+        user := os.Getenv("username")
+        if user == "" {
+		evt := cal.NewCalEvent("INITDB", "USERNAME_NOT_FOUND", cal.TransWarning, fmt.Sprintf("m_datasource %s", urlDs))
+		evt.SetStatus(cal.TransError)
+		evt.Completed()
+                return nil, errors.New("Can't get 'username' from env")
+        }
+        if urlDs == "" {
+		evt := cal.NewCalEvent("INITDB", "DATASOURCE_NOT_FOUND", cal.TransWarning, "")
+		evt.SetStatus(cal.TransError)
+		evt.Completed()
+                return nil, errors.New("Can't get 'mysql_datasource' from env")
+        }
+
+        var db *sql.DB
+        var err error
+        var writable bool
+        pwds := [3]string{os.Getenv("password"), os.Getenv("password2"), os.Getenv("password3")}
+        // allows multiple db endpoints
+        for idx, curDs := range strings.Split(urlDs, "||") {
+                attempt := 0
+                // retry on 3 password upon login error 
+                for attempt <= 2 {
+                        if len(pwds[attempt]) == 0 {
+                                if logger.GetLogger().V(logger.Warning) {
+                                        logger.GetLogger().Log(logger.Warning, fmt.Sprintf("InitDB password %d is not set", attempt))
+                                }
+                                attempt = attempt +1
+                                continue
+                        }
+
+                        db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pwds[attempt], curDs))
+                        if err == nil {
+                                err, writable = adapter.Heartbeat(db)
+                                if writable {
+					adapter.MasterDs = curDs
 				}
-				db.Close()
-			}
+				if err != nil {
+                                        // HB check failed
+                                        if logger.GetLogger().V(logger.Warning) {
+                                                logger.GetLogger().Log(logger.Warning, "HB failure " + fmt.Sprintf("%s, retry-attempt=%d", err.Error(), attempt))
+                                        }
+                                        evt := cal.NewCalEvent("INITDB", "HB_Failure", cal.TransWarning, fmt.Sprintf("%s, retry-attempt=%d", err.Error(), attempt))
+                                        evt.SetStatus(cal.TransError)
+                                        evt.Completed()
+					//db.Close()
+                                } else {
+	                               break // try next endpoint
+				}
+                        } else {
+                                if logger.GetLogger().V(logger.Warning) {
+                                        logger.GetLogger().Log(logger.Warning, user+" sql.Open fail"+curDs+fmt.Sprintf(" %d. %s", idx, err.Error()))
+                                }
+                                // retry with next password if error is access denied 1044 or 1045 otherwise break to try next endpoint
+                                errno := adapter.getDBErrCode(err.Error())
+				if errno != 1044 && errno != 1045 {
+					break // try next endpoint upon non-login error
+				} 
+                        }
 			attempt = attempt + 1
-			// read only connection
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt-1))
-			}
+                }
 
-			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt-1))
-			evt.SetStatus(cal.TransError)
-			evt.Completed()
-
-			pwdStr := fmt.Sprintf("password%d", attempt)
-			pass = os.Getenv(pwdStr)
-		}
-		if attempt > 3 {
-			calTrans.AddDataStr("m_err", "READONLY_CONN")
-			calTrans.AddDataStr("m_errtype", "CONNECT")
-			calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
-			calTrans.SetStatus(cal.TransFatal)
-			err = errors.New("cannot use read-only conn " + curDs)
-		}
-		if is_writable {
-			break
-		}
-	}
-	calTrans.Completed()
-	if err != nil {
-		spread := 11 * time.Second + time.Duration(rand.Intn(11000999888)/*ns*/)
-		logger.GetLogger().Log(logger.Warning, "onErr sleeping "+spread.String())
-		time.Sleep(spread)
-	}
+                if err == nil { // has a successful connection
+                        if logger.GetLogger().V(logger.Info) {
+                                logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
+                        }
+                        err = nil
+                        break
+                }
+        }
 	return db, err
 }
 
-// Checking master status
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
-	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+
+// InitDB creates sql.DB object for conection to the mysql database, using "username", "password" and
+// "mysql_datasource" parameters
+func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
+	ds := os.Getenv("mysql_datasource")
+	adapter.ReadOnMaster = false // only turn true if no read copy found
+	calTrans := cal.NewCalTransaction(cal.TransTypeURL, "INITDB", cal.TransOK, "", cal.DefaultTGName)
+	calTrans.AddDataStr("m_ds", ds)
+	db, err := adapter.initHelper(ds)
+	var spread time.Duration
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "HB rw check") {
+			wkrType := os.Getenv("logger.LOG_PREFIX")
+			if strings.HasPrefix(wkrType, "R-WORKER ") || strings.HasPrefix(wkrType, "S-WORKER") {
+				adapter.ReadOnMaster = true
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "INITDB allow read connection fallback to write") 
+				}
+				calTrans.AddDataStr("m_ReadOnMaster", strconv.FormatBool(adapter.ReadOnMaster))
+				// read connection final try on the master if it's available.
+				db, err = adapter.initHelper(adapter.MasterDs)
+				if err == nil {
+					calTrans.Completed()
+					return db, err
+				}
+			}
+			// if it's HB RW error, then reduce the range of wait
+			spread = 5* time.Second + time.Duration(rand.Intn(5000000))
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "INITDB onErr apply short sleeping "+spread.String())
+			}
+		} else {
+			spread = 11 * time.Second + time.Duration(rand.Intn(11000999888)/*ns*/)
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "INITDB onErr apply long sleeping "+spread.String())
+			}
+		}
+		time.Sleep(spread)
+	}
+
+	calTrans.Completed()
+	return db, err
+}
+
+// Checking master status and others
+//  TODO: may extend to cover replica state 
+func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (error, bool) {
 	writable := false
+	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
+			logger.GetLogger().Log(logger.Warning, "HB could not get connection "+err.Error())
 		}
-		return writable
+		return err, writable
 	}
 	defer conn.Close()
 
-	if strings.Contains(os.Getenv("logger.LOG_PREFIX"), "WORKER ") {
-		stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
-		//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
-		if err != nil {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
-			}
-			return false
+	stmt, err := conn.PrepareContext(ctx, "select @@global.read_only")
+	//stmt, err := conn.PrepareContext(ctx, "show variables where variable_name='read_only'")
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "HB query ro check err ", err.Error())
 		}
-		defer stmt.Close()
+		return err, writable
+	}
+	defer stmt.Close()
 
-		rows, err := stmt.Query()
-		if err != nil {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
-			}
-			return false
+	rows, err := stmt.Query()
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "HB ro check err ", err.Error())
 		}
-		defer rows.Close()
-		countRows := 0
-		if rows.Next() {
-			countRows++
-			var readOnly int
-			/*var nom string
-			rows.Scan(&nom, &readOnly) // */
-			rows.Scan(&readOnly)
-			if readOnly == 0 {
-				writable = true
-			}
-		}
-
-		// read only connection
-		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "writable:", writable)
+		return err, writable
+	}
+	defer rows.Close()
+	countRows := 0
+	if rows.Next() {
+		countRows++
+		var readOnly int
+		/*var nom string
+		rows.Scan(&nom, &readOnly) // */
+		rows.Scan(&readOnly)
+		if readOnly == 0 {
+			writable = true
 		}
 	}
-	return writable
+
+	err = nil
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "HB ReadOnMaster=" +
+			strconv.FormatBool(adapter.ReadOnMaster) + " DB writable=" + strconv.FormatBool(writable))
+	}
+	wkrType := os.Getenv("logger.LOG_PREFIX")
+	if strings.HasPrefix(wkrType, "WORKER ") {
+		// write connection
+		if writable == false {
+			err = errors.New("HB rw check: Write connection to read-only db")
+		}
+	} else if strings.HasPrefix(wkrType, "R-WORKER ") || strings.HasPrefix(wkrType, "S-WORKER") {
+		// Read and standby workers should be able to fall back to write instance if it can't find a read copy
+		if adapter.ReadOnMaster == false && writable == true {
+			err = errors.New("HB rw check: Read connection should connect to read-only db")
+		}
+	} 
+	return err, writable
 }
 
 // UseBindNames return false because the SQL string uses ? for bind parameters
@@ -210,7 +260,17 @@ func (adapter *mysqlAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
+func (adapter *mysqlAdapter) getDBErrCode(errMsg string) int {
+        idx := strings.Index(errMsg, ":")
+        if idx < 0 || idx >= len(errMsg) {
+                return 0
+        }
+        var rc int
+        fmt.Sscanf(errMsg[6:idx], "%d", &rc)
+	return rc
+}
+
+func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) (code string, msg string) {
 	errStr := errToProcess.Error()
 
 	if strings.HasPrefix(errStr, "driver: bad connection") {
@@ -218,15 +278,10 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 			logger.GetLogger().Log(logger.Warning, "mysql ProcessError badConnRecycle "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd)
 		}
 		(*workerScope).Child_shutdown_flag = true
-		return
+		return "0", errStr
 	}
 
-	idx := strings.Index(errStr, ":")
-	if idx < 0 || idx >= len(errStr) {
-		return
-	}
-	var errno int
-	fmt.Sscanf(errStr[6:idx], "%d", &errno)
+	errno := adapter.getDBErrCode(errStr)
 
 	if logger.GetLogger().V(logger.Warning) {
 		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d", errno))
@@ -264,6 +319,7 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 	case 1878: // temp file write fail
 		(*workerScope).Child_shutdown_flag = true
 	}
+	return strconv.Itoa(errno), errStr
 }
 
 func (adapter *mysqlAdapter) ProcessResult(colType string, res string) string {

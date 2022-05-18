@@ -33,7 +33,6 @@ import (
 	"github.com/paypal/hera/utility"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
-
 	"database/sql"
 )
 
@@ -42,15 +41,18 @@ import (
 type CmdProcessorAdapter interface {
 	MakeSqlParser() (common.SQLParser, error)
 	GetColTypeMap() map[string]int
-	Heartbeat(*sql.DB) bool
+	Heartbeat(*sql.DB) (error, bool) 
 	InitDB() (*sql.DB, error)
 	/* ProcessError's workerScope["child_shutdown_flag"] = "1 or anything" can help terminate after the request */
-	ProcessError(errToProcess error, workerScope *WorkerScopeType, queryScope *QueryScopeType)
+	ProcessError(errToProcess error, workerScope *WorkerScopeType, queryScope *QueryScopeType) (code string, msg string)
 	// ProcessResult is used for date related types to translate between the database format to the mux format
 	ProcessResult(colType string, res string) string
 	UseBindNames() bool
 	UseBindQuestionMark() bool // true for mysql, false for postgres $1 $2 binds
+	//GetDBErrCode(errMsg *error) int // process DB error message and only return code only
 }
+
+
 
 // bindType defines types of bind variables
 type bindType int
@@ -154,6 +156,9 @@ type CmdProcessor struct {
 	calExecTxn cal.Transaction
 	// last error
 	lastErr error
+	lastErrCode string
+	lastErrMsg string
+
 	// the FNV hash of the SQL, for logging
 	sqlHash uint32
 	// the name of the cal TXN
@@ -267,9 +272,11 @@ outloop:
 			cp.stmt, err = cp.db.Prepare(sqlQuery)
 		}
 		if err != nil {
-			cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
+			errno, msg := cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 			cp.calExecErr("Prepare", err.Error())
 			cp.lastErr = err
+			cp.lastErrCode = errno
+			cp.lastErrMsg = msg
 			err = nil
 		}
 		cp.rows = nil
@@ -435,7 +442,7 @@ outloop:
 				}
 			}
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
+				errno, msg := cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				cp.calExecErr("RC", err.Error())
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "Execute error:", err.Error())
@@ -445,12 +452,17 @@ outloop:
 				// The worker moves from Busy -> Finished -> Accept again. The rollback sent by the client is a NoOp and mux responds OK. 
 				// The older txn is not closed and is used for newer transactions too, thereby causing the "PSQLException: current transaction is aborted, commands ignored until end of transaction block"
 				// Adding this check ensures that the worker is moved to wait state and waits for the client to send either commit/rollback. 
+
 				if cp.inTrans || cp.tx != nil {
-					cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
+					cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(errno)))
+					//cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(strconv.Itoa(errno))))
 				} else {
-					cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
+					cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(errno)))
+					//cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(strconv.Itoa(errno))))
 				}
 				cp.lastErr = err
+				cp.lastErrCode = errno
+				cp.lastErrMsg = msg
 				err = nil
 				break
 			}
@@ -570,9 +582,9 @@ outloop:
 				resns := netstring.NewNetstringEmbedded(nss)
 				cp.eor(common.EORInTransaction, resns)
 			} else if cp.inTrans || cp.tx != nil {
-				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
+				cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErrCode)))
 			} else {
-				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErr.Error())))
+				cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcSQLError, []byte(cp.lastErrCode)))
 			}
 		}
 	case common.CmdFetch:
@@ -600,9 +612,9 @@ outloop:
 			for cp.rows.Next() {
 				err = cp.rows.Scan(readCols...)
 				if err != nil {
-					cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
+					errno, msg := cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "fetch:", err.Error())
+						logger.GetLogger().Log(logger.Warning, "fetch:", errno, msg)
 					}
 					calt.AddDataStr("RC", err.Error())
 					calt.SetStatus(cal.TransError)
@@ -723,13 +735,14 @@ outloop:
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "Commit")
 		}
+		var errno, msg string
 		if cp.tx != nil {
 			calevt := cal.NewCalEvent("COMMIT", "Local", cal.TransOK, "")
 			err = cp.tx.Commit()
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
+				errno, msg = cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "Commit error:", err.Error())
+					logger.GetLogger().Log(logger.Warning, "Commit error:", errno, msg)
 				}
 				// This is a postgres specific error that is returned by the pq driver to the client to indicate that the client 
 				// atttempted to commit a failed transaction. It does a rollback instead of commit and returns the message. 
@@ -756,20 +769,22 @@ outloop:
 			cp.inTrans = false
 			cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcOK, nil))
 		} else {
-			cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
+			cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(errno)))
 			err = nil
 		}
+
 	case common.CmdRollback:
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "Rollback")
 		}
+		var errno, msg string
 		if cp.tx != nil {
 			calevt := cal.NewCalEvent("ROLLBACK", "Local", cal.TransOK, "")
 			err = cp.tx.Rollback()
 			if err != nil {
-				cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
+				errno, msg = cp.adapter.ProcessError(err, &cp.WorkerScope, &cp.queryScope)
 				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "Rollback error:", err.Error())
+					logger.GetLogger().Log(logger.Warning, "Rollback error:", errno, msg)
 				}
 				calevt.AddDataStr("RC", err.Error())
 				calevt.SetStatus(cal.TransError)
@@ -786,7 +801,7 @@ outloop:
 			cp.inTrans = false
 			cp.eor(common.EORFree, netstring.NewNetstringFrom(common.RcOK, nil))
 		} else {
-			cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
+			cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(errno)))
 			err = nil
 		}
 	}
@@ -794,10 +809,12 @@ outloop:
 	return err
 }
 
-func (cp *CmdProcessor) SendDbHeartbeat() bool {
-	var masterIsUp bool
-	masterIsUp = cp.adapter.Heartbeat(cp.db)
-	return masterIsUp
+func (cp *CmdProcessor) SendDbHeartbeat() error {
+	err, writable := cp.adapter.Heartbeat(cp.db)
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "DB writable", writable)
+	}
+	return err
 }
 
 // InitDB performs various initializations at start time

@@ -170,10 +170,10 @@ outerloop:
 					logger.GetLogger().Log(logger.Info, "sending heartbeat to DB")
 				}
 
-				ok := cmdprocessor.SendDbHeartbeat()
-				if !ok {
+				err = cmdprocessor.SendDbHeartbeat()
+				if err != nil  {
 					if logger.GetLogger().V(logger.Warning) {
-						logger.GetLogger().Log(logger.Warning, "master db is unavailable, worker exiting")
+						logger.GetLogger().Log(logger.Warning, "Heartbeat error:", err.Error())
 					}
 					break outerloop
 				}

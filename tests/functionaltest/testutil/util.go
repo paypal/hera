@@ -136,6 +136,23 @@ func RunMysql(sql string) (string, error) {
         return cmdOutBuf.String(), nil
 }
 
+func SetDBGlobalState(dbIP string, dbName string, dbType DBType) error {
+               if dbIP == "" {
+                       return errors.New("SetDBGlobalState dbIP is nil")
+               }
+               if os.Getenv("username") == "" || os.Getenv("password")=="" {
+                       return errors.New("SetDBGlobalState Failed to set up DB user")
+               }
+               q := "SET GLOBAL read_only = 1;"
+               err := DBDirect(q, dbIP, dbName, dbType)
+               if err != nil {
+                       logger.GetLogger().Log(logger.Warning, "grant app user:"+q+" errored "+err.Error())
+               } else {
+                       os.Setenv("username", "dwappuser")
+               }
+               return nil
+}
+
 
 func RunDML(dml string) error {
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))

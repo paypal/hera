@@ -66,14 +66,38 @@ func (p *tafResponsePreproc) Write(bf []byte) (int, error) {
 				if logger.GetLogger().V(logger.Info) {
 					logger.GetLogger().Log(logger.Info, p.conn.RemoteAddr().String(), "TAF response: found SQL error", string(ns.Payload[:20]))
 				}
-				ora, sz := atoi(ns.Payload)
-				switch ora {
-				case 3113, 3114, 3135, 12514, 3128, 3127, 3123, 3111, 3106, 1012, 28, 31, 51, 25400, 25401, 25402, 25403, 25404, 25405, 25407, 25408, 25409, 25425, 24343, 1041, 600, 700, 7445:
-					//for testing 962=<table doesn't exist>:	case 942:
-					p.ok = false
-					p.ora = string(ns.Payload[:sz])
-				default:
-					p.ok = true
+				switch GetConfig().DatabaseType {
+					case Oracle:
+						ora, sz := atoi(ns.Payload)
+						switch ora {
+							case 3113, 3114, 3135, 12514, 3128, 3127, 3123, 3111, 3106, 1012, 28, 31, 51, 25400, 25401, 25402, 25403, 25404, 25405, 25407, 25408, 25409, 25425, 24343, 1041, 600, 700, 7445:
+								//for testing 962=<table doesn't exist>:	case 942:
+								p.ok = false
+								p.ora = string(ns.Payload[:sz])
+							default:
+								p.ok = true
+						}
+					case MySQL:
+						mysqlerr, sz := atoi(ns.Payload)
+						switch mysqlerr {
+							case 1053,1080,1099,2013,2055:
+								p.ok = false
+								p.ora = string(ns.Payload[:sz])
+							default:
+								p.ok = true
+						}
+					case POSTGRES:
+						// pg err can contain character although TAF specific error are all digits.
+						pgerr, sz := atoi(ns.Payload) 
+						switch pgerr {
+							case 8000,8003,8006,53000,53100,53200:
+								p.ok = false
+								p.ora = string(ns.Payload[:sz])
+							default:
+								p.ok = true
+						}
+					default:
+						p.ok = true
 				}
 			}
 		}

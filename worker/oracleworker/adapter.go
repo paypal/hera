@@ -66,8 +66,8 @@ func (adapter *oracleAdapter) UseBindQuestionMark() bool {
 /**
  * @TODO
  */
-func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (bool) {
-	return true
+func (adapter *oracleAdapter) Heartbeat(db *sql.DB) (error, bool) {
+	return nil, true
 }
 /**
  * @TODO infra.hera.jdbc.HeraResultSetMetaData mysql type to java type map.
@@ -88,13 +88,15 @@ func (adapter *oracleAdapter) GetColTypeMap() map[string]int {
 	return colTypeMap
 }
 
-func (adapter *oracleAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) {
+func (adapter *oracleAdapter) ProcessError(errToProcess error, workerScope *shared.WorkerScopeType, queryScope *shared.QueryScopeType) (code string, msg string) {
         if logger.GetLogger().V(logger.Warning) {
                 logger.GetLogger().Log(logger.Warning, "oracle ProcessError "+ errToProcess.Error() + " "+ (*queryScope).SqlHash +" "+(*queryScope).NsCmd)
         }
         if strings.Contains(errToProcess.Error(), "ORA-03113") {
                 (*workerScope).Child_shutdown_flag = true
         }
+	// TODO: this needs fix to work correctly with some part of the coordinator 
+	return errToProcess.Error(), errToProcess.Error()
 }
 
 func (adapter *oracleAdapter) ProcessResult(colType string, res string) string {
