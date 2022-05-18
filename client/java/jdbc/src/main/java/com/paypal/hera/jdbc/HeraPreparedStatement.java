@@ -260,6 +260,14 @@ public class HeraPreparedStatement extends HeraStatement implements PreparedStat
 		in_params.put(Integer.valueOf(_index), new Pair<BindType, byte[]>(BindType.HERA_TYPE_STRING, _value));
 	}
 
+	protected final void bindBoolean(int _index, byte[] _value) throws SQLException {
+		in_params.put(Integer.valueOf(_index), new Pair<BindType, byte[]>(BindType.HERA_TYPE_BOOLEAN, _value));
+	}
+
+	protected final void bindInt(int _index, byte[] _value) throws SQLException {
+		in_params.put(Integer.valueOf(_index), new Pair<BindType, byte[]>(BindType.HERA_TYPE_INT, _value));
+	}
+
 	protected final void bindDateTime(int _index, byte[] _value) throws SQLException {
 		in_params.put(Integer.valueOf(_index), new Pair<BindType, byte[]>(BindType.HERA_TYPE_TIMESTAMP, _value));
 	}
@@ -311,12 +319,12 @@ public class HeraPreparedStatement extends HeraStatement implements PreparedStat
 
 	public void setInt(int index, int x) throws SQLException {
 		checkParamStart();
-		bindString(index, HeraJdbcConverter.int2hera(x));
+		bindInt(index, HeraJdbcConverter.int2hera(x));
 	}
 
 	public void setBoolean(int index, boolean x) throws SQLException {
 		checkParamStart();
-		bindString(index, HeraJdbcConverter.int2hera(x ? 1 : 0));
+		bindBoolean(index, HeraJdbcConverter.int2hera(x ? 1 : 0));
 	}
 
 	public void setByte(int index, byte x) throws SQLException {
