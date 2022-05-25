@@ -359,6 +359,20 @@ outloop:
 						cp.bindVars[cp.currentBindName].value = time.Date(year, time.Month(month), day, hour, min, sec, ms*1000000, time.FixedZone("Custom", tzh*3600))
 					case common.DataTypeRaw, common.DataTypeBlob:
 						cp.bindVars[cp.currentBindName].value = ns.Payload
+					case common.DataTypeBool:
+						bValue, err := strconv.ParseBool(string(ns.Payload))
+						if err != nil {
+							cp.calExecErr("BindValueConv", err.Error())
+							break
+						}
+						cp.bindVars[cp.currentBindName].value = bValue
+					case common.DataTypeInt:
+						bValue, err := strconv.Atoi(string(ns.Payload))
+						if err != nil {
+							cp.calExecErr("BindValueConv", err.Error())
+							break
+						}
+						cp.bindVars[cp.currentBindName].value = bValue
 					default:
 						cp.bindVars[cp.currentBindName].value = sql.NullString{String: string(ns.Payload), Valid: true}
 					}
