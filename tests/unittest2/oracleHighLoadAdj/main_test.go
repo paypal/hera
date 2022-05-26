@@ -40,6 +40,45 @@ limitations under the License.
 // creates a different ora error code to help test that second passwords are
 // only attempted if ORA-01017 invalid password happens in a connect attempt.
 //
+/*
+for cmd/rude.go 
+
+create or replace function cur_micros
+return number
+is
+    rv number;
+    upper number;
+begin
+    select to_number(to_char(current_timestamp,'SSFF')) into rv from dual;
+    select to_number(to_char(current_timestamp,'MI')) into upper from dual;
+    rv := rv + 1000000 * 60 * upper;
+    -- adding hh24 overflows
+    return rv;
+end;
+/
+select cur_micros() from dual;
+select cur_micros() as chkStmtSpeed from dual;
+create or replace function usleep (micros in number)
+return number
+is
+    finish number;
+    cur number;
+begin
+    cur := cur_micros();
+    finish := cur + micros;
+    while cur < finish loop
+        cur := cur_micros();
+    end loop;
+    return cur-finish+micros;
+end;
+/
+select current_timestamp from dual;
+select usleep(2111000) from dual;
+select current_timestamp from dual;
+create public synonym usleep for usleep;
+grant execute on usleep to app;
+
+*/
 package main
 
 import (
@@ -76,6 +115,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg["request_backlog_timeout"] = "1000"
 	appcfg["soft_eviction_probability"] = "100"
+	appcfg["high_load_pct"] = "30"
+	appcfg["init_limit_pct"] = "25"
 
 	opscfg := make(map[string]string)
 	max_conn = 15
@@ -194,6 +235,7 @@ func TestSkipOciBreak(t *testing.T) {
 		stuckConn[i] = c
 		stuckTx[i] = execSql(t, c, fmt.Sprintf("insert into resilience_at_load(id,note)values(%d,'stuckConn')", 1000+i), true)
 	}
+	time.Sleep(1000*time.Millisecond)
 
 	// helper starts sql and rudely stops
 	out, err := exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go").Output()
@@ -201,9 +243,10 @@ func TestSkipOciBreak(t *testing.T) {
 		fmt.Printf("go run rude.go - output %s", out)
 		fmt.Print("could not go run rude.go", err)
 	}
+	time.Sleep(50*time.Millisecond)
 
 	// check for behavior we want
-	if testutil.RegexCountFile("is high load, skipping initiateRecover()", "hera.log") < 1 {
+	if testutil.RegexCountFile("is high load, skipping", "hera.log") < 1 {
 		t.Fatal("Error did not skip oci break (80pct of the time)")
 	}
 
