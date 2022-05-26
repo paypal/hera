@@ -58,7 +58,7 @@ func (adapter *postgresAdapter) initHelper(urlDs string) (*sql.DB, error) {
 	        evt := cal.NewCalEvent("INITDB", "DATASOURCE_NOT_FOUND", cal.TransWarning, "")
 	        evt.SetStatus(cal.TransError)
 	        evt.Completed()
-	        return nil, errors.New("Can't get 'mysql_datasource' from env")
+	        return nil, errors.New("Can't get 'db_datasource' from env")
 	}
 
 	var db *sql.DB
@@ -130,9 +130,9 @@ func (adapter *postgresAdapter) initHelper(urlDs string) (*sql.DB, error) {
 
 
 // InitDB creates sql.DB object for conection to the database, using "username", "password" and
-// "mysql_datasource" parameters
+// "db_datasource" parameters
 func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
-	ds := os.Getenv("mysql_datasource")
+	ds := os.Getenv("db_datasource")
 	adapter.ReadOnMaster = false // only turn true if no read copy found
 	calTrans := cal.NewCalTransaction(cal.TransTypeURL, "INITDB", cal.TransOK, "", cal.DefaultTGName)
 	calTrans.AddDataStr("m_ds", ds)
