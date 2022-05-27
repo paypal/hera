@@ -559,12 +559,13 @@ func (worker *WorkerClient) Close() {
 /**
  * Sends the recover signal to the worker
  */
-func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool) <-chan time.Time {
+func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus) <-chan time.Time {
 	dice := rand.Intn(100)
 	freePct := 100*p.activeQ.Len()/p.desiredSize
 	var rv <-chan time.Time
 
-	if 100-freePct > GetConfig().HighLoadPct {
+	// only skip and slow when on db-side (state==busy)
+	if 100-freePct > GetConfig().HighLoadPct && prior == wsBusy {
 		timeMs := GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs)
 		rv = time.After(time.Millisecond * time.Duration(timeMs))
 		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
@@ -639,13 +640,14 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 		}
 		return
 	}
+	priorWorkerStatus := worker.Status
 	worker.setState(wsQuce)
 	killparam := common.StrandedClientClose
 	if len(param) > 0 {
 		killparam = param[0]
 	}
 	worker.callogStranded("RECOVERING", info) // TODO: should we have this?
-	workerRecoverTimeout := worker.initiateRecover(killparam, p)
+	workerRecoverTimeout := worker.initiateRecover(killparam, p, priorWorkerStatus)
 	for {
 		select {
 		case <-workerRecoverTimeout:

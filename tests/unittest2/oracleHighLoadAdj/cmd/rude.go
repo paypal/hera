@@ -64,9 +64,11 @@ func main() {
 	go sleepExit()
 	// a few different types of SQL (slow, select, insert)
 	// select is too fast
-	//execSQL(tmpConn, "insert into resilience_at_load(id,note)values(2000,'tmpConn')", true /*skipCommit*/)
-	//execSQL(tmpConn, "select * from resilience_at_load where id=77", true /*skipCommit*/)
-	execSQL(tmpConn, "select usleep(3000111) from dual", true /*skipCommit*/)
+	if os.Args[1] == "insert" {
+		execSQL(tmpConn, "insert into resilience_at_load(id,note)values(2000,'tmpConn')", true /*skipCommit*/)
+	} else {
+		execSQL(tmpConn, "select usleep(3000111) from dual", true /*skipCommit*/)
+	}
 
 	logger.GetLogger().Log(logger.Debug, "rude.go +++++++++++++ done")
 

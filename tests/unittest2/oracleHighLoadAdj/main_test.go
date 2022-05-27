@@ -115,6 +115,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg["request_backlog_timeout"] = "1000"
 	appcfg["soft_eviction_probability"] = "100"
+	appcfg["high_load_skip_initiate_recover_pct"] = "100"
 	appcfg["high_load_pct"] = "30"
 	appcfg["init_limit_pct"] = "25"
 
@@ -238,7 +239,23 @@ func TestSkipOciBreak(t *testing.T) {
 	time.Sleep(1000*time.Millisecond)
 
 	// helper starts sql and rudely stops
-	out, err := exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go").Output()
+	// first with insert which stays in wait state for the client
+	// we want to keep current behavior
+	out, err := exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go", "insert").Output()
+	if err != nil {
+		fmt.Printf("go run rude.go - output %s", out)
+		fmt.Print("could not go run rude.go", err)
+	}
+	time.Sleep(50*time.Millisecond)
+
+	// check for behavior we want
+	if testutil.RegexCountFile("is high load, skipping", "hera.log") != 0 {
+		t.Fatal("skip oci break, on waiting db txn")
+	}
+
+
+	// slow query, client timesout/crashes
+	out, err = exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go", "usleep").Output()
 	if err != nil {
 		fmt.Printf("go run rude.go - output %s", out)
 		fmt.Print("could not go run rude.go", err)
@@ -247,7 +264,7 @@ func TestSkipOciBreak(t *testing.T) {
 
 	// check for behavior we want
 	if testutil.RegexCountFile("is high load, skipping", "hera.log") < 1 {
-		t.Fatal("Error did not skip oci break (80pct of the time)")
+		t.Fatal("Error did not skip oci break")
 	}
 
 	// start restore
