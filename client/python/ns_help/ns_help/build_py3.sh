@@ -1,0 +1,1 @@
+/usr/bin/clang -fno-strict-aliasing -arch x86_64 -g -DTEST_CHRIS -DNDEBUG -g -fwrapv -O3 -Wall -Wstrict-prototypes -I/Library/Frameworks/Python.framework/Versions/2.7/include/python2.7  -L /Library/Frameworks/Python.framework/Versions/2.7/lib -l python2.7 _ns_help.c -o ./ns

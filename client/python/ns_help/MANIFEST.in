@@ -1,0 +1,1 @@
+recursive-include ns_help *.py *.c
