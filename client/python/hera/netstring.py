@@ -264,8 +264,7 @@ def _pump_netstring_sock(self):
                 elif sub_ns[0] != SERVER_ALIVE:  # throw away keep-alives
                     ml.ld4("Adding to ns_q" + str(sub_ns))
                     self.ns_q.put(sub_ns)
-                elif ((self.protocol_name != OCC_PROTOCOL_NAME) and
-                      (self.protocol_name != CRYPTOSERV_PROTOCOL_NAME)):
+                elif (self.protocol_name != OCC_PROTOCOL_NAME):
                     ml.ld("Adding to ns_q" + sub_ns)
                     self.ns_q.put(sub_ns)
     except ReferenceError:
@@ -281,7 +280,6 @@ def _pump_netstring_sock(self):
             pass  # dang
 
 OCC_PROTOCOL_NAME    = b"occ 1"
-CRYPTOSERV_PROTOCOL_NAME    = b"cryptoserv 1"
 SERVER_CHALLENGE     = 1001
 CLIENT_PROTOCOL_NAME_NOAUTH = 2001
 CLIENT_PROTOCOL_NAME        = 2002
