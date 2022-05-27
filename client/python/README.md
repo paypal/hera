@@ -6,3 +6,5 @@ both Python2 and Python3.
 
 The test file (test/test_open_hera.py) illustrates how to use it.  It has only been tested with MySQL engine.
 
+The ns_help directory contains a dependency (not in PyPi) so first python setup.py install --user in that directory.
+
