@@ -20,7 +20,7 @@ import (
 func main() {
 	parentSignal := make(chan os.Signal, 1)
 	signal.Ignore(syscall.SIGPIPE)
-	signal.Notify(parentSignal, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(parentSignal, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	namePtr := flag.String("name", "", "module name in v$session table")
 	flag.Parse()
 
