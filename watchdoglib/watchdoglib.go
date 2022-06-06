@@ -140,7 +140,7 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 	processData.cmd = processCommand
 	processData.currPid = processData.cmd.Process.Pid
 	processData.startCount++
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf("start number %d: watchdog Process: %d started Process: %d / new process '%s'", processData.startCount, parentProcessId, processData.currPid, processData.PathToChildExecutable))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("start number %d: watchdog process: %d started new child process '%s' and pid: %d", processData.startCount, parentProcessId, processData.PathToChildExecutable, processData.currPid))
 	return nil
 }
 
@@ -156,10 +156,14 @@ func (w *Watchdog) Start() {
 	//var ws syscall.WaitStatus
 	go func() {
 		defer func() {
+			signal.Stop(signalChild) // reverse the effect of the above Notify()
 			if w.processList != nil {
 				for index := range w.processList {
 					if w.processList[index].cmd != nil {
-						w.processList[index].cmd.Process.Release()
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog releasing child process : %d", w.processList[index].currPid))
+						if err3 := w.processList[index].cmd.Process.Kill(); err3 != nil {
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog failed to release child process : %d", w.processList[index].currPid))
+						}
 					}
 				}
 			}
@@ -168,7 +172,6 @@ func (w *Watchdog) Start() {
 			w.mut.Lock()
 			w.shutdown = true
 			w.mut.Unlock()
-			signal.Stop(signalChild) // reverse the effect of the above Notify()
 		}()
 		//Iterate over processes and start each child-process daemon
 		for index := range w.processList {
@@ -178,7 +181,7 @@ func (w *Watchdog) Start() {
 			}
 		}
 		if processStartFailureCount == len(w.processList) {
-			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("starting of all child processes failed"))
+			logger.GetLogger().Log(logger.Alert, "starting of all child processes failed")
 			return
 		}
 		var ws syscall.WaitStatus
