@@ -1,0 +1,24 @@
+name: Manual functionaltest
+on:
+  workflow_dispatch:
+
+jobs:
+  funcTest:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql
+        env:
+          MYSQL_ROOT_PASSWORD: 1-testDb
+          MYSQL_DATABASE: heratestdb
+        ports:
+          - 3306:3306
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.15
+    - name: System Test
+      run: tests/functionaltest/runall.sh
