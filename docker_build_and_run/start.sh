@@ -63,4 +63,6 @@ case "${unameOut}" in
     *)        docker exec -it hera_mysql mysql -u root -p$HERA_DB_ROOT_PASSWORD  -e "Use $HERA_DB_SCHEMA; $(cat ./initialize.sql)"
 esac
 
-cd ../sample_hera_based_app/ && mvn spring-boot:run > app.log &
+if [ "$START_HERA_SAMPLE_APP" = true ] ; then
+    cd ../sample_hera_based_app/ && mvn spring-boot:run > app.log &
+fi
