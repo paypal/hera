@@ -78,7 +78,6 @@ func CfgFromTns(name string) {
 		numShards++
 	}
 	if numShards > 0 {
-		GetConfig().EnableSharding=true
 		GetConfig().NumOfShards=numShards
 		// shard key must be configured
 		logErr(fmt.Sprintf("numShards=%d taf:%d rw:%d",numShards,tafShards,rwShards))
