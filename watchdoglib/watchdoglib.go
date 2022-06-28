@@ -140,7 +140,7 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 	processData.cmd = processCommand
 	processData.currPid = processData.cmd.Process.Pid
 	processData.startCount++
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf("start number %d: watchdog process: %d started new child process '%s' and pid: %d", processData.startCount, parentProcessId, processData.PathToChildExecutable, processData.currPid))
+	logger.GetLogger().Log(logger.Alert, fmt.Sprintf("start number %d: watchdog process: %d started new child process '%s' and pid: %d", processData.startCount, parentProcessId, processData.PathToChildExecutable, processData.currPid))
 	return nil
 }
 
