@@ -17,11 +17,6 @@ import (
 	"github.com/paypal/hera/watchdoglib"
 )
 
-const (
-	LATEST_GO_VERSION = "1.18.2"
-	OLD_GO_VERSION    = "1.10"
-)
-
 func main() {
 	parentSignal := make(chan os.Signal, 1)
 	signal.Ignore(syscall.SIGPIPE)
