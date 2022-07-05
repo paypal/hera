@@ -1,0 +1,14 @@
+rac_sql_interval=0
+high_load_max_stranded_time_interval=5000
+opscfg.default.server.log_level=5
+bind_port=24317
+opscfg.default.server.saturation_recover_threshold=10
+log_file=hera.log
+enable_heartbeat_fix=true
+opscfg.default.server.max_connections=15
+request_backlog_timeout=1000
+soft_eviction_probability=100
+opscfg.hera.server.saturation_recover_throttle_rate=100
+log_level=5
+sharding_cfg_reload_interval=0
+child.executable=oracleworker

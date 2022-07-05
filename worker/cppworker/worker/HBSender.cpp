@@ -168,7 +168,11 @@ bool HBSender::handle_ctrl()
 	// capture the req_id which can be used during recover() so as to not recover different req_id due to race condition
 	m_occ_child->set_id_to_abort(rq_id);
 	uint16_t flags = data[0];
-	if (m_is_enabled) {
+
+	if (flags == ControlMessage::STRANDED_SKIP_BREAK) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "high load, skipping break");
+		m_occ_child->trigger_recovery(flags);
+	} else if (m_is_enabled) {
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "Breaking the OCI call !!!");
 		if ( m_occ_child->break_oci_call() != 0 ) {
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT, " %d Error breaking out of OCI call. Exiting", m_ppid);

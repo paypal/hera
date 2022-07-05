@@ -198,7 +198,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("password", "1-testDb")
 		waitLoop := 1
 		for {
-			err := DBDirect("select 1", "127.0.0.1", "heratestdb", MySQL)
+			err := DBDirect("select 1", "127.0.0.1", dbName/*"heratestdb"*/, MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
@@ -383,12 +383,12 @@ func (m *mux) StartServer() error {
 			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
 			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 			twoTask := os.Getenv("TWO_TASK")
-        	os.Setenv ("TWO_TASK_0", twoTask)
-        	os.Setenv ("TWO_TASK_1", twoTask)
+			os.Setenv ("TWO_TASK_0", twoTask)
+			os.Setenv ("TWO_TASK_1", twoTask)
 			twoTask1 := os.Getenv("TWO_TASK")
 			fmt.Println ("TWO_TASK_1: ", twoTask1)
 		}
-	} 
+	}
 
 	m.wg.Add(1)
 	go func() {
@@ -399,7 +399,7 @@ func (m *mux) StartServer() error {
 	}()
 
 	// wait 10 seconds for mux to come up
-	toWait := 10
+	toWait := 20
 	for {
 		acpt, err := StatelogGetField(2)
 		if err == nil || err == INCOMPLETE {

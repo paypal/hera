@@ -289,6 +289,33 @@ func (sl *StateLog) GetStrandedWorkerCountForPool(shardID int, wType HeraWorkerT
 	return cnt
 }
 
+func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID int, wType HeraWorkerType, instID int) int {
+	var cnt = 0
+	//
+	// if any of the shareId, instID, and wType is invalid, return 0.
+	//
+	if (shardID >= 0) && (shardID < sl.maxShardSize) {
+		if (wType >= wtypeRW) && (wType < wtypeTotalCount) {
+			instCnt := len(sl.mWorkerStates[shardID][wType])
+			if (instID >= 0) && (instID < instCnt) {
+				for n := 0; n < instCnt; n++ {
+					workerCnt := len(sl.mWorkerStates[shardID][wType][n])
+					if workerCnt == 0 {
+						continue
+					}
+					for w := 0; w < workerCnt; w++ {
+						if workerState == sl.mWorkerStates[shardID][wType][n][w].state {
+							cnt++
+						}
+					}
+				}
+			}
+		}
+	}
+	//logger.GetLogger().Log(logger.Verbose, "(strandcnt, shard, inst, wt)=", cnt, shardId, instID, wType)
+	return cnt
+}
+
 // ProxyHasCapacity checks if there is enough capacity
 func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
 	shdCnt := sl.maxShardSize

@@ -499,6 +499,11 @@ private:
 		if (the_child == NULL) return -1;
 		return static_cast<OCCChild *>(the_child)->ph_cb_out(octxp, bindp, iter, index, bufpp, alenpp, piecep, indpp, rcodepp);
 	}
+	//! Callback function for failover
+	sb4 cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, ub4 fo_event);
+	static sb4 c_cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, ub4 fo_event) {
+		return static_cast<OCCChild *>(fo_ctx)->cb_failover(svchp, envhp, fo_ctx, fo_type, fo_event);
+	}
 	int return_out_bind_vars(StmtCacheEntry *stmt);
 	//!< Reset 2PC transaction state.
 	int clear_2pc_state(void);

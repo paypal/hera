@@ -43,4 +43,5 @@ const (
 	StrandedSwitch            = 6
 	StrandedTimeout           = 7
 	StrandedErr               = 8
+	StrandedSkipBreakHiLoad   = 9
 )

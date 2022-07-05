@@ -430,7 +430,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	resize_oracle_fd_buffer();
 
 	// enable_hb_fix
-	enable_hb_fix = config->is_switch_enabled("enable_heartbeat_fix", FALSE);
+	enable_hb_fix = config->is_switch_enabled("enable_heartbeat_fix", TRUE);
 
 	// enable_hb_fix is meaningful in only blocking mode
 	if (!use_nonblock && enable_hb_fix) {
@@ -1537,6 +1537,13 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 						(ub4) OCI_DEFAULT);
 			if(rc == OCI_SUCCESS) {
 				break;
+			} else {
+				std::string text;
+				int code = get_oracle_error(rc, text);
+				if (code == 1017) { // only continue on bad password
+					continue;
+				}
+				break;
 			}
 		}
 	}
@@ -1556,6 +1563,15 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 
 #endif
 
+	OCIFocbkStruct failover_cb_info;
+	failover_cb_info.fo_ctx = (void*)this;
+	failover_cb_info.callback_function = OCCChild::c_cb_failover;
+	
+	rc = OCIAttrSet(srvhp, (ub4)OCI_HTYPE_SERVER, (void*)&failover_cb_info, (ub4)0, (ub4)OCI_ATTR_FOCBK, errhp);
+	if(rc!=OCI_SUCCESS) {
+		log_oracle_error(rc,"Failed to set failover callback.");
+	}
+	
 	has_session = true;
 	cal_trans.Completed();
 
@@ -5600,4 +5616,40 @@ uint OCCChild::compute_scuttle_id(unsigned long long _shardkey_val)
 			break;
 	}
 	return scuttle_id;
+}
+
+sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, ub4 fo_event)
+{
+	if (fo_event == OCI_FO_BEGIN) {
+		const char *fo_type_str = "unknown";
+		if (fo_type == OCI_FO_NONE) {
+			fo_type_str = "none";
+		} else if (fo_type == OCI_FO_SESSION) {
+			fo_type_str = "session";
+		} else if (fo_type == OCI_FO_SELECT) {
+			fo_type_str = "select";
+		} else if (fo_type == OCI_FO_TXNAL) {
+			fo_type_str = "transaction";
+		}
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover starting, type:",fo_type_str);
+	} else if (fo_event == OCI_FO_END) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover success, can resume normal processing");
+	} else if (fo_event == OCI_FO_ABORT) {
+		int us = 111222333;
+		us = us/2 + rand()%us;
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unsuccessful, usleep", us);
+		usleep(us);
+		exit(1);
+	} else if (fo_event == OCI_FO_ERROR) {
+		int us = 3222333;
+		us = us/2 + rand()%us;
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover error, could attempt to address and retry, usleep", us);
+		usleep(us);
+		return OCI_FO_RETRY;
+	} else if (fo_event == OCI_FO_REAUTH) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover reauthed");
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unknown", fo_event);
+	}
+	return 0;
 }

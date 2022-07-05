@@ -290,9 +290,9 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 		// reload sleep every loop to pick up any runtime config change.
 		//
 		sleep := GetSatRecoverFreqMs(mgr.wpool.ShardID)
-		if logger.GetLogger().V(logger.Verbose) {
+		/*if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "saturation recover enter (ms)", sleep)
-		}
+		} // */
 		if sleep == int(^uint(0)>>1) {
 			//
 			// need to periodically check whether recovery config is activated.
@@ -310,9 +310,9 @@ func (mgr *adaptiveQueueManager) runSaturationRecovery() {
 		//
 		time.Sleep(time.Millisecond * time.Duration(sleep))
 
-		if logger.GetLogger().V(logger.Verbose) {
+		/* if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, "saturation recover active (ms)", sleep)
-		}
+		} // */
 		if mgr.shouldRecover() && mgr.doBindEviction() == 0 {
 			//
 			// once we decided to recover a worker and send an abort msg through worker.ctrlCh,
@@ -386,9 +386,9 @@ func (mgr *adaptiveQueueManager) shouldRecover() bool {
 	// no backlog
 	//
 	bgcnt := int(atomic.LoadInt32(&(mgr.wpool.backlogCnt)))
-	if logger.GetLogger().V(logger.Verbose) {
+	/* if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "shouldRecover bgcnt >0", bgcnt)
-	}
+	} // */
 	if bgcnt == 0 {
 		return false
 	}
