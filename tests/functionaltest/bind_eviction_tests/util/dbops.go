@@ -3,7 +3,6 @@ import (
 	"context"
         "database/sql"
 	"fmt"
-	"os"
 	//"testing"
 	"time"
         "github.com/paypal/hera/client/gosqldriver"
