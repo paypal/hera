@@ -91,7 +91,7 @@ func TestShardBasic(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	time.Sleep(8 * time.Second);
 	
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -202,7 +202,7 @@ func TestShardBasic(t *testing.T) {
             t.Fatalf ("Error: Select Query does NOT go to shd3");
         }
 	testutil.DoDefaultValidation(t)
-	time.Sleep (time.Duration(2 * time.Second)
+	time.Sleep (time.Duration(2 * time.Second))
 	logger.GetLogger().Log(logger.Debug, "TestShardBasic done  -------------------------------------------------------------")
 }
 

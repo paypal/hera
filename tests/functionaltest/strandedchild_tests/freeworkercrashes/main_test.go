@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 func TestFreeWorkerCrashes(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestFreeWorkerCrashes begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
