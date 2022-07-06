@@ -70,7 +70,7 @@ func TestStatusFDedicatedWorker(t *testing.T) {
 	fmt.Println ("TestStatusFDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestStatusFDedicatedWorker begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
