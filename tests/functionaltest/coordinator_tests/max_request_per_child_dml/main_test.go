@@ -61,7 +61,7 @@ func TestMaxRequestPerChildDML(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMaxRequestPerChildDML begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	//shard := 0
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
