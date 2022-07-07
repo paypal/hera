@@ -56,7 +56,7 @@ func BashCmd(cmd string) ([]byte, error) {
 * Helper function for select, can be used when error happens during Fetch
 */
 func RunSelect(query string) {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -92,7 +92,7 @@ func RunSelect(query string) {
 
 func Fetch (query string) (int) {
         count := 0;
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -174,7 +174,7 @@ func RunDML(dml string) error {
 }
 
 func RunDML1(dml string) error {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -295,7 +295,7 @@ func PopulateWhilelistShardMap() error {
 }
 
 func RunDMLCommitLater(dml string, wait_second int) error {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -338,7 +338,7 @@ func RunDMLCommitLater(dml string, wait_second int) error {
 }
 
 func SetRacNodeStatus (status string, module string, diff_time int64)  error {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -384,7 +384,7 @@ func SetRacNodeStatus (status string, module string, diff_time int64)  error {
 }
 
 func InsertRacEmptyTime (status string, module string, diff_time int64)  error {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -433,7 +433,7 @@ func InsertRacEmptyTime (status string, module string, diff_time int64)  error {
 }
 
 func InsertRacEmptyTime2 (status string, module string, diff_time int64)  error {
-        hostname,_ := os.Hostname()
+        hostname := GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -603,4 +603,13 @@ func ModifyOpscfgParam (t *testing.T, logfile string, opscfg_param string, opscf
         if err != nil {
                t.Fatal(err)
         }
+}
+
+func GetHostname() string {
+        hostname,err := os.Hostname()
+
+        if err != nil {
+                hostname = "127.0.0.1" 
+        }
+        return hostname
 }
