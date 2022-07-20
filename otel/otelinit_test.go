@@ -29,7 +29,7 @@ func TestCounter(t *testing.T) {
 		attribute.String("client", "cli"),
 	}
 
-	for i := 1; i <= 2500; i++ {
+	for i := 1; i <= 50; i++ {
 		requestCount.Add(ctx, 1, commonLabels...)
 		time.Sleep(1 * time.Second)
 		fmt.Println("Counter..it:==>" + strconv.Itoa(i))
@@ -53,7 +53,7 @@ func TestVariableDimentionCounter(t *testing.T) {
 		attribute.String("client", "cli"),
 	}
 
-	for i := 1; i <= 2500; i++ {
+	for i := 1; i <= 50; i++ {
 
 		min := 0
 		max := 50
@@ -83,7 +83,7 @@ func TestHistogram(t *testing.T) {
 		attribute.String("client", "cli"),
 	}
 
-	for i := 1; i <= 2500; i++ {
+	for i := 1; i <= 50; i++ {
 		min := 1
 		max := 15
 		duration := float64(rand.Intn(max-min) + min)

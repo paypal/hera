@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/otel"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -88,11 +89,16 @@ func Run() {
 	}
 	caltxn.Completed()
 
+	// Otel Initialization
+	otelshutdown := otel.InitOtel()
+	defer otelshutdown()
+
 	//
 	// create singleton broker and start worker/pools
 	//
-	nameForTns := *namePtr;
-	CfgFromTns(nameForTns); if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
+	nameForTns := *namePtr
+	CfgFromTns(nameForTns)
+	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
 		}

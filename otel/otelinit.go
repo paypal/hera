@@ -4,17 +4,23 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/metric/global"
+	"go.opentelemetry.io/otel/metric/instrument"
+	"go.opentelemetry.io/otel/metric/instrument/syncint64"
+	"go.opentelemetry.io/otel/metric/unit"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
 	"go.opentelemetry.io/otel/sdk/metric/export/aggregation"
 	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
 )
+
+var apiHistogramOnce sync.Once
 
 func initMetricProvider() func() {
 	ctx := context.Background()
@@ -70,4 +76,23 @@ func handleErr(err error, message string) {
 	if err != nil {
 		log.Fatalf("%s: %v", message, err)
 	}
+}
+
+func InitOtel() func() {
+	return initMetricProvider()
+}
+
+func GetHistogramForAPI() (syncint64.Histogram, error) {
+	var apiHistogram syncint64.Histogram
+
+	apiHistogramOnce.Do(func() {
+		meter := global.Meter("hera-server-meter")
+		apiHistogram, _ = meter.SyncInt64().Histogram(
+			"pp.hera.api",
+			instrument.WithDescription("Histogram for Hera API"),
+			instrument.WithUnit(unit.Milliseconds),
+		)
+
+	})
+	return apiHistogram, nil
 }
