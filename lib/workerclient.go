@@ -19,6 +19,7 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -33,8 +34,10 @@ import (
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
+	"github.com/paypal/hera/otel"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // HeraWorkerStatus defines the posible states the worker can be in
@@ -125,9 +128,9 @@ type WorkerClient struct {
 	// for bind eviction
 	sqlBindNs atomic.Value // *netstring.Netstring
 
-	// for SQL eviction and throttle by host prefix 
-	clientHostPrefix atomic.Value //  string 
-	clientApp atomic.Value // string
+	// for SQL eviction and throttle by host prefix
+	clientHostPrefix atomic.Value //  string
+	clientApp        atomic.Value // string
 	//
 	// time since hera_start in ms when the current prepare statement is sent to worker.
 	// reset to 0 after eor meaning no sql running (same as start_time_offset_ms in c++).
@@ -153,6 +156,9 @@ type WorkerClient struct {
 
 	// Throtle workers lifecycle
 	thr Throttler
+
+	//OtelMetric API Begin
+	otelMetricAPIBegin time.Time
 }
 
 type strandedCalInfo struct {
@@ -386,7 +392,6 @@ func (worker *WorkerClient) StartWorker() (err error) {
 		}
 	}
 
-
 	socketPair, err := syscall.Socketpair(syscall.AF_LOCAL, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return err
@@ -573,7 +578,7 @@ func (worker *WorkerClient) Close() {
  */
 func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus) <-chan time.Time {
 	dice := rand.Intn(100)
-	freePct := 100*p.activeQ.Len()/p.desiredSize
+	freePct := 100 * p.activeQ.Len() / p.desiredSize
 	var rv <-chan time.Time
 
 	// only skip and slow when on db-side (state==busy)
@@ -989,4 +994,31 @@ func (worker *WorkerClient) isProcessRunning() bool {
 		return false
 	}
 	return true
+}
+
+func (worker *WorkerClient) setOtelMetricAPIBegin() {
+	worker.otelMetricAPIBegin = time.Now()
+}
+
+func (worker *WorkerClient) resetAPIBeginReturnDiff() time.Duration {
+	duration := time.Now().Sub(worker.otelMetricAPIBegin)
+	worker.otelMetricAPIBegin = time.Time{}
+	return duration
+}
+
+func (worker *WorkerClient) publishAPIOtelMetric() {
+	//TODO:: Handle error
+	ctx := context.Background()
+	apiHistogram, _ := otel.GetHistogramForAPI()
+
+	duration := worker.resetAPIBeginReturnDiff()
+
+	commonLabels := []attribute.KeyValue{
+		attribute.String("clientApp", worker.clientApp.Load().(string)),
+		//TODO:: Populate pool name from config
+		attribute.String("PoolName", "HeraOtelTestApp"),
+	}
+
+	apiHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
+
 }

@@ -128,7 +128,7 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 		}
 		millis := rand.Intn(3000)
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, initCnt, "is too many in init state. waiting to start",wid)
+			logger.GetLogger().Log(logger.Alert, initCnt, "is too many in init state. waiting to start", wid)
 		}
 		time.Sleep(time.Millisecond * time.Duration(millis))
 	}
@@ -446,6 +446,9 @@ func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *Work
 		workerclient.DrainResponseChannel(0 /*no wait to minimize the latency*/)
 	}
 
+	// Let capture workerclient assignment to coordinator
+	workerclient.setOtelMetricAPIBegin()
+
 	return workerclient, ticket, nil
 }
 
@@ -489,6 +492,8 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		e.Completed()
 		worker.DrainResponseChannel(time.Microsecond * 10)
 	}
+
+	worker.publishAPIOtelMetric()
 
 	worker.setState(wsAcpt)
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
@@ -556,10 +561,10 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	}
 	if skipRecycle {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:=", pool.desiredSize)
+			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=", pool.moduleName, "shard_id=", pool.ShardID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:=", pool.desiredSize)
 		}
 		calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
-		evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+		evt := cal.NewCalEvent("ERROR", "RECYCLE_WORKER", cal.TransOK, calMsg)
 		evt.Completed()
 	}
 
@@ -765,12 +770,12 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Lock()
 		for i := 0; i < pool.currentSize; i++ {
 			if (pool.workers[i] != nil) && (pool.workers[i].exitTime != 0) && (pool.workers[i].exitTime <= now) {
-				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize*GetConfig().MaxDesiredHealthyWorkerPct/100)) { // Should it be a config value
+				if pool.GetHealthyWorkersCount() < (int32(pool.desiredSize * GetConfig().MaxDesiredHealthyWorkerPct / 100)) { // Should it be a config value
 					if logger.GetLogger().V(logger.Alert) {
-						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
+						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=", pool.moduleName, "shard_id=", pool.ShardID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 					}
 					calMsg := fmt.Sprintf("checkworkerlifespan()  module_name=%s,shard_id=%d", pool.moduleName, pool.ShardID)
-					evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+					evt := cal.NewCalEvent("ERROR", "RECYCLE_WORKER", cal.TransOK, calMsg)
 					evt.Completed()
 					break
 				}
@@ -811,7 +816,7 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 		pool.poolCond.L.Unlock()
 		for _, w := range workers {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID ,"HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
+				logger.GetLogger().Log(logger.Info, "checkworkerlifespan - Lifespan exceeded, terminate worker: pid =", w.pid, ", pool_type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
 			}
 			w.Terminate()
 		}
