@@ -21,6 +21,7 @@ import (
 )
 
 var apiHistogramOnce sync.Once
+var apiHistogram syncint64.Histogram
 
 func initMetricProvider() func() {
 	ctx := context.Background()
@@ -83,8 +84,6 @@ func InitOtel() func() {
 }
 
 func GetHistogramForAPI() (syncint64.Histogram, error) {
-	var apiHistogram syncint64.Histogram
-
 	apiHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		apiHistogram, _ = meter.SyncInt64().Histogram(
