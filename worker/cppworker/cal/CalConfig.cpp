@@ -185,7 +185,7 @@ void CalConfig::create_label (std::string& _environment, std::string& _version, 
 	os << m_label;
 	os << "SQLLog for " << m_poolname << ":" << host << "\r\n";
 	os << "Environment: " << _environment << "\r\n";
-	os << "Label: " << m_poolname << "-" << _version << "-" << _build;
+	os << "Label: " << m_poolname << "-" << _version << "-" << _build << "\r\n";
 	char buff[256];
 	sprintf(buff, "Start: %02d-%02d-%04d %02d:%02d:%02d\r\n",
 			st.tm_mday, st.tm_mon+1, st.tm_year+1900,
