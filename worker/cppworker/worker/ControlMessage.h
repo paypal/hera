@@ -37,6 +37,7 @@ public:
 		STRANDED_SWITCH,
 		STRANDED_TIMEOUT,
 		STRANDED_ERR,
+		STRANDED_SKIP_BREAK,
     };
 
 	ControlMessage();

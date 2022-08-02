@@ -21,7 +21,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+	"time"
+
+	"github.com/paypal/hera/utility/logger"
 )
 
 
@@ -78,7 +82,6 @@ func CfgFromTns(name string) {
 		numShards++
 	}
 	if numShards > 0 {
-		GetConfig().EnableSharding=true
 		GetConfig().NumOfShards=numShards
 		// shard key must be configured
 		logErr(fmt.Sprintf("numShards=%d taf:%d rw:%d",numShards,tafShards,rwShards))
@@ -134,10 +137,35 @@ func CfgFromTns(name string) {
 }
 
 func logErr(msg string) {
-	fmt.Println("cfgFromTns",msg)
+	//fmt.Println(os.Getpid(), time.Now().Format("20060102-030405"), srcFileNameLine(3), srcFileNameLine(2), "cfgFromTns", msg)
+        if logger.GetLogger().V(logger.Warning) {
+                logger.GetLogger().Log(logger.Warning, "cfgFromTns", msg)
+        }
 }
 
+func srcFileNameLine(skip int) string {
+    if skip < 0 {
+        var last int
+        for i:=0; i<111222; i++ {
+            _, _, _, ok := runtime.Caller(i)
+            if !ok { break }
+            last = i
+        }
+        skip = last + skip
+    }
+    _, fn, line, _ := runtime.Caller(skip)
+    pathnames := strings.Split(fn, "/")
+
+    return fmt.Sprintf("%s:%d",pathnames[len(pathnames)-1],line)
+}
+
+var FindTnsCacheData map[string]string
+var FindTnsCacheTime *time.Time
 func FindTns() (map[string]string, error) {
+	now := time.Now()
+	if FindTnsCacheTime != nil && now.Sub(*FindTnsCacheTime) < 10*time.Second {
+		return FindTnsCacheData, nil
+	}
 	tnsEntries, err := loadTns(os.Getenv("TNS_ADMIN")+"/tnsnames.ora")
 	if err != nil {
 		logErr("now trying ORACLE_HOME tnsnames")
@@ -146,8 +174,12 @@ func FindTns() (map[string]string, error) {
 			logErr(err.Error())
 			return nil, err
 		}
+		FindTnsCacheData = tnsEntries
+		FindTnsCacheTime = &now
 		return tnsEntries, err
 	}
+	FindTnsCacheData = tnsEntries
+	FindTnsCacheTime = &now
 	return tnsEntries, err
 }
 

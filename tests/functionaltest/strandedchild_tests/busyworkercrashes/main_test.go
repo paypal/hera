@@ -65,7 +65,7 @@ func TestBusyWorkerCrashes(t *testing.T) {
 	//Insert a row
  	testutil.RunDML1("insert into test_simple_table_2 (accountID, Name, Status) VALUES (12345, 'Jack', 'In Progress')")
 
-	hostname,_ := os.Hostname()
+        hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

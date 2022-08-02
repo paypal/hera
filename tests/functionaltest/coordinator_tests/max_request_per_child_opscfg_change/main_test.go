@@ -60,7 +60,7 @@ func TestMaxRequestsOpscfgChange(t *testing.T) {
 	//Insert a row
 	testutil.RunDML1("insert into test_simple_table_1 (ID, Name, Status) VALUES (1, 'Jack', 100)")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

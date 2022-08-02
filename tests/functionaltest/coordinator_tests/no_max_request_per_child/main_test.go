@@ -58,7 +58,7 @@ func TestNoMaxRequestsPerChild(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestNoMaxRequestsPerChild begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
         count_s := testutil.RegexCountFile ("E.*MUX.*new_worker_child_0", "cal.log");
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
 	if err != nil {

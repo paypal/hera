@@ -1,0 +1,9 @@
+cal.log
+cal_client.txt
+hera.log
+hera.txt
+mux.pid
+mysqlworker
+postgresworker
+*.test
+state.log

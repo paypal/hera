@@ -102,10 +102,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 	pool.workers = make([]*WorkerClient, size)
 	pool.thr = NewThrottler(uint32(GetConfig().MaxDbConnectsPerSec), fmt.Sprintf("%d_%d_%d", wType, shardID, instID))
 	for i := 0; i < size; i++ {
-		err := pool.spawnWorker(i)
-		if err != nil {
-			return err
-		}
+		go pool.spawnWorker(i)
 		pool.currentSize++
 	}
 	pool.checkoutTickets = make(map[interface{}]string)
@@ -118,13 +115,32 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
 	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
+
+	worker.setState(wsSchd)
+	millis := rand.Intn(100)
+	time.Sleep(time.Millisecond * time.Duration(millis))
+
+	initLimit := pool.desiredSize * GetConfig().InitLimitPct / 100
+	for {
+		initCnt := GetStateLog().GetWorkerCountForPool(wsInit, pool.ShardID, pool.Type, pool.InstID)
+		if initCnt <= initLimit {
+			break
+		}
+		millis := rand.Intn(3000)
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, initCnt, "is too many in init state. waiting to start",wid)
+		}
+		time.Sleep(time.Millisecond * time.Duration(millis))
+	}
+
 	er := worker.StartWorker()
 	if er != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed starting worker: ", er)
 		}
-		// called from Init will see error
-		// called from RestartWorkerPool can retry when workers don't come up
+		pool.poolCond.L.Lock()
+		pool.currentSize--
+		pool.poolCond.L.Unlock()
 		return er
 	}
 	if logger.GetLogger().V(logger.Info) {
@@ -134,7 +150,7 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 	// after establishing uds with the worker, it will be add to active queue
 	//
 	// oracle connect errors show up in attach worker
-	go worker.AttachToWorker()
+	worker.AttachToWorker() // does not return
 	return nil
 }
 
@@ -175,19 +191,7 @@ func (pool *WorkerPool) RestartWorker(worker *WorkerClient) (err error) {
 	pool.activeQ.Remove(worker)
 	pool.poolCond.L.Unlock()
 
-	er := pool.spawnWorker(worker.ID)
-	//
-	// @TODO retry instead of stop the whole startup process
-	//
-	if er != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed starting worker: ", er)
-		}
-		pool.poolCond.L.Lock()
-		pool.currentSize--
-		pool.poolCond.L.Unlock()
-		return er
-	}
+	go pool.spawnWorker(worker.ID)
 	return nil
 }
 
@@ -632,15 +636,7 @@ func (pool *WorkerPool) Resize(newSize int) {
 		//
 		GetStateLog().PublishStateEvent(StateEvent{eType: WorkerResizeEvt, shardID: pool.ShardID, wType: pool.Type, instID: pool.InstID, newWSize: newSize})
 		for i := pool.currentSize; i < newSize; i++ {
-			worker := NewWorker(i, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
-			er := worker.StartWorker()
-			if er != nil {
-				if logger.GetLogger().V(logger.Alert) {
-					logger.GetLogger().Log(logger.Alert, "failed starting worker: ", er)
-				}
-				return
-			}
-			go worker.AttachToWorker()
+			go pool.spawnWorker(i)
 		}
 		pool.currentSize = pool.desiredSize
 	} else {

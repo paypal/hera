@@ -53,7 +53,7 @@ func setupDb() error {
 func insert_row_delay_commit (id string, wait_second int) error {
         fmt.Println ("Insert a row, commit later")
         status := 999
-        hostname,_ := os.Hostname()
+        hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -99,7 +99,7 @@ func insert_row_delay_commit (id string, wait_second int) error {
    Helper method to update a row with delay
 --------------------------------------------*/
 func update_row_delay_commit (id string, wait_second int) error {
-        hostname,_ := os.Hostname()
+        hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

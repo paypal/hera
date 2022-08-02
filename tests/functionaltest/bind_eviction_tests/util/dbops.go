@@ -3,7 +3,6 @@ import (
 	"context"
         "database/sql"
 	"fmt"
-	"os"
 	//"testing"
 	"time"
         "github.com/paypal/hera/client/gosqldriver"
@@ -25,7 +24,7 @@ var mx testutil.Mux
 func InsertBinding (id string, wait_second int) error {
         fmt.Println ("Insert a row, commit later")
 	status := 9999 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -72,7 +71,7 @@ func InsertBinding (id string, wait_second int) error {
    Helper function to update a row in test_simple_table_1 with delay
 --------------------------------------------*/
 func UpdateBinding (id string, wait_second int) error {
-        hostname,_ := os.Hostname()
+        hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {
@@ -127,7 +126,7 @@ func FetchBinding (id string, forUpdate string) (int) {
 func FetchBindingWithDelay (id string, forUpdate string, wait_second int) (int) {
 
         count := 0;
-        hostname,_ := os.Hostname()
+        hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

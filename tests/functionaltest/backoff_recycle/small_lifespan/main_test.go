@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 func TestBackOffWithMaxLifespan(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestBackOffWithMaxLifespan begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         _, err := sql.Open("hera", hostname + ":31002")
 	if err != nil {
