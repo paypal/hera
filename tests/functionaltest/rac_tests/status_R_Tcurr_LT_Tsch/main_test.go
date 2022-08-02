@@ -64,7 +64,7 @@ func TestStatusU_to_R_Tcurr_GT_Tsch(t *testing.T) {
 	fmt.Println ("TestStatusU_to_R_Tcurr_GT_Tsch begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestStatusU_to_R_Tcurr_GT_Tsch begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

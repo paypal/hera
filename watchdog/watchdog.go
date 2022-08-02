@@ -26,7 +26,7 @@ func main() {
 
 	if len(*namePtr) == 0 {
 		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Info, "missing mandatory --name parameter")
+			logger.GetLogger().Log(logger.Alert, "missing mandatory --name parameter")
 		}
 		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("stopping watchdog process: %d as mandatory --name parameter not provided", os.Getgid()))
 		os.Exit(1)
@@ -70,7 +70,7 @@ func main() {
 	processList := [][]string{}
 	muxProcess := []string{muxpath, "--name", *namePtr}
 	processList = append(processList, muxProcess)
-	logger.GetLogger().Log(logger.Info, "Starting watchdog process.")
+	logger.GetLogger().Log(logger.Alert, "Starting watchdog process.")
 	watcher := watchdoglib.NewWatchdog(processList)
 	//Start watcher
 	watcher.Start()
@@ -78,11 +78,11 @@ func main() {
 	time.Sleep(2 * time.Millisecond)
 	select {
 	case <-parentSignal:
-		logger.GetLogger().Log(logger.Info, "received terminal signal.")
+		logger.GetLogger().Log(logger.Alert, "received terminal signal.")
 		watcher.ReqStopWatchdog <- true
-		logger.GetLogger().Log(logger.Info, "watchdog process got killed, sent stop signal to its children process as well.")
+		logger.GetLogger().Log(logger.Alert, "watchdog process got killed, sent stop signal to its children process as well.")
 	case <-watcher.Done:
-		logger.GetLogger().Log(logger.Info, "watchdog exited.")
+		logger.GetLogger().Log(logger.Alert, "watchdog exited.")
 	}
 }
 

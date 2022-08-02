@@ -79,7 +79,7 @@ func TestSetShardID(t *testing.T) {
 	fmt.Println ("TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "TestSetShardID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	hostname,_ := os.Hostname()
+	hostname := testutil.GetHostname()
         fmt.Println ("Hostname: ", hostname);
         db, err := sql.Open("hera", hostname + ":31002")
         if err != nil {

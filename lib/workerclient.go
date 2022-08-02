@@ -373,7 +373,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	}
 
 	envUpsert(&attr, "mysql_datasource", twoTask)
-	if twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
+	if len(twoTask) > 0 && twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
 		tnsnames, err := FindTns()
 		if err == nil {
 			dsn, ok := tnsnames[twoTask]
@@ -571,11 +571,29 @@ func (worker *WorkerClient) Close() {
 /**
  * Sends the recover signal to the worker
  */
-func (worker *WorkerClient) initiateRecover(param int) {
+func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus) <-chan time.Time {
+	dice := rand.Intn(100)
+	freePct := 100*p.activeQ.Len()/p.desiredSize
+	var rv <-chan time.Time
+
+	// only skip and slow when on db-side (state==busy)
+	if 100-freePct > GetConfig().HighLoadPct && prior == wsBusy {
+		timeMs := GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs)
+		rv = time.After(time.Millisecond * time.Duration(timeMs))
+		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, 100-freePct, "is high load, skipping (oci) break dice:", dice, "workerID:", worker.ID, "priorParam:", param)
+			}
+			param = common.StrandedSkipBreakHiLoad
+		}
+	} else {
+		rv = time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+	}
 	buff := []byte{byte(param), byte((worker.rqId & 0xFF000000) >> 24), byte((worker.rqId & 0x00FF0000) >> 16),
 		byte((worker.rqId & 0x0000FF00) >> 8), byte((worker.rqId & 0x000000FF))}
 	ns := netstring.NewNetstringFrom(common.CmdInterruptMsg, buff)
 	worker.workerOOBConn.Write(ns.Serialized)
+	return rv
 }
 
 /**
@@ -634,14 +652,14 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 		}
 		return
 	}
+	priorWorkerStatus := worker.Status
 	worker.setState(wsQuce)
 	killparam := common.StrandedClientClose
 	if len(param) > 0 {
 		killparam = param[0]
 	}
 	worker.callogStranded("RECOVERING", info) // TODO: should we have this?
-	worker.initiateRecover(killparam)
-	workerRecoverTimeout := time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+	workerRecoverTimeout := worker.initiateRecover(killparam, p, priorWorkerStatus)
 	for {
 		select {
 		case <-workerRecoverTimeout:
