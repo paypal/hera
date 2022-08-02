@@ -96,6 +96,8 @@ public class HeraJdbcDriverConstants {
 		s_staleConnErrors_priv.add("HERA error: HERA-102: backlog eviction");
 		s_staleConnErrors_priv.add("HERA error: HERA-103: request rejected, database down");
 		s_staleConnErrors_priv.add("HERA error: HERA-104: saturation soft sql eviction");
+		s_staleConnErrors_priv.add("OCC error: HERA-105: bind throttle");
+		s_staleConnErrors_priv.add("OCC error: HERA-106: bind eviction");
 		s_staleConnErrors_priv.add("Unexpected end of stream");
 		s_staleConnErrors = Collections.unmodifiableSet(new HashSet<Object>(s_staleConnErrors_priv));
 
