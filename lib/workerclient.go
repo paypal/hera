@@ -159,6 +159,10 @@ type WorkerClient struct {
 
 	//OtelMetric API Begin
 	otelMetricAPIBegin time.Time
+	execBegin          time.Time
+	fetchBegin         time.Time
+	commitBegin        time.Time
+	rollbackBegin      time.Time
 }
 
 type strandedCalInfo struct {
@@ -870,6 +874,25 @@ func (worker *WorkerClient) doRead() {
 		//
 		switch ns.Cmd {
 		case common.CmdEOR:
+			fmt.Println("common.CmdEOR--->", common.CmdEOR)
+			logger.GetLogger().Log(logger.Info, "common.CmdEOR", common.CmdEOR)
+			if !worker.execBegin.IsZero() {
+				logger.GetLogger().Log(logger.Info, "Exec::sqlHash::", worker.sqlHash, "duration ::", time.Now().Sub(worker.execBegin))
+				worker.publishExecOtelMetric()
+				worker.execBegin = time.Time{}
+			} else if !worker.fetchBegin.IsZero() {
+				logger.GetLogger().Log(logger.Info, "Fetch::sqlHash::", worker.sqlHash, "duration ::", time.Now().Sub(worker.fetchBegin))
+				worker.publishFetchOtelMetric()
+				worker.fetchBegin = time.Time{}
+			} else if !worker.commitBegin.IsZero() {
+				logger.GetLogger().Log(logger.Info, "commit::sqlHash::", worker.sqlHash, "duration ::", time.Now().Sub(worker.commitBegin))
+				worker.publishCommitOtelMetric()
+				worker.commitBegin = time.Time{}
+			} else if !worker.rollbackBegin.IsZero() {
+				logger.GetLogger().Log(logger.Info, "rollback::sqlHash::", worker.sqlHash, "duration ::", time.Now().Sub(worker.rollbackBegin))
+				worker.publishRollbackOtelMetric()
+				worker.rollbackBegin = time.Time{}
+			}
 			newPayload := ns.Payload[5:]
 			if len(payload) == 0 {
 				payload = newPayload
@@ -944,6 +967,21 @@ func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error
 	if worker.workerConn == nil {
 		return errors.New("writing to a closed workerconn")
 	}
+	cmdType := extractTypeOfCommand(ns)
+	fmt.Println("Cmd Type-->", cmdType)
+	if cmdType == "EXEC" {
+		worker.execBegin = time.Now()
+	} else if cmdType == "FETCH" {
+		worker.fetchBegin = time.Now()
+
+	} else if cmdType == "ROLLBACK" {
+		worker.rollbackBegin = time.Now()
+
+	} else if cmdType == "COMMIT" {
+		worker.commitBegin = time.Now()
+
+	}
+
 	err := WriteAll(worker.workerConn, ns.Serialized)
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "workerclient (>>>worker pid =", worker.pid, ", rqID =", worker.rqId, " ): ", DebugString(ns.Serialized))
@@ -1021,4 +1059,103 @@ func (worker *WorkerClient) publishAPIOtelMetric() {
 
 	apiHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
 
+}
+
+func (worker *WorkerClient) publishExecOtelMetric() {
+	ctx := context.Background()
+	//TODO:: Handle error
+	execHistogram, _ := otel.GetHistogramForExec()
+	duration := time.Now().Sub(worker.execBegin)
+	commonLabels := []attribute.KeyValue{
+		attribute.String("clientApp", worker.clientApp.Load().(string)),
+		//TODO:: Populate pool name from config
+		attribute.String("PoolName", "HeraOtelTestApp"),
+		attribute.String("Hashcode", string(worker.sqlHash)),
+	}
+
+	execHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
+
+}
+
+func (worker *WorkerClient) publishFetchOtelMetric() {
+	//TODO:: Handle error
+	ctx := context.Background()
+	fetchHistogram, _ := otel.GetHistogramForFetch()
+	duration := time.Now().Sub(worker.fetchBegin)
+
+	commonLabels := []attribute.KeyValue{
+		attribute.String("clientApp", worker.clientApp.Load().(string)),
+		//TODO:: Populate pool name from config
+		attribute.String("PoolName", "HeraOtelTestApp"),
+		attribute.String("Hashcode", string(worker.sqlHash)),
+	}
+
+	fetchHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
+
+}
+
+func (worker *WorkerClient) publishCommitOtelMetric() {
+	//TODO:: Handle error
+	ctx := context.Background()
+	commitHistogram, _ := otel.GetHistogramForCommit()
+
+	duration := time.Now().Sub(worker.commitBegin)
+	commonLabels := []attribute.KeyValue{
+		attribute.String("clientApp", worker.clientApp.Load().(string)),
+		//TODO:: Populate pool name from config
+		attribute.String("PoolName", "HeraOtelTestApp"),
+	}
+
+	commitHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
+
+}
+
+func (worker *WorkerClient) publishRollbackOtelMetric() {
+	//TODO:: Handle error
+	ctx := context.Background()
+	rollbackHistogram, _ := otel.GetHistogramForRollback()
+	duration := time.Now().Sub(worker.rollbackBegin)
+	commonLabels := []attribute.KeyValue{
+		attribute.String("clientApp", worker.clientApp.Load().(string)),
+		//TODO:: Populate pool name from config
+		attribute.String("PoolName", "HeraOtelTestApp"),
+	}
+
+	rollbackHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
+
+}
+
+func extractTypeOfCommand(ns *netstring.Netstring) string {
+	fmt.Println("extractTypeOfCommand")
+	if ns.IsComposite() {
+		subns, _ := netstring.SubNetstrings(ns)
+		for i, nsitem := range subns {
+			fmt.Println("cmd-", i, "->", nsitem.Cmd)
+			fmt.Println(DebugString(nsitem.Payload))
+			if nsitem.Cmd == common.CmdExecute {
+				return cal.TransTypeExec
+			} else if nsitem.Cmd == common.CmdFetch {
+				return cal.TransTypeFetch
+			} else if nsitem.Cmd == common.CmdCommit {
+				return "COMMIT"
+			} else if nsitem.Cmd == common.CmdRollback {
+				return "ROLLBACK"
+			}
+
+		}
+	} else {
+		fmt.Println("cmd->", ns.Cmd)
+		fmt.Println(DebugString(ns.Payload))
+		if ns.Cmd == common.CmdExecute {
+			return cal.TransTypeExec
+		} else if ns.Cmd == common.CmdFetch {
+			return cal.TransTypeFetch
+		} else if ns.Cmd == common.CmdCommit {
+			return "COMMIT"
+		} else if ns.Cmd == common.CmdRollback {
+			return "ROLLBACK"
+		}
+	}
+
+	return "IgnoreNow"
 }
