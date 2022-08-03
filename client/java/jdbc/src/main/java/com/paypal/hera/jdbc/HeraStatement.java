@@ -1,5 +1,6 @@
 package com.paypal.hera.jdbc;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -69,6 +70,14 @@ public class HeraStatement implements Statement {
 	protected void prepare(String _sql) throws HeraExceptionBase {
 		stCache = connection.getStatementCache().getEntry(_sql, escapeProcessingEnabled, 
 				connection.shardingEnabled(), connection.paramNameBindingEnabled(), datasource);
+		try {
+			if (stCache.getTimeoutInMilliSecond() > 0) {
+				connection.getHeraClient().setSOTimeout(stCache.getTimeoutInMilliSecond());
+			}
+		}
+		catch (IOException e) {
+			throw new HeraIOException(e);
+		}
 		connection.getHeraClient().prepare(stCache.getParsedSQL());
 	}
 	

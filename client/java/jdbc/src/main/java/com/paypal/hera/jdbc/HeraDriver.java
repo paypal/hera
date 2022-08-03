@@ -6,8 +6,11 @@ import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +42,9 @@ public class HeraDriver implements Driver {
 	static final boolean PROP_COLUMN_INFO = false; 
 
 	private static HeraDriver s_driverInstance = new HeraDriver();
-	
+
+	private static Map<String, Integer> queryProperties = new ConcurrentHashMap<>();
+	private static volatile boolean queryPropertiesLoaded = false;
 
 	public HeraDriver() {
 	}
@@ -53,9 +58,30 @@ public class HeraDriver implements Driver {
 		StringBuffer host_ip = new StringBuffer();
 		StringBuffer host_port = new StringBuffer();
 		parseURL(url, host_ip, host_port);
+		prepareQueryProperties(info);
 		return new HeraConnection(info, host_ip.toString(), host_port.toString(), url);
 	}
 
+	public static Map<String, Integer> getQueryProperties() {
+		return queryProperties;
+	}
+	private static void prepareQueryProperties(Properties properties){
+		if(!queryPropertiesLoaded) {
+			queryPropertiesLoaded = true;
+			Set<String> keys = properties.stringPropertyNames();
+			for (String key : keys) {
+				try {
+					if (key.startsWith("hera.query.") && key.endsWith(".readTimeout")) {
+						Integer value = Integer.parseInt(properties.getProperty(key));
+						queryProperties.put(key.split("hera\\.query\\.")[1].split("\\.readTimeout")[0], value);
+					}
+				} catch (Exception ex) {
+					LOGGER.warn("failed while read timeout for " + key + " Exception: " +
+							ex.getMessage());
+				}
+			}
+		}
+	}
 	private void parseURL(String url, StringBuffer host_ip, StringBuffer host_port) throws HeraExceptionBase
 	{
 		int posn = 0;
