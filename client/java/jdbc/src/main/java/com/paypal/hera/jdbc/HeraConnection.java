@@ -1,5 +1,6 @@
 package com.paypal.hera.jdbc;
 
+import java.net.SocketException;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -547,12 +548,20 @@ public class HeraConnection implements Connection {
 
 	public void setNetworkTimeout(Executor executor, int milliseconds)
 			throws SQLException {
-		throw new SQLFeatureNotSupportedException("HeraConnection.setNetworkTimeout is not implemented");
+		try {
+			heraClient.setSOTimeout(milliseconds);
+		} catch (SocketException e) {
+			throw new SQLException(e);
 		}
+	}
 
 	public int getNetworkTimeout() throws SQLException {
-		throw new SQLFeatureNotSupportedException("HeraConnection.getNetworkTimeout is not implemented");
+		try {
+			return heraClient.getSOTimeout();
+		} catch (SocketException e) {
+			throw new SQLException(e);
 		}
+	}
 
 	
 	public String getServerName() {
