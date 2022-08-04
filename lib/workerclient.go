@@ -379,7 +379,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	}
 
 	envUpsert(&attr, "mysql_datasource", twoTask)
-	if twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
+	if len(twoTask) > 0 && twoTask[0] >= 'A' && twoTask[0] <= 'Z' {
 		tnsnames, err := FindTns()
 		if err == nil {
 			dsn, ok := tnsnames[twoTask]

@@ -1,6 +1,7 @@
 package com.paypal.hera.jdbc;
 
 import java.lang.reflect.Method;
+import java.util.Properties;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -17,7 +18,8 @@ public class SQLEscapeSeqTest {
 	
 	public String preprocessEscapeCall(String input, E_DATASOURCE_TYPE type) {
 		HeraStatementsCache heraStmt = new HeraStatementsCache(0);
-		StatementCacheEntry stmtEntry = heraStmt.new StatementCacheEntry(input, true, false, false, type);
+		StatementCacheEntry stmtEntry = heraStmt.new StatementCacheEntry(input, true,
+				false, false, type, HeraDriver.getQueryProperties());
 		String output = null;
 		try {
 			Method method = StatementCacheEntry.class.getDeclaredMethod("preprocessEscape", String.class, E_DATASOURCE_TYPE.class);
