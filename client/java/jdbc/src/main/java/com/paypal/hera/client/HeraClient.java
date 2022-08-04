@@ -1,5 +1,6 @@
 package com.paypal.hera.client;
 
+import java.net.SocketException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 
@@ -41,4 +42,7 @@ public interface HeraClient {
 	public void setCalLogOption(String isCalEnabled);
 	public void setHeraHostName(String heraBoxName);
 	public void setFirstSQL(boolean isFirstSQL);
+
+	void setSOTimeout(int timeoutInMS) throws SocketException;
+	int getSOTimeout() throws SocketException;
 }
