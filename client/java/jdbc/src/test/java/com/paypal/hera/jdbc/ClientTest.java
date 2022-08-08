@@ -43,9 +43,6 @@ import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.ex.HeraClientException;
 import com.paypal.hera.ex.HeraInternalErrorException;
 import com.paypal.hera.ex.HeraTimeoutException;
-import com.paypal.hera.jdbc.HeraBlob;
-import com.paypal.hera.jdbc.HeraConnection;
-import com.paypal.hera.util.NetStringObj;
 
 public class ClientTest {
 	static final Logger LOGGER = LoggerFactory.getLogger(HeraClientImpl.class);
@@ -84,7 +81,7 @@ public class ClientTest {
 	public static void setUp() throws Exception {
 		Util.makeAndStartHeraMux(null);
 		host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
-		table = System.getProperty("TABLE_NAME", "jdbc_hera_test"); 
+		table = System.getProperty("TABLE_NAME", "jdbc_hera_test");
 		HeraClientConfigHolder.clear();
 		Properties props = new Properties();
 		props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
@@ -1778,5 +1775,95 @@ public class ClientTest {
 			Assert.assertTrue("expect no exception", false);
 		}
 	}
-	
+
+	@Test
+	public void testReadOnly() throws SQLException {
+		Properties props = new Properties();
+		Connection connection = null;
+		try {
+			connection = DriverManager.getConnection("jdbc:hera:" + host, props);
+			Assert.assertFalse(connection.isReadOnly());
+			connection.setReadOnly(true);
+			Assert.assertTrue(connection.isReadOnly());
+			connection.setReadOnly(false);
+			Assert.assertFalse(connection.isReadOnly());
+		}finally {
+			if(connection != null) {
+				connection.setReadOnly(false);
+				connection.close();
+			}
+		}
+	}
+
+	@Test
+	public void testReadOnlyDML() throws SQLException {
+
+		Properties props = new Properties();
+		Connection connection = null;
+		try {
+			connection = DriverManager.getConnection("jdbc:hera:" + host, props);
+			Statement st = connection.createStatement();
+			cleanTable(st, sID_START, 20, false);
+			PreparedStatement pst = connection.prepareStatement(
+					"insert into " + table + " (id, int_val, str_val, clob_val) values (?, ?, ?, ?)");
+			pst.setObject(1, iID_START);
+			pst.setObject(2, 1234);
+			pst.setObject(3, "abc");
+			Clob clob = dbConn.createClob();
+			clob.setString(1, "xyzw");
+			pst.setObject(4, clob);
+			try {
+				pst.executeUpdate();
+			} catch(SQLException e) {
+				Assert.fail("Can't insert: " + e.getMessage());
+			}
+			ResultSet rs = st.executeQuery("select id, int_val, str_val, clob_val from " + table + " where id=" + iID_START);
+			rs.next();
+			Assert.assertEquals("rs", (int) iID_START, rs.getInt(1));
+			Assert.assertEquals("rs", 1234, rs.getInt(2));
+			Assert.assertEquals("rs", "abc", rs.getString(3));
+			Assert.assertEquals("rs", "xyzw", rs.getClob(4).getSubString(1, (int) rs.getClob(4).length()));
+
+			connection.setReadOnly(true);
+			try {
+				pst.setObject(1, iID_START+1);
+				pst.setObject(2, 2345);
+				pst.setObject(3, "xyz");
+				pst.executeUpdate();
+				Assert.fail("should have failed");
+			} catch(SQLException e) {
+				Assert.assertTrue(e.getMessage().contains("DML Operation called on ReadOnly Connection"));
+			}
+
+			rs = st.executeQuery("select id, int_val, str_val, clob_val from " + table + " where id=" + (iID_START+1));
+			Assert.assertFalse(rs.next());
+
+			rs = st.executeQuery("select id, int_val, str_val, clob_val from " + table + " where id=" + iID_START);
+			Assert.assertTrue(rs.next());
+
+			connection.setReadOnly(false);
+			try {
+				pst.setObject(1, iID_START+1);
+				pst.setObject(2, 2345);
+				pst.setObject(3, "xyz");
+				pst.executeUpdate();
+			} catch(SQLException e) {
+				Assert.fail("Can't insert: " + e.getMessage());
+			}
+
+			rs = st.executeQuery("select id, int_val, str_val, clob_val from " + table + " where id=" + (iID_START+1));
+			Assert.assertTrue(rs.next());
+
+			rs = st.executeQuery("select id, int_val, str_val, clob_val from " + table + " where id=" + iID_START);
+			Assert.assertTrue(rs.next());
+		}finally {
+			if(connection != null) {
+				connection.setReadOnly(false);
+				connection.close();
+			}
+		}
+
+
+
+	}
 }

@@ -71,6 +71,8 @@ public class HeraClientImpl implements HeraClient{
 	private String serverLogicalName;
 	private String calLogFrequency;
 	private String heraHostName;
+
+	private boolean readOnly;
 	private boolean isFirstSQL;
 	//TODO: migrate stale conn impl from OpenDAK.
 
@@ -407,6 +409,11 @@ public class HeraClientImpl implements HeraClient{
 	public void execDML(boolean _add_commit) throws SQLException {
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::execDML(" + _add_commit + ")");
+		if (readOnly) {
+			String msg = "DML Operation called on ReadOnly Connection";
+			LOGGER.error("HeraClient::execDML " + msg);
+			throw new SQLException(msg);
+		}
 
 		CalTransaction execCalTxn = startCalExecTransaction();
 		execCalTxn.setStatus("0");
@@ -868,6 +875,16 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public int getSOTimeout() throws SocketException {
 		return conn.getSoTimeout();
+	}
+
+	@Override
+	public void setReadOnly(boolean readOnly) {
+		this.readOnly = readOnly;
+	}
+
+	@Override
+	public boolean isReadOnly() {
+		return this.readOnly;
 	}
 
 }

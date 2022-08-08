@@ -45,4 +45,7 @@ public interface HeraClient {
 
 	void setSOTimeout(int timeoutInMS) throws SocketException;
 	int getSOTimeout() throws SocketException;
+
+	public void setReadOnly(boolean readOnly);
+	public boolean isReadOnly();
 }

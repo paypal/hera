@@ -289,14 +289,12 @@ public class HeraConnection implements Connection {
 
 	public void setReadOnly(boolean readOnly) throws SQLException {
 		checkOpened();
-		if (readOnly) {
-			throw new HeraSQLException("Hera driver does not support " + "read-only transactions");
-		}
+		heraClient.setReadOnly(readOnly);
 	}
 
 	public boolean isReadOnly() throws SQLException {
 		checkOpened();
-		return false;
+		return heraClient.isReadOnly();
 	}
 
 	public void setCatalog(String catalog) throws SQLException {
