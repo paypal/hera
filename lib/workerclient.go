@@ -1070,7 +1070,7 @@ func (worker *WorkerClient) publishExecOtelMetric() {
 		attribute.String("clientApp", worker.clientApp.Load().(string)),
 		//TODO:: Populate pool name from config
 		attribute.String("PoolName", "HeraOtelTestApp"),
-		attribute.String("Hashcode", string(worker.sqlHash)),
+		attribute.String("Hashcode", strconv.Itoa(int(worker.sqlHash))),
 	}
 
 	execHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
@@ -1087,7 +1087,7 @@ func (worker *WorkerClient) publishFetchOtelMetric() {
 		attribute.String("clientApp", worker.clientApp.Load().(string)),
 		//TODO:: Populate pool name from config
 		attribute.String("PoolName", "HeraOtelTestApp"),
-		attribute.String("Hashcode", string(worker.sqlHash)),
+		attribute.String("Hashcode", strconv.Itoa(int(worker.sqlHash))),
 	}
 
 	fetchHistogram.Record(ctx, duration.Milliseconds(), commonLabels...)
