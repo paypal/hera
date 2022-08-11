@@ -29,7 +29,9 @@ import (
 	"time"
 
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/otel"
 	"github.com/paypal/hera/utility/logger"
+	"go.opentelemetry.io/otel/metric/global"
 )
 
 // ConnState is a possible state
@@ -132,6 +134,11 @@ type StateLog struct {
 	// start time since epoch in ns
 	//
 	mServerStartTime int64
+
+	//
+	//Channel to send statelog data. OTEL observer periodically pull data from channel
+	//
+	mStateDataChan chan otel.WorkersStateData
 }
 
 // StateEventType is an event published by proxy when state changes.
@@ -240,6 +247,8 @@ func (sl *StateLog) HasActiveWorker() bool {
 }
 
 // GetTotalConnections is a best effort, without thread locking, to give the total number of connections
+// This compute total number of connection across all shards for HeraWorkerType=wtypeRW and instance Id: 0
+// It consider Assign + Idle states
 func (sl *StateLog) GetTotalConnections() int {
 	var counter = 0
 	for s := 0; s < sl.maxShardSize; s++ {
@@ -289,6 +298,9 @@ func (sl *StateLog) GetStrandedWorkerCountForPool(shardID int, wType HeraWorkerT
 	return cnt
 }
 
+//
+//Get count of workers for provided workerState, shardId, HeraWworkerType and instance Id
+//
 func (sl *StateLog) GetWorkerCountForPool(workerState HeraWorkerStatus, shardID int, wType HeraWorkerType, instID int) int {
 	var cnt = 0
 	//
@@ -356,6 +368,10 @@ func (sl *StateLog) ProxyHasCapacity(_wlimit int, _rlimit int) (bool, int) {
 	return (wbacklog <= _wlimit) && ((rbacklog <= _rlimit) || (readerCnt == 0)), wbacklog + rbacklog
 }
 
+//
+// Number of free workers for based on requested shardId and HeraWorkerType
+// This only consider worker in Accept state
+//
 func (sl *StateLog) numFreeWorker(shardId int, wType HeraWorkerType) int {
 	out := 0
 	instCnt := len(sl.mWorkerStates[shardId][wType])
@@ -374,6 +390,10 @@ func (sl *StateLog) numFreeWorker(shardId int, wType HeraWorkerType) int {
 	return out
 }
 
+//
+// It checks whether shard has any free workers.
+// As part of this It iterate all HeraWorkerType if any HeraWorkerType has free connection it returns true.
+//
 func (sl *StateLog) hasFreeWorker(shdCnt int) bool {
 	for s := 0; s < shdCnt; s++ {
 		instCnt := len(sl.mWorkerStates[s][wtypeRW])
@@ -521,6 +541,12 @@ func (sl *StateLog) init() error {
 				}
 			}
 		}
+
+		// Initialize statelog_metrics to send metrics information
+		stateStartErr := otel.StartMetricsCollection(sl.mStateDataChan, otel.WitthMetricProvider(global.MeterProvider()), otel.WithOCCName(os.Getenv("OCC_NAME"))) // TODO Name will moved to global attribute list
+		if stateStartErr != nil {
+			logger.GetLogger().Log(logger.Alert, "failed to start metric collection agent for statelogs", stateStartErr)
+		}
 	}
 
 	//
@@ -564,6 +590,7 @@ func (sl *StateLog) init() error {
 	sl.mWriteHeader = 0
 
 	sl.mEventChann = make(chan StateEvent, 3000)
+	sl.mStateDataChan = make(chan otel.WorkersStateData, 3000)
 
 	//
 	// start periodical reporting
@@ -738,8 +765,14 @@ func (sl *StateLog) genReport() {
 		sl.mWriteHeader = sl.mWriteHeaderInterval
 	}
 
+	/*
+		*	sl.mWorkerStates = make([]map[HeraWorkerType][][]*WorkerStateInfo, sl.maxShardSize)
+		sl.mStateDataChan = make(chan WorkerStatesData, 3000)
+	*/
+
 	//totalConnections := sl.GetTotalConnections()
 	for s := 0; s < sl.maxShardSize; s++ {
+
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			instCnt := len(sl.mWorkerStates[s][HeraWorkerType(t)])
 			//
@@ -750,6 +783,14 @@ func (sl *StateLog) genReport() {
 				if workerCnt == 0 {
 					continue
 				}
+				// Initialize statedata object
+				workerStatesData := otel.WorkersStateData{
+					ShardId:    int(s),
+					WorkerType: int(t),
+					InstanceId: int(n),
+					StateData:  make(map[string]int64),
+				}
+
 				//
 				// count all request/response for all workers under the instance
 				//
@@ -791,13 +832,17 @@ func (sl *StateLog) genReport() {
 					}
 				}
 				//
+				//
 				// write collection into calheartbeat(cased out) and log (oneline).
 				//
 				hb := cal.NewCalHeartBeat("STATE", sl.mTypeTitles[s][HeraWorkerType(t)][n], cal.TransOK, "")
 				for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 					buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
 					hb.AddDataInt(StateNames[i], int64(stateCnt[i]))
+					workerStatesData.StateData[StateNames[i]] = int64(stateCnt[i])
 				}
+				//Send states data to channel
+				sl.mStateDataChan <- workerStatesData
 				hb.AddDataInt("req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n]))
 				hb.AddDataInt("resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
 				/*
