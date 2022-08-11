@@ -29,6 +29,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
+import java.net.SocketException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -857,6 +858,16 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public void setFirstSQL(boolean isFirstSQL) {
 		this.isFirstSQL = isFirstSQL;
+	}
+
+	@Override
+	public void setSOTimeout(int timeoutInMS) throws SocketException {
+		conn.setSoTimeout(timeoutInMS);
+	}
+
+	@Override
+	public int getSOTimeout() throws SocketException {
+		return conn.getSoTimeout();
 	}
 
 }

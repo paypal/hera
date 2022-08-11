@@ -676,11 +676,26 @@ public class HeraDatabaseMetadata implements DatabaseMetaData {
 		String[] types)
 		throws SQLException
 	{
+		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.MySQL)) {
+			String query = "SELECT TABLE_SCHEMA AS TABLE_CAT, NULL AS TABLE_SCHEM," +
+					" TABLE_NAME, CASE WHEN TABLE_TYPE='BASE TABLE' THEN CASE WHEN TABLE_SCHEMA = 'mysql' OR TABLE_SCHEMA = 'performance_schema' THEN 'SYSTEM TABLE' " +
+					"ELSE 'TABLE' END WHEN TABLE_TYPE='TEMPORARY' THEN 'LOCAL_TEMPORARY' ELSE TABLE_TYPE END AS TABLE_TYPE, " +
+					"TABLE_COMMENT AS REMARKS, NULL AS TYPE_CAT, NULL AS TYPE_SCHEM, NULL AS TYPE_NAME, NULL AS SELF_REFERENCING_COL_NAME, " +
+					"NULL AS REF_GENERATION FROM INFORMATION_SCHEMA.TABLES" +
+					" WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?  ORDER BY TABLE_TYPE, TABLE_SCHEMA, TABLE_NAME";
+
+			PreparedStatement pst = connection.prepareStatement(query);
+			pst.setString(1, catalog);
+			pst.setString(2, tableNamePattern);
+			return pst.executeQuery();
+		}
+
 		/*** return an empty rs to fool hibernate. a full implementation
 		 * should be added later by contacting the hera server&db
 		 */
 		logNoImplementationInDebug();
 		HeraResultSet rs = new HeraResultSet();
+
 		return rs;
 	}
 
