@@ -2010,7 +2010,8 @@ int OCCChild::run_oci_func(int _func, const StmtCacheEntry *_stmt, const OCIFunc
 					|| (errcode == 25402 /*transaction must roll back*/) || (errcode == 25405 /*transaction status unknown*/)
 					|| (errcode == 25408 /*cannot safely replay call*/)  || (errcode == 25425 /*Connection lost during rollback*/)
 					|| (errcode == 24343 /*user defined callback error, bind callback err corrupts the bind array for next query */)
-					|| (errcode == 1041 /*internal error. hostdef extension doesn"t exist (Oracle bug)*/))
+					|| (errcode == 1041 /*internal error. hostdef extension doesn"t exist (Oracle bug)*/)
+					|| (errcode == 3106 /*two-task communication protocol error*/))
 			{
 				sql_error(rc, _stmt);
 				child_shutdown_flag = 1;
@@ -2389,7 +2390,8 @@ int OCCChild::get_oracle_error(int rc, std::string& buffer)
 				|| (errcode == 25402 /*transaction must roll back*/) || (errcode == 25405 /*transaction status unknown*/)
 				|| (errcode == 25408 /*cannot safely replay call*/)  || (errcode == 25425 /*Connection lost during rollback*/)
 				|| (errcode == 1041 /*internal error. hostdef extension doesn"t exist (Oracle bug)*/)
-				|| (errcode == 1012 /*not logged in*/))
+				|| (errcode == 1012 /*not logged in*/)
+				|| (errcode == 3106 /*two-task communication protocol error*/))
 		{
 			child_shutdown_flag = 1;
 		}
@@ -2420,7 +2422,8 @@ int OCCChild::get_oracle_error(int rc, std::string& buffer)
 				|| (errcode == 25402 /*transaction must roll back*/) || (errcode == 25405 /*transaction status unknown*/)
 				|| (errcode == 25408 /*cannot safely replay call*/)  || (errcode == 25425 /*Connection lost during rollback*/)
 				|| (errcode == 1041 /*internal error. hostdef extension doesn"t exist (Oracle bug)*/)
-				|| (errcode == 1012 /*not logged in*/))
+				|| (errcode == 1012 /*not logged in*/)
+				|| (errcode == 3106 /*two-task communication protocol error*/))
 		{
 			child_shutdown_flag = 1;
 		}
