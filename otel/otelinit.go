@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
@@ -14,10 +15,13 @@ import (
 	"go.opentelemetry.io/otel/metric/instrument"
 	"go.opentelemetry.io/otel/metric/instrument/syncint64"
 	"go.opentelemetry.io/otel/metric/unit"
+	"go.opentelemetry.io/otel/sdk/metric/aggregator/histogram"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
 	"go.opentelemetry.io/otel/sdk/metric/export/aggregation"
 	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 var apiHistogramOnce sync.Once
@@ -60,18 +64,25 @@ func initMetricProvider() func() {
 	metricExp, err := otlpmetric.New(ctx, metricClient, otlpmetric.WithMetricAggregationTemporalitySelector(aggregation.DeltaTemporalitySelector()))
 	handleErr(err, "Failed to create the collector metric exporter")
 
+	resource := resource.NewWithAttributes("empty resource",
+		// semconv.TelemetrySDKLanguageGo,
+		semconv.ProcessRuntimeVersionKey.String(runtime.Version()),
+		semconv.TelemetrySDKVersionKey.String(otel.Version()),
+	)
+
 	pusher := controller.New(
 		processor.NewFactory(
 			// to capture histogram sum , counter with allocated bucket
 			// simple.NewWithHistogramDistribution(histogram.WithExplicitBoundaries([]float64{5, 10, 15})),
 			// to capture histogram sum
-			simple.NewWithInexpensiveDistribution(),
+			//simple.NewWithInexpensiveDistribution(),
 			// to capture histogram sum and counter
-			// simple.NewWithHistogramDistribution(histogram.WithExplicitBoundaries([]float64{})),
+			simple.NewWithHistogramDistribution(histogram.WithExplicitBoundaries([]float64{})),
 			aggregation.DeltaTemporalitySelector(),
 		),
 		controller.WithExporter(metricExp),
 		controller.WithCollectPeriod(5*time.Second),
+		controller.WithResource(resource),
 	)
 
 	global.SetMeterProvider(pusher)
