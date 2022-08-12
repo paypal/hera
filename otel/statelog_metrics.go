@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/paypal/hera/utility/logger"
@@ -216,22 +217,34 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 			defer lock.Unlock()
 
 			//Infinite loop read through the channel and send metrics
-			for workersState := range stateLogMetrics.mStateDataChan {
-				commonLabels := []attribute.KeyValue{
-					attribute.String("Application", stateLogMetrics.metricsConfig.OCCName),
-					attribute.Int("ShardId", workersState.ShardId),
-					attribute.Int("HeraWorkerType", int(workersState.WorkerType)),
-					attribute.Int("InstanceId", workersState.InstanceId),
-				}
+			for {
+				select {
+				case workersState, OK := <-stateLogMetrics.mStateDataChan:
+					fmt.Println("OK-->", OK)
+					if OK == false {
+						return
+					}
 
-				//Observe states data
-				initState.Observe(ctx, int64(workersState.StateData["init"]), commonLabels...)
-				acptState.Observe(ctx, int64(workersState.StateData["acpt"]), commonLabels...)
-				waitState.Observe(ctx, int64(workersState.StateData["wait"]), commonLabels...)
-				busyState.Observe(ctx, int64(workersState.StateData["busy"]), commonLabels...)
-				idleState.Observe(ctx, int64(workersState.StateData["idle"]), commonLabels...)
-				bklgState.Observe(ctx, int64(workersState.StateData["bklg"]), commonLabels...)
+					commonLabels := []attribute.KeyValue{
+						attribute.String("Application", stateLogMetrics.metricsConfig.OCCName),
+						attribute.Int("ShardId", workersState.ShardId),
+						attribute.Int("HeraWorkerType", int(workersState.WorkerType)),
+						attribute.Int("InstanceId", workersState.InstanceId),
+					}
+
+					//Observe states data
+					initState.Observe(ctx, int64(workersState.StateData["init"]), commonLabels...)
+					acptState.Observe(ctx, int64(workersState.StateData["acpt"]), commonLabels...)
+					waitState.Observe(ctx, int64(workersState.StateData["wait"]), commonLabels...)
+					busyState.Observe(ctx, int64(workersState.StateData["busy"]), commonLabels...)
+					idleState.Observe(ctx, int64(workersState.StateData["idle"]), commonLabels...)
+					bklgState.Observe(ctx, int64(workersState.StateData["bklg"]), commonLabels...)
+				default:
+					return
+
+				}
 			}
+
 		})
 
 	if err != nil {
