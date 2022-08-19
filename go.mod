@@ -6,16 +6,9 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/godror/godror v0.26.3
 	github.com/lib/pq v1.10.3
-	github.com/stretchr/testify v1.7.1
 	go.opentelemetry.io/otel v1.6.3
-)
-
-require (
-	github.com/davecgh/go-spew v1.1.0 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.29.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v0.29.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.29.0
+	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v0.29.0
 )
 
 require (
@@ -29,7 +22,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric v0.29.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.29.0
 	go.opentelemetry.io/otel/metric v0.29.0
-	go.opentelemetry.io/otel/sdk v1.6.3 // indirect
+	go.opentelemetry.io/otel/sdk v1.6.3
 	go.opentelemetry.io/otel/sdk/metric v0.29.0
 	go.opentelemetry.io/otel/trace v1.6.3 // indirect
 	go.opentelemetry.io/proto/otlp v0.15.0

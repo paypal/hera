@@ -834,17 +834,23 @@ func (sl *StateLog) genReport() {
 				//
 				//
 				// write collection into calheartbeat(cased out) and log (oneline).
-				//
-				hb := cal.NewCalHeartBeat("STATE", sl.mTypeTitles[s][HeraWorkerType(t)][n], cal.TransOK, "")
+				//If enable_otel_metrics_only not enabled then it sends CAL heart beat event or else send data to file and OTEL agent
+				if !GetConfig().UseOTELMetricsOnly {
+					hb := cal.NewCalHeartBeat("STATE", sl.mTypeTitles[s][HeraWorkerType(t)][n], cal.TransOK, "")
+					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
+						hb.AddDataInt(StateNames[i], int64(stateCnt[i]))
+					}
+					hb.AddDataInt("req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n]))
+					hb.AddDataInt("resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
+					hb.Completed()
+				}
 				for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 					buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
-					hb.AddDataInt(StateNames[i], int64(stateCnt[i]))
 					workerStatesData.StateData[StateNames[i]] = int64(stateCnt[i])
 				}
-				//Send states data to channel
-				sl.mStateDataChan <- workerStatesData
-				hb.AddDataInt("req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n]))
-				hb.AddDataInt("resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
+				//TODO Need to add following metrics as well to OTEL
+				//"req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n])
+				//"resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
 				/*
 					buf.WriteString(fmt.Sprintf("%6d", totalConnections))
 					if sl.HasActiveWorker()	{
@@ -858,7 +864,7 @@ func (sl *StateLog) genReport() {
 						buf.WriteString(fmt.Sprintf("%6d", 0))
 					}
 				*/
-				hb.Completed()
+				sl.mStateDataChan <- workerStatesData
 				sl.fileLogger.Println(getTime() + buf.String())
 
 				sl.mLastReqCnt[s][HeraWorkerType(t)][n] = reqCnt
