@@ -40,6 +40,9 @@ var DEFAULT_OTEL_COLLECTOR_PROTOCOL string = "http"
 var DEFAULT_OTEL_COLLECTOR__IP string = "127.0.0.1"
 var DEFAULT_GRPC_OTEL_COLLECTOR_PORT string = "4317"
 var DEFAULT_HTTP_OTEL_COLLECTOR_PORT string = "4318"
+var COLLECTOR_POLLING_INTERVAL_SECONDS int32 = 5
+
+const METRIC_NAME_PREFIX = "pp."
 
 var OTEL_COLLECTOR_PROTOCOL string = DEFAULT_OTEL_COLLECTOR_PROTOCOL
 
@@ -81,7 +84,7 @@ func initMetricProvider() func() {
 			aggregation.DeltaTemporalitySelector(),
 		),
 		controller.WithExporter(metricExp),
-		controller.WithCollectPeriod(5*time.Second),
+		controller.WithCollectPeriod(time.Duration(COLLECTOR_POLLING_INTERVAL_SECONDS)*time.Second),
 		controller.WithResource(resource),
 	)
 
@@ -116,7 +119,7 @@ func GetHistogramForAPI() (syncint64.Histogram, error) {
 	apiHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		apiHistogram, _ = meter.SyncInt64().Histogram(
-			"pp.hera.api",
+			populateMetricNamePrefix("hera.api"),
 			instrument.WithDescription("Histogram for Hera API"),
 			instrument.WithUnit(unit.Milliseconds),
 		)
@@ -129,7 +132,7 @@ func GetHistogramForExec() (syncint64.Histogram, error) {
 	execHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		execHistogram, _ = meter.SyncInt64().Histogram(
-			"pp.hera.exec",
+			populateMetricNamePrefix("hera.exec"),
 			instrument.WithDescription("Histogram for Hera Exec"),
 			instrument.WithUnit(unit.Milliseconds),
 		)
@@ -142,7 +145,7 @@ func GetHistogramForFetch() (syncint64.Histogram, error) {
 	fetchHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		fetchHistogram, _ = meter.SyncInt64().Histogram(
-			"pp.hera.fetch",
+			populateMetricNamePrefix("hera.fetch"),
 			instrument.WithDescription("Histogram for Hera fetch"),
 			instrument.WithUnit(unit.Milliseconds),
 		)
@@ -155,7 +158,7 @@ func GetHistogramForCommit() (syncint64.Histogram, error) {
 	commitHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		commitHistogram, _ = meter.SyncInt64().Histogram(
-			"pp.hera.commit",
+			populateMetricNamePrefix("hera.commit"),
 			instrument.WithDescription("Histogram for Hera commit"),
 			instrument.WithUnit(unit.Milliseconds),
 		)
@@ -168,11 +171,15 @@ func GetHistogramForRollback() (syncint64.Histogram, error) {
 	rollbackHistogramOnce.Do(func() {
 		meter := global.Meter("hera-server-meter")
 		rollbackHistogram, _ = meter.SyncInt64().Histogram(
-			"pp.hera.rollback",
+			populateMetricNamePrefix("hera.rollback"),
 			instrument.WithDescription("Histogram for Hera rollback"),
 			instrument.WithUnit(unit.Milliseconds),
 		)
 
 	})
 	return rollbackHistogram, nil
+}
+
+func populateMetricNamePrefix(metricName string) string {
+	return METRIC_NAME_PREFIX + metricName
 }
