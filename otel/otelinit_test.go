@@ -79,16 +79,14 @@ func TestVariableDimentionCounter(t *testing.T) {
 		attribute.String("client", "cli"),
 	}
 
-	expectedFirstSqlHash := ""
+	sqlHashList := make([]string, 0)
 	for i := 1; i <= 5; i++ {
 
 		min := 0
 		max := 50
 		sqlHash := strconv.Itoa(rand.Intn(max-min) + min)
 		fmt.Println("sqlHash:==>", sqlHash)
-		if i == 1 {
-			expectedFirstSqlHash = sqlHash
-		}
+		sqlHashList = append(sqlHashList, sqlHash)
 		commonLabelsLocal := append(commonLabels, attribute.String("sqlhash", sqlHash))
 
 		requestCount.Add(ctx, 1, commonLabelsLocal...)
@@ -101,8 +99,8 @@ func TestVariableDimentionCounter(t *testing.T) {
 	for _, attri := range v1m[0].GetSum().DataPoints[0].Attributes {
 		if attri.Key == "sqlhash" {
 			actual := attri.Value.GetStringValue()
-			if actual != expectedFirstSqlHash {
-				t.Errorf("got %q, wanted %q", actual, expectedFirstSqlHash)
+			if !contains(sqlHashList, actual) {
+				t.Errorf("Sqlhash %q not found in %v", actual, sqlHashList)
 			}
 		}
 	}
@@ -198,4 +196,23 @@ func TestGauage(t *testing.T) {
 		t.Errorf("got %q, wanted %q", actual, expected)
 	}
 
+}
+
+func TestMetricNamePrefix(t *testing.T) {
+	actual := populateMetricNamePrefix("hera.mname")
+	expected := "pp.hera.mname"
+
+	if expected != actual {
+		t.Errorf("got %q, wanted %q", actual, expected)
+	}
+
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
