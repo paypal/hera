@@ -2,7 +2,6 @@ package otel
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/paypal/hera/utility/logger"
@@ -271,9 +270,8 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 			//Infinite loop read through the channel and send metrics
 			for {
 				select {
-				case workersState, OK := <-stateLogMetrics.mStateDataChan:
-					fmt.Println("OK-->", OK)
-					if !OK {
+				case workersState, more := <-stateLogMetrics.mStateDataChan:
+					if !more { // TODO:: check zero value for workersState
 						logger.GetLogger().Log(logger.Info, "Statelog metrics data channel 'mStateDataChan' has been closed.")
 						return
 					}
