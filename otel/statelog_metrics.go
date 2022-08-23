@@ -163,7 +163,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	defer lock.Unlock()
 
 	if initState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		INIT_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(INIT_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in init state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for init state", err)
@@ -171,7 +171,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if acptState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		ACCPT_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(ACCPT_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in accept state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for accept state", err)
@@ -179,7 +179,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if waitState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		WAIT_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(WAIT_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in wait state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for wait state", err)
@@ -187,7 +187,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if busyState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		BUSY_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(BUSY_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in busy state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for busy state", err)
@@ -195,7 +195,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if schdState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		SCHEDULED_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(SCHEDULED_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in scheduled state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for scheduled state", err)
@@ -203,7 +203,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if fnshState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		FINISHED_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(FINISHED_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in finished state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for finished state", err)
@@ -211,7 +211,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if quceState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		QUIESCED_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(QUIESCED_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in quiesced state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for quiesced state", err)
@@ -219,7 +219,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if asgnState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		ASSIGNED_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(ASSIGNED_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in assigned state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for assigned state", err)
@@ -227,7 +227,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if idleState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		IDLE_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(IDLE_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in idle state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for idle state", err)
@@ -235,7 +235,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if bklgState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		BACKLOG_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(BACKLOG_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of workers in backlog state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for backlog state", err)
@@ -243,7 +243,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if strdState, err = stateLogMetrics.meter.AsyncInt64().Gauge(
-		STRD_CONN_COUNT_METRIC,
+		populateMetricNamePrefix(STRD_CONN_COUNT_METRIC),
 		instrument.WithDescription("Number of connections in stranded state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for stranded state", err)
