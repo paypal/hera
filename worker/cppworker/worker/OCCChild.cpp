@@ -3901,7 +3901,7 @@ int OCCChild::execute(int& _cmd_rc)
 		binder = bind_array->at(i).get();
 		if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
 			unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(binder->value).c_str(), FNV1_64A_INIT);
-			StringUtil::fmt_ulong(bind_hash_str_val, hash_val);
+			StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
 			client_session.get_session_transaction()->AddData(binder->name, bind_hash_str_val);
 			bind_hash_str_val.clear();
 		}

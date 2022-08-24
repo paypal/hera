@@ -26,6 +26,7 @@ class StringUtil {
         static bool ends_with(const std::string& str, const std::string& end);
         static std::string& fmt_int(std::string& str, const int& val);
         static std::string& fmt_ulong(std::string& str, const unsigned long& val);
+        static std::string& fmt_ullong(std::string& str, const unsigned long long& val);
         static unsigned int fmt_uint(char * s,unsigned int u);
         static int to_int(const std::string& str);
         static unsigned int to_uint(const std::string& str);
