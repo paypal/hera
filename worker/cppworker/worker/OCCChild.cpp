@@ -1027,15 +1027,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 
 			if (c)
 			{
-                               if (config->is_switch_enabled("enable_bind_hash_logging", FALSE)) {
-                                       std::string bind_hash_str_val;
-                                       for (unsigned int i = 0; i < bind_array->size(); i++) {
-                                               unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
-                                               StringUtil::fmt_ulong(bind_hash_str_val, hash_val);
-                                               c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
-                                               bind_hash_str_val.clear();
-                                       }
-                               }
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
@@ -3903,10 +3894,17 @@ int OCCChild::execute(int& _cmd_rc)
 		return -1;
 	}
 
+	std::string bind_hash_str_val;
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
 	{
 		binder = bind_array->at(i).get();
+		if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
+			unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(binder->value).c_str(), FNV1_64A_INIT);
+			StringUtil::fmt_ulong(bind_hash_str_val, hash_val);
+			client_session.get_session_transaction()->AddData(binder->name, bind_hash_str_val);
+			bind_hash_str_val.clear();
+		}
 		if(binder->lob) {
 			//write the data
 			lob_size = binder->value.length();
