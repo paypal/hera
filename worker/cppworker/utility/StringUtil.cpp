@@ -65,6 +65,13 @@ std::string& StringUtil::fmt_ulong(std::string& str, const unsigned long& val) {
     return str;
 }
 
+std::string& StringUtil::fmt_ullong(std::string& str, const unsigned long long& val) {
+    std::ostringstream os;
+    os << val;
+    str = os.str();
+    return str;
+}
+
 int StringUtil::to_int(const std::string& str) {
     int result = 0;
     const char* p = str.c_str();

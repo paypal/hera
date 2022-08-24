@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
-
+#include <utility/fnv/fnv.h>
 #include <oci.h>
 #include <xa.h>
 
@@ -1027,6 +1027,15 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 
 			if (c)
 			{
+				if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
+					std::string bind_hash_str_val;
+					for (unsigned int i = 0; i < bind_array->size(); i++) {
+						unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
+						StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
+						c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
+						bind_hash_str_val.clear();
+					}
+                		}
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
