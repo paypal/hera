@@ -20,12 +20,13 @@ package cal
 import (
 	"errors"
 	"fmt"
-	"github.com/paypal/hera/config"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/paypal/hera/config"
 )
 
 const (
@@ -357,6 +358,11 @@ func (c *Client) GetReleaseBuildNum() string {
 
 // SetParentStack set the CAL parent inthe stack
 func (c *Client) SetParentStack(_clientpoolInfo string, _operationName string, _tgname string) {
+	defer func() {
+		if err := recover(); err != nil {
+			c.mParentStack[_tgname] = _clientpoolInfo
+		}
+	}()
 	if len(_clientpoolInfo) >= c.mCalConfig.poolStackSize {
 		first := strings.Index(_clientpoolInfo, calPoolSeperator)
 		_clientpoolInfo = _clientpoolInfo[first:]
