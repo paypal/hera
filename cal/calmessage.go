@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/paypal/hera/utility"
 	//"log"
 )
@@ -168,7 +169,7 @@ type calTransaction struct {
 	calActivity
 	mParent   *calTransaction
 	mDuration float32
-	mTimer CalTimer
+	mTimer    CalTimer
 }
 
 // NewCalEvent creates a CAL event
@@ -392,7 +393,7 @@ func (act *calActivity) AddPoolStack() {
 	}
 }
 
-func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName string, _tgname ...string) {
+func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName string, _tgname ...string) (err error) {
 	var client = GetCalClientInstance()
 	if client != nil {
 		var ctxkey string
@@ -403,9 +404,10 @@ func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName st
 		}
 
 		gMapMtx.Lock()
-		client.SetParentStack(_clientpoolInfo, _operationName, ctxkey)
+		err = client.SetParentStack(_clientpoolInfo, _operationName, ctxkey)
 		gMapMtx.Unlock()
 	}
+	return err
 }
 
 /**
@@ -983,12 +985,12 @@ func (act *calTransaction) prepareEndOfTransactionMessage(_msgClass string) stri
 	// to safeguard 64 to 32 bit int conversion
 	value := act.mTimer.Duration()
 	var duration float32
-	if int32(value) > maxDuration {		// Check on comparision between float and int
+	if int32(value) > maxDuration { // Check on comparision between float and int
 		duration = maxDuration
 	} else {
 		duration = value
 	}
-	if act.mDuration >= minDuration{
+	if act.mDuration >= minDuration {
 		duration = act.mDuration
 	}
 	duration_str = fmt.Sprintf("%.1f", duration)
