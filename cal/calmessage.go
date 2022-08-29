@@ -392,7 +392,7 @@ func (act *calActivity) AddPoolStack() {
 	}
 }
 
-func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName string, _tgname ...string) {
+func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName string, _tgname ...string) (err error) {
 	var client = GetCalClientInstance()
 	if client != nil {
 		var ctxkey string
@@ -403,9 +403,10 @@ func (act *calActivity) SetParentStack(_clientpoolInfo string, _operationName st
 		}
 
 		gMapMtx.Lock()
-		client.SetParentStack(_clientpoolInfo, _operationName, ctxkey)
+		err = client.SetParentStack(_clientpoolInfo, _operationName, ctxkey)
 		gMapMtx.Unlock()
 	}
+	return err
 }
 
 /**

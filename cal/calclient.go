@@ -356,7 +356,13 @@ func (c *Client) GetReleaseBuildNum() string {
 }
 
 // SetParentStack set the CAL parent inthe stack
-func (c *Client) SetParentStack(_clientpoolInfo string, _operationName string, _tgname string) {
+func (c *Client) SetParentStack(_clientpoolInfo string, _operationName string, _tgname string) (err error) {
+	defer func() {
+		if perr := recover(); perr != nil {
+			c.mParentStack[_tgname] = _clientpoolInfo
+			err = errors.New(fmt.Sprintf("received bad clientInfo error: %s and clientpool info: %s", perr, _clientpoolInfo))
+		}
+	}()
 	if len(_clientpoolInfo) >= c.mCalConfig.poolStackSize {
 		first := strings.Index(_clientpoolInfo, calPoolSeperator)
 		_clientpoolInfo = _clientpoolInfo[first:]
@@ -369,6 +375,7 @@ func (c *Client) SetParentStack(_clientpoolInfo string, _operationName string, _
 	if len(_operationName) > 0 {
 		c.mCurrentOpName[_tgname] = _operationName
 	}
+	return err
 }
 
 func (c *Client) getCurrentPoolInfo(_tgname ...string) string {

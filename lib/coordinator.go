@@ -582,7 +582,10 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 			if end != -1 {
 				parentPoolStack = parentPoolStack[:end]
 			}
-			et.SetParentStack(parentPoolStack, "CLIENT_INFO")
+			pserr := et.SetParentStack(parentPoolStack, "CLIENT_INFO")
+			if pserr != nil {
+				logger.GetLogger().Log(logger.Alert, pserr)
+			}
 		}
 	}
 	et.AddPoolStack()
