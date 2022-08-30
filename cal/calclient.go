@@ -20,12 +20,13 @@ package cal
 import (
 	"errors"
 	"fmt"
-	"github.com/paypal/hera/config"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/paypal/hera/config"
 )
 
 const (
@@ -360,7 +361,7 @@ func (c *Client) SetParentStack(_clientpoolInfo string, _operationName string, _
 	defer func() {
 		if perr := recover(); perr != nil {
 			c.mParentStack[_tgname] = _clientpoolInfo
-			err = errors.New(fmt.Sprintf("received bad clientInfo error: %s and clientpool info: %s", perr, _clientpoolInfo))
+			err = fmt.Errorf("bad poolstack info error: %s and clientpoolinfo data: %s", perr, _clientpoolInfo)
 		}
 	}()
 	if len(_clientpoolInfo) >= c.mCalConfig.poolStackSize {
