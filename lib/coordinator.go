@@ -577,7 +577,7 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		if pos != -1 {
 			pos += len(prefix)
 			parentPoolStack := clientInfo[pos:]
-			end := strings.Index(crd.poolName, ",")
+			end := strings.Index(parentPoolStack, ",")
 			if end != -1 {
 				parentPoolStack = parentPoolStack[:end]
 			}
