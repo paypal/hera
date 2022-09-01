@@ -48,17 +48,17 @@ type Coordinator struct {
 	done          chan int
 	sqlParser     common.SQLParser
 
-	corrID         *netstring.Netstring
-	preppendCorrID bool
-	clientHostPrefix        string
-	clientHostName  string
-	poolName  string
+	corrID           *netstring.Netstring
+	preppendCorrID   bool
+	clientHostPrefix string
+	clientHostName   string
+	poolName         string
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
 	id        string
 	sqlhash   int32
-        shard     *shardInfo
+	shard     *shardInfo
 	prevShard *shardInfo
 
 	workerpool    *WorkerPool   // if it is in transaction/in cursor, the pool of the worker attached
@@ -302,7 +302,7 @@ func (crd *Coordinator) Run() {
 	if crd.worker != nil { // for a client disconn
 		et := cal.NewCalEvent("HERAMUX", "CATCH_CLIENT_DROP_FREE_WORKER", cal.TransOK, "")
 		et.AddDataStr("raddr", crd.conn.RemoteAddr().String())
-		et.AddDataStr("worker_pid", fmt.Sprintf("%d",crd.worker.pid))
+		et.AddDataStr("worker_pid", fmt.Sprintf("%d", crd.worker.pid))
 		et.Completed()
 
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
@@ -393,7 +393,7 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 				ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrQueryBindBlocker.Error()))
 				crd.respond(ns.Serialized)
 				crd.conn.Close()
-				return true/*handled*/, nil
+				return true /*handled*/, nil
 			}
 		} // end GetConfig().EnableQueryBindBlocker
 		for _, ns := range nss {
@@ -519,7 +519,6 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		crd.poolName = "UNKNOWN"
 	}
 
-
 	prefix = "HOST: "
 	pos = strings.LastIndex(clientInfo, prefix)
 	if pos != -1 {
@@ -540,19 +539,19 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 
 				skipregexp := regexp.MustCompile(GetConfig().SkipEvictRegex)
 				evalregexp := regexp.MustCompile(GetConfig().EvictRegex)
-				var match [] string
-				if match = skipregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+				var match []string
+				if match = skipregexp.FindStringSubmatch(crd.clientHostName); match != nil {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, "Req info: skiphost", crd.clientHostName)
 					}
-					crd.clientHostPrefix = "" // we don't throttle or evict on ccg 
-				} else if match = evalregexp.FindStringSubmatch(crd.clientHostName); match != nil  {
+					crd.clientHostPrefix = "" // we don't throttle or evict on ccg
+				} else if match = evalregexp.FindStringSubmatch(crd.clientHostName); match != nil {
 					crd.clientHostPrefix = match[0]
 				} else {
 					if logger.GetLogger().V(logger.Verbose) {
 						logger.GetLogger().Log(logger.Verbose, "Req info: unrecognized host name pattern")
 					}
-				// unrecognized pattern will be evaluated
+					// unrecognized pattern will be evaluated
 					crd.clientHostPrefix = "others"
 				}
 			}
@@ -578,11 +577,16 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		if pos != -1 {
 			pos += len(prefix)
 			parentPoolStack := clientInfo[pos:]
-			end := strings.Index(crd.poolName, ",")
+			end := strings.Index(parentPoolStack, ",")
 			if end != -1 {
 				parentPoolStack = parentPoolStack[:end]
 			}
-			et.SetParentStack(parentPoolStack, "CLIENT_INFO")
+			pserr := et.SetParentStack(parentPoolStack, "CLIENT_INFO")
+			if pserr != nil {
+				logger.GetLogger().Log(logger.Alert, pserr)
+				evt := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, "1", pserr.Error())
+				evt.Completed()
+			}
 		}
 	}
 	et.AddPoolStack()
@@ -646,9 +650,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		if GetConfig().ReadonlyPct > 0 {
 			if crd.isRead {
 				wType = wtypeRO
-				cfg = int( float64(cfg)*float64(GetConfig().ReadonlyPct)/100.0 );
+				cfg = int(float64(cfg) * float64(GetConfig().ReadonlyPct) / 100.0)
 			} else {
-				cfg = int( float64(cfg)*float64(100-GetConfig().ReadonlyPct)/100.0 );
+				cfg = int(float64(cfg) * float64(100-GetConfig().ReadonlyPct) / 100.0)
 			}
 		}
 		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
@@ -659,7 +663,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 		if logger.GetLogger().V(logger.Verbose) {
 			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
-				numFree, cfg, GetConfig().BindEvictionTargetConnPct , thres)
+				numFree, cfg, GetConfig().BindEvictionTargetConnPct, thres)
 			logger.GetLogger().Log(logger.Verbose, msg)
 		}
 		bindkv := parseBinds(request)
@@ -671,7 +675,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
-		needBlock,throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
+		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
@@ -679,7 +683,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				throttleEntry.AllowEveryX,
 				1.0/float64(throttleEntry.AllowEveryX),
 				crd.conn.RemoteAddr().String())
-			sqlhashStr := fmt.Sprintf("%d",uint32(crd.sqlhash))
+			sqlhashStr := fmt.Sprintf("%d", uint32(crd.sqlhash))
 			evt := cal.NewCalEvent("BIND_THROTTLE", sqlhashStr, "1", msg)
 			evt.Completed()
 			if logger.GetLogger().V(logger.Verbose) {
@@ -763,7 +767,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		}
 	}
 
-        wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
+	wait, err := crd.doRequest(crd.ctx, worker, request, crd.conn, nil)
 
 	if !xShardRead {
 		if wait {
@@ -827,39 +831,38 @@ var (
 	ErrCanceled   = errors.New("Canceled")
 )
 
-
 /* does not return all values from array binds */
-func parseBinds(request *netstring.Netstring) (map[string]string) {
-    out := make(map[string]string)
+func parseBinds(request *netstring.Netstring) map[string]string {
+	out := make(map[string]string)
 
-    requests, err := netstring.SubNetstrings(request)
-    if err != nil {
+	requests, err := netstring.SubNetstrings(request)
+	if err != nil {
+		return out
+	}
+
+	sz := len(requests)
+	for i := 0; i < sz; i++ {
+		if requests[i].Cmd == common.CmdBindName {
+			bindName := string(requests[i].Payload)
+			for j := 1; i+j < sz; j++ {
+				if requests[i+j].Cmd == common.CmdBindNum {
+					continue
+				} else if requests[i+j].Cmd == common.CmdBindType {
+					continue
+				} else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
+					continue
+				} else if requests[i+j].Cmd == common.CmdBindValue {
+					out[bindName] = string(requests[i+j].Payload)
+				} else {
+					// i=3 i+j=5 ---- 3:name 4:value 5:name
+					i += j - 2
+					break
+				}
+			}
+		} // end if bind name
+	}
+
 	return out
-    }
-
-    sz := len(requests)
-    for i := 0; i < sz; i++ {
-        if requests[i].Cmd == common.CmdBindName {
-            bindName := string(requests[i].Payload)
-            for j:=1; i+j<sz; j++ {
-                if requests[i+j].Cmd == common.CmdBindNum {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindType {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindValueMaxSize {
-                    continue
-                } else if requests[i+j].Cmd == common.CmdBindValue {
-                    out[bindName] = string(requests[i+j].Payload)
-                } else {
-                    // i=3 i+j=5 ---- 3:name 4:value 5:name
-                    i += j-2
-                    break
-                }
-            }
-        } // end if bind name
-    }
-
-    return out
 }
 
 /**
@@ -888,7 +891,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	atomic.StoreUint32(&(worker.sqlStartTimeMs), timesincestart)
 
 	if request != nil {
-		_/*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
+		_ /*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
 		if parseErr != nil {
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
@@ -908,7 +911,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
-			var ns []*netstring.Netstring;
+			var ns []*netstring.Netstring
 			if !request.IsComposite() {
 				ns = make([]*netstring.Netstring, 2)
 				ns[0] = corrID
@@ -917,7 +920,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				rnss, _ := netstring.SubNetstrings(request)
 				ns = make([]*netstring.Netstring, len(rnss)+1)
 				ns[0] = corrID
-				for i:=0; i<len(rnss); i++ {
+				for i := 0; i < len(rnss); i++ {
 					ns[i+1] = rnss[i]
 				}
 			}
@@ -947,13 +950,13 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	//
 	atomic.StoreInt32(&(worker.sqlHash), crd.sqlhash)
 	worker.clientHostPrefix.Store(crd.clientHostPrefix)
-        worker.clientApp.Store(crd.poolName)
+	worker.clientApp.Store(crd.poolName)
 	worker.sqlBindNs.Store(request)
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash), 
-								"sqltime=", timesincestart,
-								"srcHostPrefix=", worker.clientHostPrefix,
-								"reqapp=", worker.clientApp )
+		logger.GetLogger().Log(logger.Debug, crd.id, "crd sqlhash =", uint32(worker.sqlHash),
+			"sqltime=", timesincestart,
+			"srcHostPrefix=", worker.clientHostPrefix,
+			"reqapp=", worker.clientApp)
 	}
 
 	logmsg := fmt.Sprintf("worker (type%d,inst%d,id%d) %d", worker.Type, worker.instID, worker.ID, worker.pid)
