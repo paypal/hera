@@ -848,9 +848,9 @@ func (sl *StateLog) genReport() {
 					buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
 					workerStatesData.StateData[StateNames[i]] = int64(stateCnt[i])
 				}
-				//TODO Need to add following metrics as well to OTEL
-				//"req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n])
-				//"resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
+				//Adding req and response metrics to OTEL
+				workerStatesData.StateData["req"] = int64(reqCnt - sl.mLastReqCnt[s][HeraWorkerType(t)][n])
+				workerStatesData.StateData["resp"] = int64(respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n])
 				/*
 					buf.WriteString(fmt.Sprintf("%6d", totalConnections))
 					if sl.HasActiveWorker()	{

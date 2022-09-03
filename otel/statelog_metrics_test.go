@@ -103,6 +103,8 @@ func TestSendingStateLogMetrics(t *testing.T) {
 		"busy": 2,
 		"idle": 5,
 		"bklg": 0,
+		"req":  5,
+		"resp": 5,
 	}
 	workersStateData := WorkersStateData{
 		ShardId:    1,
@@ -117,6 +119,10 @@ func TestSendingStateLogMetrics(t *testing.T) {
 	//logger.GetLogger().Log(logger.Info, fmt.Sprintf("Length of channel is: %d", len(dataChannel)))
 	if len(dataChannel) > 0 {
 		t.Fail()
+	}
+	metricsData := mc.GetMetrics()
+	if len(metricsData) != 20 {
+		t.Errorf("got %d, wanted %d", len(metricsData), 13)
 	}
 	close(dataChannel)
 }
