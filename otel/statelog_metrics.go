@@ -188,7 +188,7 @@ func StartMetricsCollection(stateLogDataChan <-chan WorkersStateData, opt ...Opt
 // Define Instrumentation for each metrics and register with StateLogMetrics
 func (stateLogMetrics *StateLogMetrics) register() (err error) {
 
-	//"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd", "cls"}
+	//"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd", "cls"
 	stateLogMetrics.lock.Lock()
 	defer stateLogMetrics.lock.Unlock()
 
@@ -489,7 +489,8 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(ctx context.C
 		stateLogMetrics.initState.Observe(ctx, aggStatesData["init"], commonLabels...)
 		stateLogMetrics.acptState.Observe(ctx, aggStatesData["acpt"], commonLabels...)
 		stateLogMetrics.waitState.Observe(ctx, aggStatesData["wait"], commonLabels...)
-		stateLogMetrics.busyState.Observe(ctx, aggStatesData["schd"], commonLabels...)
+		stateLogMetrics.busyState.Observe(ctx, aggStatesData["busy"], commonLabels...)
+		stateLogMetrics.schdState.Observe(ctx, aggStatesData["schd"], commonLabels...)
 		stateLogMetrics.fnshState.Observe(ctx, aggStatesData["fnsh"], commonLabels...)
 		stateLogMetrics.quceState.Observe(ctx, aggStatesData["quce"], commonLabels...)
 
@@ -503,7 +504,8 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(ctx context.C
 		stateLogMetrics.initStateMax.Observe(ctx, aggStatesData["initMax"], commonLabels...)
 		stateLogMetrics.acptStateMax.Observe(ctx, aggStatesData["acptMax"], commonLabels...)
 		stateLogMetrics.waitStateMax.Observe(ctx, aggStatesData["waitMax"], commonLabels...)
-		stateLogMetrics.busyStateMax.Observe(ctx, aggStatesData["schdMax"], commonLabels...)
+		stateLogMetrics.busyStateMax.Observe(ctx, aggStatesData["busyMax"], commonLabels...)
+		stateLogMetrics.schdStateMax.Observe(ctx, aggStatesData["schdMax"], commonLabels...)
 		stateLogMetrics.fnshStateMax.Observe(ctx, aggStatesData["fnshMax"], commonLabels...)
 		stateLogMetrics.quceStateMax.Observe(ctx, aggStatesData["quceMax"], commonLabels...)
 

@@ -121,7 +121,7 @@ func TestSendingStateLogMetrics(t *testing.T) {
 		t.Fail()
 	}
 	metricsData := mc.GetMetrics()
-	if len(metricsData) != 20 {
+	if len(metricsData) != 22 {
 		t.Errorf("got %d, wanted %d", len(metricsData), 13)
 	}
 	close(dataChannel)
@@ -251,6 +251,7 @@ func dataGenerator(workersStatesDataChan chan<- WorkersStateData) {
 	waitTime := time.Second * 1
 
 	metricNames := [11]string{"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd"}
+	workerStates := [2]string{"req", "resp"}
 
 	timer := time.NewTimer(waitTime)
 
@@ -281,6 +282,8 @@ mainloop:
 			//Random index
 			randIndex := rand.Intn(len(metricNames))
 			workerStatesData.StateData[metricNames[randIndex]] += int64(totalSum - tempSum)
+			workerStatesData.StateData[workerStates[0]] = int64(rand.Intn(100))
+			workerStatesData.StateData[workerStates[1]] = int64(rand.Intn(100))
 			workersStatesDataChan <- workerStatesData
 			timer.Reset(waitTime)
 		case <-ctx.Done():
