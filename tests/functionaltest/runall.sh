@@ -15,7 +15,7 @@ do
       pushd $GOPATH/src/github.com/paypal/hera/tests/functionaltest/$suite/$d
       cp $GOPATH/bin/mysqlworker .
       $GOROOT/bin/go test -c .
-      ./$d.test
+      ./$d.test -test.v
       rv=$?
       if [ 0 != $rv ]
       then
