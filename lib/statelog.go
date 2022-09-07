@@ -502,6 +502,8 @@ func (sl *StateLog) init() error {
 	//
 	// for each shard, initialize map
 	//
+	var totalWorkersCount int //Use this value to initialize bufferred channel for statelog metrics
+
 	for s := 0; s < sl.maxShardSize; s++ {
 		sl.mWorkerStates[s] = make(map[HeraWorkerType][][]*WorkerStateInfo, wtypeTotalCount)
 		sl.mConnStates[s] = make(map[HeraWorkerType][]*ConnStateInfo, wtypeTotalCount)
@@ -514,7 +516,7 @@ func (sl *StateLog) init() error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
 			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
-
+			totalWorkersCount += workerCnt
 			sl.mWorkerStates[s][HeraWorkerType(t)] = make([][]*WorkerStateInfo, instCnt)
 			sl.mConnStates[s][HeraWorkerType(t)] = make([]*ConnStateInfo, instCnt)
 			sl.mTypeTitles[s][HeraWorkerType(t)] = make([]string, instCnt)
@@ -549,6 +551,9 @@ func (sl *StateLog) init() error {
 		}
 	}
 
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "Total workers count across all shards and all worker types: ", totalWorkersCount)
+	}
 	//
 	// prepare horizontal (state) and vertical (workertype) titles.
 	//
@@ -590,7 +595,7 @@ func (sl *StateLog) init() error {
 	sl.mWriteHeader = 0
 
 	sl.mEventChann = make(chan StateEvent, 3000)
-	sl.mStateDataChan = make(chan otel.WorkersStateData, 3000)
+	sl.mStateDataChan = make(chan otel.WorkersStateData, totalWorkersCount*20) //TODO currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2
 
 	//
 	// start periodical reporting

@@ -28,7 +28,7 @@ func initializeConsoleExporter() (*controller.Controller, error) {
 			exporter,
 		),
 		controller.WithExporter(exporter),
-		controller.WithCollectPeriod(3*time.Second),
+		controller.WithCollectPeriod(10*time.Second),
 	)
 
 	if err := cont.Start(context.Background()); err != nil {
@@ -132,7 +132,7 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	dataChannel := make(chan WorkersStateData, 5)
+	dataChannel := make(chan WorkersStateData, 100)
 
 	err2 := StartMetricsCollection(dataChannel, WitthMetricProvider(global.MeterProvider()), WithOCCName("occ-testapp2"))
 
@@ -223,7 +223,7 @@ func TestOCCStatelogGenerator(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	dataChannel := make(chan WorkersStateData, 5)
+	dataChannel := make(chan WorkersStateData, 1000)
 
 	defer func(dataChan chan WorkersStateData) {
 		//close channel
@@ -239,14 +239,14 @@ func TestOCCStatelogGenerator(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
 	}
-	<-time.After(time.Second * time.Duration(25))
+	<-time.After(time.Second * time.Duration(21))
 	if err3 := cont.Stop(context.Background()); err3 != nil {
 		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
 	}
 }
 
 func dataGenerator(workersStatesDataChan chan<- WorkersStateData) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	waitTime := time.Second * 1
 
