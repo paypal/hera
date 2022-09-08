@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func initializeConsoleExporter() (*controller.Controller, error) {
 			exporter,
 		),
 		controller.WithExporter(exporter),
-		controller.WithCollectPeriod(3*time.Second),
+		controller.WithCollectPeriod(10*time.Second),
 	)
 
 	if err := cont.Start(context.Background()); err != nil {
@@ -102,6 +103,8 @@ func TestSendingStateLogMetrics(t *testing.T) {
 		"busy": 2,
 		"idle": 5,
 		"bklg": 0,
+		"req":  5,
+		"resp": 5,
 	}
 	workersStateData := WorkersStateData{
 		ShardId:    1,
@@ -117,6 +120,10 @@ func TestSendingStateLogMetrics(t *testing.T) {
 	if len(dataChannel) > 0 {
 		t.Fail()
 	}
+	metricsData := mc.GetMetrics()
+	if len(metricsData) != 22 {
+		t.Errorf("got %d, wanted %d", len(metricsData), 13)
+	}
 	close(dataChannel)
 }
 
@@ -125,7 +132,7 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	dataChannel := make(chan WorkersStateData, 5)
+	dataChannel := make(chan WorkersStateData, 100)
 
 	err2 := StartMetricsCollection(dataChannel, WitthMetricProvider(global.MeterProvider()), WithOCCName("occ-testapp2"))
 
@@ -209,4 +216,87 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 	if err3 := cont.Stop(context.Background()); err3 != nil {
 		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
 	}
+}
+
+func TestOCCStatelogGenerator(t *testing.T) {
+	cont, err := initializeConsoleExporter()
+	if err != nil {
+		t.Fail()
+	}
+	dataChannel := make(chan WorkersStateData, 1000)
+
+	defer func(dataChan chan WorkersStateData) {
+		//close channel
+		close(dataChan)
+		logger.GetLogger().Log(logger.Info, "Channel `dataChan` has been closed.")
+	}(dataChannel)
+
+	go dataGenerator(dataChannel)
+
+	err2 := StartMetricsCollection(dataChannel, WitthMetricProvider(global.MeterProvider()), WithOCCName("occ-testapp"))
+
+	if err2 != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
+		t.Fail()
+	}
+	<-time.After(time.Second * time.Duration(21))
+	if err3 := cont.Stop(context.Background()); err3 != nil {
+		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
+	}
+}
+
+func dataGenerator(workersStatesDataChan chan<- WorkersStateData) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	waitTime := time.Second * 1
+
+	metricNames := [11]string{"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd"}
+	workerStates := [2]string{"req", "resp"}
+
+	timer := time.NewTimer(waitTime)
+
+	defer timer.Stop()
+
+mainloop:
+	for {
+		select {
+		case <-timer.C:
+			// Initialize statedata object
+			workerStatesData := WorkersStateData{
+				ShardId:    int(0),
+				WorkerType: int(1),
+				InstanceId: int(0),
+				StateData:  make(map[string]int64),
+			}
+			var numberofMetrics int = 11
+			var totalSum int = 100
+			var tempSum int = 0
+			for index := 0; index < numberofMetrics; index++ {
+				exactpart := int(totalSum / numberofMetrics)
+				randVal := rand.Intn(exactpart)
+				randomValue := int(int(exactpart/2) + randVal)
+				value := If(tempSum+randomValue > totalSum, totalSum-tempSum, randomValue)
+				workerStatesData.StateData[metricNames[index]] = int64(value)
+				tempSum += value
+			}
+			//Random index
+			randIndex := rand.Intn(len(metricNames))
+			workerStatesData.StateData[metricNames[randIndex]] += int64(totalSum - tempSum)
+			workerStatesData.StateData[workerStates[0]] = int64(rand.Intn(100))
+			workerStatesData.StateData[workerStates[1]] = int64(rand.Intn(100))
+			workersStatesDataChan <- workerStatesData
+			timer.Reset(waitTime)
+		case <-ctx.Done():
+			logger.GetLogger().Log(logger.Info, "Timedout, so context closed")
+			break mainloop
+		}
+	}
+}
+
+//Go terenary inplementation
+func If[T any](cond bool, vtrue, vfalse T) T {
+	if cond {
+		return vtrue
+	}
+	return vfalse
 }
