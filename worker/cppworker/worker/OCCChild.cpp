@@ -4458,33 +4458,55 @@ unsigned long long OCCChild::fetch(const std::string& count)
 							// with NULLs ('\0')
 							value.resize(0);
 							value.resize(buffer_size);
+							CalTransaction cal_trans("CLOB");
+							cal_trans.SetName("OCILobRead2");
 							rc = OCILobRead2(svchp, errhp, output.lob, &byte_amt, &char_amt, 1,
 									(void*)(value.c_str()), buffer_size, OCI_ONE_PIECE, 0, 0, 0, SQLCS_IMPLICIT);
 							lob_size_read = (unsigned int) byte_amt;
-
+							std::ostringstream oss;
+							oss << "lob_size=" << lob_size;
+							oss << "&lob_read_size=" << lob_size_read;
+							oss << "&current_row=" << current_row;
+							oss << "&rows_fetched=" << rows_fetched;
+							cal_trans.AddData(oss.str());
 							if(rc!=OCI_SUCCESS) {
 								value.resize(0);
 								sql_error(rc, stmt);
 								WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "got failure during OCILobRead, lob_size = %u, lob_read_size = %u", lob_size, lob_size_read);
+								cal_trans.SetStatus(CAL::TRANS_ERROR);
+								cal_trans.Completed();
 								return -1;
 							}
 							value.resize(lob_size_read);
+							cal_trans.SetStatus(CAL::TRANS_OK);
+							cal_trans.Completed();
 						} else { // SQLT_BLOB
 							// make sure we have enough space
 							oraub8	byte_amt, char_amt;
 							byte_amt = char_amt = lob_size;
 							value.resize(lob_size);
+							CalTransaction cal_trans("BLOB");
+							cal_trans.SetName("OCILobRead2");
 							rc = OCILobRead2(svchp, errhp, output.lob, &byte_amt, &char_amt, 1,
 									(void*)(value.c_str()), lob_size, OCI_ONE_PIECE, 0, 0, 0, SQLCS_IMPLICIT);
 							lob_size_read = (unsigned int) byte_amt;
-
+							std::ostringstream oss;
+							oss << "lob_size=" << lob_size;
+							oss << "&lob_read_size=" << lob_size_read;
+							oss << "&current_row=" << current_row;
+							oss << "&rows_fetched=" << rows_fetched;
+							cal_trans.AddData(oss.str());
 							if(rc!=OCI_SUCCESS) {
 								value.resize(0);
 								sql_error(rc, stmt);
 								WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "got failure during OCILobRead, lob_size = %u, lob_read_size = %u", lob_size, lob_size_read);
+								cal_trans.SetStatus(CAL::TRANS_ERROR);
+								cal_trans.Completed();
 								return -1;
 							}
 							value.resize(lob_size_read);
+							cal_trans.SetStatus(CAL::TRANS_OK);
+							cal_trans.Completed();
 						}
 					}
 				}
