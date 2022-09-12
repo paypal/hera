@@ -64,6 +64,7 @@ type WorkerBroker struct {
 	// and restart the stopped workers.
 	//
 	pidworkermap map[int32]*WorkerClient
+	lock sync.Mutex
 
 	//
 	// loaded from cfg once and used later.
@@ -234,6 +235,8 @@ func (broker *WorkerBroker) GetWorkerPool(wType HeraWorkerType, ids ...int) (wor
 
 // AddPidToWorkermap add the worker to the map pid -> worker
 func (broker *WorkerBroker) AddPidToWorkermap(worker *WorkerClient, pid int) {
+	broker.lock.Lock()
+	defer broker.lock.Unlock()
 	broker.pidworkermap[int32(pid)] = worker
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Added", pid, ", pwmap:", broker.pidworkermap)
@@ -281,7 +284,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 					if logger.GetLogger().V(logger.Info) {
 						logger.GetLogger().Log(logger.Info, "exited worker", defunctPids)
 					}
-
+					broker.lock.Lock()
 					for i := 0; i < arraySize; i++ {
 						//
 						// last valid entry in stoppedpids is followed by one or more zeros.
@@ -322,6 +325,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 							}
 						}
 					}
+					broker.lock.Unlock()
 				case syscall.SIGTERM:
 					if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, "Got SIGTERM")
