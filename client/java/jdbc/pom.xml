@@ -156,6 +156,25 @@
 			<artifactId>slf4j-simple</artifactId>
 			<version>1.7.25</version>
 		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-core</artifactId>
+			<version>1.7.2</version>
+			<scope>provided</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.paypal.dal.occmockclient</groupId>
+			<artifactId>occmockclient</artifactId>
+			<version>1.3.0-RELEASE</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.signalfx.public</groupId>
+			<artifactId>micrometer-registry-signalfx</artifactId>
+			<version>1.8.4-splunk2</version>
+			<scope>test</scope>
+		</dependency>
 
 	</dependencies>
 </project>

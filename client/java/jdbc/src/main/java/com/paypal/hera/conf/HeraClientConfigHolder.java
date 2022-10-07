@@ -25,6 +25,8 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	public static final String ENABLE_SHARDING_PROPERTY = "hera.enable.sharding";
 	public static final String ENABLE_BATCH_PROPERTY = "hera.enable.batch";
 	public static final String ENABLE_PARAM_NAME_BINDING = "hera.enable.param_name_binding";
+	public static String HERA_STMT_CACHE_SIZE = "hera.stmt_cache_size";
+
 	public static final String DB_ENCODING_UTF8 = "hera.db_encoding.utf8";
 	public static final String ENABLE_DATE_NULL_FIX = "hera.enable.date_null_fix"; // ! TODO: this should be cleaned-up after all Heras are rolled out with the server fix
 	public static final String DATASOURCE_TYPE = "hera.datasource.type";
@@ -40,6 +42,9 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	public static final boolean DEFAULT_ENABLE_PARAM_NAME_BINDING = true;
 	public static final boolean DEFAULT_DB_ENCODING_UTF8 = true;
 	public static final boolean DEFAULT_ENABLE_DATE_NULL_FIX = false;
+	public static final int DEFAULT_HERA_STMT_CACHE_SIZE = 1000;
+	public static final int MAX_HERA_STMT_CACHE_SIZE = 10000;
+
 
 	public static final String DEFAULT_CONNECTION_FACTORY="com.paypal.hera.conn.HeraTCPConnectionFactory";
 	public static enum E_DATASOURCE_TYPE {
@@ -74,6 +79,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 	private Boolean enableParamNameBinding;
 	private Boolean isDBEncodingUTF8;
 	private Boolean enableDateNullFix;
+	private Integer stmtCacheSize;
 	private E_DATASOURCE_TYPE datasourceType;
 
 	private HeraClientConnectionFactory connectionFactory;
@@ -109,6 +115,7 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		enableSharding = validateAndReturnDefaultBoolean(ENABLE_SHARDING_PROPERTY, DEFAULT_ENABLE_SHARDING);
 		enableBatch = validateAndReturnDefaultBoolean(ENABLE_BATCH_PROPERTY, DEFAULT_ENABLE_BATCH);
 		enableParamNameBinding = validateAndReturnDefaultBoolean(ENABLE_PARAM_NAME_BINDING, DEFAULT_ENABLE_PARAM_NAME_BINDING);
+		stmtCacheSize = validateAndReturnDefaultInt(HERA_STMT_CACHE_SIZE, DEFAULT_HERA_STMT_CACHE_SIZE, MAX_HERA_STMT_CACHE_SIZE, DEFAULT_HERA_STMT_CACHE_SIZE);
 		isDBEncodingUTF8 = validateAndReturnDefaultBoolean(DB_ENCODING_UTF8, DEFAULT_DB_ENCODING_UTF8);
 		enableDateNullFix = validateAndReturnDefaultBoolean(ENABLE_DATE_NULL_FIX, DEFAULT_ENABLE_DATE_NULL_FIX);
 		datasourceType = E_DATASOURCE_TYPE.validateAndReturnMatching(config.getProperty(DATASOURCE_TYPE), E_DATASOURCE_TYPE.HERA);
@@ -130,13 +137,14 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		return supportRSMetadata;
 	}
 
+	public Integer getStmtCacheSize() { return stmtCacheSize; }
 
 	public Integer getMinFetchSize() {
 		return minFetchSize;
 	}
 
 	public boolean enableEscape() {
-			return enableEscape;
+		return enableEscape;
 	}
 
 	public boolean enableSharding() {

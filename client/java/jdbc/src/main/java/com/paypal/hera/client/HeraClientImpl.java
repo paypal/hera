@@ -6,8 +6,8 @@ import com.paypal.hera.cal.CalStreamUtils;
 import com.paypal.hera.cal.CalTransaction;
 import com.paypal.hera.cal.CalTransactionFactory;
 import com.paypal.hera.cal.CalTransactionHelper;
-import com.paypal.hera.cal.ClsLogOutputHelper;
 import com.paypal.hera.cal.StackTrace;
+import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.conn.HeraClientConnection;
 import com.paypal.hera.constants.BindType;
 import com.paypal.hera.constants.Consts;
@@ -22,6 +22,9 @@ import com.paypal.hera.ex.HeraSQLException;
 import com.paypal.hera.ex.HeraTimeoutException;
 import com.paypal.hera.util.*;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +42,7 @@ public class HeraClientImpl implements HeraClient{
 	private enum State {
 		INITIAL, FETCH_CMD_NEEDED, FETCH_CMD_SENT, FETCH_IN_PROGRESS, FETCH_DONE;
 	};
-	
+
 	private class ClientInfo {
 		public long pid;
 		public String hostName;
@@ -47,36 +50,45 @@ public class HeraClientImpl implements HeraClient{
 		public String poolName;
 		public String poolStack;
 	};
-	
+
 	static final Logger LOGGER = LoggerFactory.getLogger(HeraClientImpl.class);
 	private static final String ENABLE_FULL_CAL = "-1";
 	private static final String DISABLE_CAL = "0";
 	private NetstringReader is;
 	private NetstringWriter os;
 	private int connTimeout;
-	
+
 	private State state;
 	private int rows;
 	private int columns;
 	private Iterator<NetStringObj> response;
-	
+
 	private ClientInfo  clientInfo;
 	private boolean columnNamesEnabled;
 	private boolean columnInfoEnabled;
 	private HeraClientConnection conn;
 	ArrayList<HeraColumnMeta> colMetaData;
 	private String sql;
-	private long lastStmtId;
+	private String lastStmtId;
 	private int byteCount;
 	private String serverLogicalName;
 	private String calLogFrequency;
 	private String heraHostName;
+	private HeraClientConfigHolder config;
+
+	private Counter execFailCounter;
+	private Counter fetchFailCounter;
+	private Counter execSuccessCounter;
+	private Counter fetchSuccessCounter;
+	private Timer execDurationTimer;
+	private Timer fetchDurationTimer;
 
 	private boolean readOnly;
 	private boolean isFirstSQL;
 	//TODO: migrate stale conn impl from OpenDAK.
 
-	public HeraClientImpl(HeraClientConnection _conn, int _connTimeout, boolean _columnNamesEnabled, boolean _columnInfoEnabled) throws HeraExceptionBase{
+	public HeraClientImpl(HeraClientConnection _conn, HeraClientConfigHolder _config, int _connTimeout, boolean _columnNamesEnabled, boolean _columnInfoEnabled) throws HeraExceptionBase{
+		config = _config;
 		conn = _conn;
 		is = new NetstringReader(new BufferedInputStream(conn.getInputStream()));
 		os = new NetstringWriter(conn.getOutputStream());
@@ -87,10 +99,10 @@ public class HeraClientImpl implements HeraClient{
 		sql = null;
 		byteCount = 0;
 		serverLogicalName = "unknown";
-		calLogFrequency = ENABLE_FULL_CAL; // -1 is for full cal enabled. 0 for disabled. 
-		
+		calLogFrequency = ENABLE_FULL_CAL; // -1 is for full cal enabled. 0 for disabled.
+
 		try {
-			// TODO: (some of) these should come as system properties to not have CAL dependency 
+			// TODO: (some of) these should come as system properties to not have CAL dependency
 			clientInfo.pid = this.computePid();
 			clientInfo.cmdLine = ManagementFactory.getRuntimeMXBean().getName();
 			clientInfo.hostName = java.net.InetAddress.getLocalHost().getHostName();
@@ -98,14 +110,14 @@ public class HeraClientImpl implements HeraClient{
 			CalPoolStackInfo stackInfo = CalPoolStackInfo.getCalPoolStackInfo();
 			if (stackInfo != null)
 				clientInfo.poolStack = "PoolStack: " + stackInfo.getPoolStack();
-			
+
 		} catch (Exception e) {
 			LOGGER.info("Could not get client info, ex: " + e.getMessage());
 		}
 		columnNamesEnabled = _columnNamesEnabled;
 		columnInfoEnabled = _columnInfoEnabled;
 	}
-	
+
 	private NetStringObj getResponse(String _cmd) throws HeraIOException, HeraProtocolException {
 		try {
 			response = is.parse();
@@ -126,60 +138,68 @@ public class HeraClientImpl implements HeraClient{
 			calLogFrequency = isCalEnabled;
 		}
 	}
-	
-	public void prepare(String _sql) throws HeraIOException{
+
+	public void prepare(HeraStatementsCache.StatementCacheEntry statementCacheEntry) throws HeraIOException{
 		sendCalCorrId();
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::prepare(" + _sql + ")");
-		os.add(HeraConstants.HERA_PREPARE_V2, _sql.getBytes());
-		sql = _sql;
+			LOGGER.debug("HeraClient::prepare(" + statementCacheEntry.getParsedSQL() + ")");
+		os.add(HeraConstants.HERA_PREPARE_V2, statementCacheEntry.getParsedSqlByte());
+		sql = statementCacheEntry.getParsedSQL();
+		lastStmtId = statementCacheEntry.getLastStmtId();
+		OCCJDBCMetrics occjdbcMetrics = HeraAggregatedMetrics.getMetrics(serverLogicalName, lastStmtId,
+				config.getStmtCacheSize());
+		execFailCounter = occjdbcMetrics.getExecFailCounter();
+		fetchFailCounter = occjdbcMetrics.getFetchFailCounter();
+		execSuccessCounter = occjdbcMetrics.getExecSuccessCounter();
+		fetchSuccessCounter = occjdbcMetrics.getFetchSuccessCounter();
+		execDurationTimer = occjdbcMetrics.getExecTimer();
+		fetchDurationTimer = occjdbcMetrics.getFetchTimer();
 	}
 
-    private CalTransaction startCalExecTransaction() {
-    	CalTransaction transaction;
-    	if(!calLogFrequency.equals(DISABLE_CAL)) {
-            // make sure to write sql statement to CAL before starting a new transaction
-            lastStmtId = ClsLogOutputHelper.writeSQLStmt(this.sql);
+	private CalTransaction startCalExecTransaction() {
+		CalTransaction transaction;
+		if(!calLogFrequency.equals(DISABLE_CAL)) {
+			// make sure to write sql statement to CAL before starting a new transaction
+			transaction = CalTransactionFactory.create("EXEC");
+			transaction.setName(lastStmtId);
+			transaction.addData("HOST", serverLogicalName);
+		} else {
+			// cal disabled return nulcaltransaction
+			transaction = CalStreamUtils.getInstance().getDefaultCalStream().transaction("EXEC");
+		}
+		return transaction;
+	}
 
-            transaction = CalTransactionFactory.create("EXEC");
-            transaction.setName(Long.toString(lastStmtId));
-            transaction.addData("HOST", serverLogicalName);
-    	} else {
-    		// cal disabled return nulcaltransaction
-    		transaction = CalStreamUtils.getInstance().getDefaultCalStream().transaction("EXEC");
-    	}
-        return transaction;
-    }
 
-	
 	public boolean execute(int _num_rows, boolean _add_commit) throws HeraIOException, HeraTimeoutException, HeraClientException, HeraProtocolException {
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::execute(" + _num_rows + ")");
 
-        CalTransaction execCalTxn = startCalExecTransaction();
-        execCalTxn.setStatus("0");
+		CalTransaction execCalTxn = startCalExecTransaction();
+		Timer.Sample execTimer = Timer.start(Metrics.globalRegistry);
+		execCalTxn.setStatus("0");
 
 		os.add(HeraConstants.HERA_EXECUTE);
-	
+
 		// flush the accumulated commands
 		try {
-	        os.flush();
+			os.flush();
 			NetStringObj obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				columns = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
 			obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				rows = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
 			if (LOGGER.isDebugEnabled())
 				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows);
 
-			 
+
 			if (columns > 0) {
-				//non-DML(select) like executeQuery 	
+				//non-DML(select) like executeQuery
 				if (columnInfoEnabled) {
 					os.add(HeraConstants.HERA_COLS_INFO);
 					os.flush();
@@ -188,30 +208,30 @@ public class HeraClientImpl implements HeraClient{
 						os.add(HeraConstants.HERA_COLS);
 						os.flush();
 					}
-				}	
+				}
 				state = State.FETCH_CMD_SENT;
 				os.add(HeraConstants.HERA_FETCH, _num_rows);
 				os.flush();
-				
+
 				colMetaData = iterateColumns();
 
 				return true;
-				
+
 			} else {
-					//DML(insert, update, delete) like executeUpdate
-					if (_add_commit) {
-						os.add(HeraConstants.HERA_COMMIT);
-						os.flush();
-						NetStringObj resp = getResponse( "HERA_AUTO_COMMIT");
-		                if (resp.getCommand() != HeraConstants.HERA_OK) {
-		                	HeraClientException heraEx = new HeraClientException("commit: Error " + Integer.toString((int)resp.getCommand()));
-		                	handleException(heraEx, execCalTxn);
-		                    throw heraEx;
-		                }
-					} 
-					return false;
+				//DML(insert, update, delete) like executeUpdate
+				if (_add_commit) {
+					os.add(HeraConstants.HERA_COMMIT);
+					os.flush();
+					NetStringObj resp = getResponse( "HERA_AUTO_COMMIT");
+					if (resp.getCommand() != HeraConstants.HERA_OK) {
+						HeraClientException heraEx = new HeraClientException("commit: Error " + Integer.toString((int)resp.getCommand()));
+						handleException(heraEx, execCalTxn);
+						throw heraEx;
+					}
+				}
+				return false;
 			}
-			
+
 		} catch (IOException e) {
 			HeraIOException heraEx = new HeraIOException(e, getConnectionMetaInfo());
 			handleException(heraEx, execCalTxn);
@@ -221,14 +241,22 @@ public class HeraClientImpl implements HeraClient{
 			throw e;
 		}finally {
 			execCalTxn.completed();
+			execTimer.stop(execDurationTimer);
+			if("0".equals(execCalTxn.getStatus())){
+				execSuccessCounter.increment();
+			}
+			else{
+				execFailCounter.increment();
+			}
 		}
 	}
-		
+
 	public ArrayList<HeraColumnMeta> execQuery(int _num_rows, boolean _column_meta) throws HeraIOException, HeraTimeoutException, HeraClientException {
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::execQuery(" + _num_rows + ")");
 
 		CalTransaction execCalTxn = startCalExecTransaction();
+		Timer.Sample execTimer = Timer.start(Metrics.globalRegistry);
 		execCalTxn.setStatus("0");
 
 		os.add(HeraConstants.HERA_EXECUTE);
@@ -236,21 +264,21 @@ public class HeraClientImpl implements HeraClient{
 			if (columnInfoEnabled)
 				os.add(HeraConstants.HERA_COLS_INFO);
 			else
-				if (columnNamesEnabled)
-					os.add(HeraConstants.HERA_COLS);
+			if (columnNamesEnabled)
+				os.add(HeraConstants.HERA_COLS);
 		}
 		state = State.FETCH_CMD_SENT;
 		os.add(HeraConstants.HERA_FETCH, _num_rows);
 		// flush the accumulated commands
 		try {
-	        os.flush();
+			os.flush();
 			NetStringObj obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				columns = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
 			obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				rows = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
@@ -258,10 +286,10 @@ public class HeraClientImpl implements HeraClient{
 				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows);
 			ArrayList<HeraColumnMeta> columnMeta = null;
 			if (_column_meta && (columnNamesEnabled || columnInfoEnabled)) {
-				columnMeta = new ArrayList<HeraColumnMeta>(); 
-				// column names 
+				columnMeta = new ArrayList<HeraColumnMeta>();
+				// column names
 				obj = read_response();
-				if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+				if (obj.getCommand() == HeraConstants.HERA_VALUE)
 					columns = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 				else
 					check_error(obj);
@@ -304,7 +332,7 @@ public class HeraClientImpl implements HeraClient{
 						else
 							check_error(obj);
 					}
-					
+
 					columnMeta.add(meta);
 				}
 			}
@@ -318,6 +346,13 @@ public class HeraClientImpl implements HeraClient{
 			throw e;
 		}finally {
 			execCalTxn.completed();
+			execTimer.stop(execDurationTimer);
+			if("0".equals(execCalTxn.getStatus())){
+				execSuccessCounter.increment();
+			}
+			else{
+				execFailCounter.increment();
+			}
 		}
 	}
 
@@ -325,8 +360,8 @@ public class HeraClientImpl implements HeraClient{
 		NetStringObj obj;
 		ArrayList<HeraColumnMeta> columnMeta = null;
 		if (columnNamesEnabled || columnInfoEnabled) {
-			columnMeta = new ArrayList<HeraColumnMeta>(); 
-			// column names 
+			columnMeta = new ArrayList<HeraColumnMeta>();
+			// column names
 			obj = read_response();
 			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				try {
@@ -395,17 +430,17 @@ public class HeraClientImpl implements HeraClient{
 					else
 						check_error(obj);
 				}
-				
+
 				columnMeta.add(meta);
 			}
 		}
 		return columnMeta;
-	} 	
+	}
 
 	public boolean packetHasMoreData() {
 		return response.hasNext();
 	}
-	
+
 	public void execDML(boolean _add_commit) throws SQLException {
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::execDML(" + _add_commit + ")");
@@ -416,6 +451,7 @@ public class HeraClientImpl implements HeraClient{
 		}
 
 		CalTransaction execCalTxn = startCalExecTransaction();
+		Timer.Sample execTimer = Timer.start(Metrics.globalRegistry);
 		execCalTxn.setStatus("0");
 
 		os.add(HeraConstants.HERA_EXECUTE);
@@ -426,12 +462,12 @@ public class HeraClientImpl implements HeraClient{
 		try {
 			os.flush();
 			NetStringObj obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				columns = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
 			obj = read_response();
-			if (obj.getCommand() == HeraConstants.HERA_VALUE) 
+			if (obj.getCommand() == HeraConstants.HERA_VALUE)
 				rows = Integer.parseInt(new String(obj.getData(), "UTF-8"));
 			else
 				check_error(obj);
@@ -449,28 +485,35 @@ public class HeraClientImpl implements HeraClient{
 		} catch (SQLException e) {
 			handleException(e, execCalTxn);
 			//for SQLException do not make it false. It is used in finally block to consume HERA_COMMIT response
-			//do_commit = false;  
+			//do_commit = false;
 			throw e;
 		} finally {
 			try {
 				handlecommit(do_commit,execCalTxn);
 			} finally {
 				execCalTxn.completed();
+				execTimer.stop(execDurationTimer);
+				if("0".equals(execCalTxn.getStatus())){
+					execSuccessCounter.increment();
+				}
+				else{
+					execFailCounter.increment();
+				}
 			}
 		}
 	}
 
 
-	 private void handlecommit(boolean do_commit, CalTransaction execCalTxn) throws HeraIOException, HeraProtocolException, HeraClientException {
-		 if (do_commit) {
-			 NetStringObj resp = getResponse("HERA_AUTO_COMMIT");
-			 if (resp.getCommand() != HeraConstants.HERA_OK) {
-				 HeraClientException heraEx = new HeraClientException("commit: Error " + Integer.toString((int) resp.getCommand()));
-				 handleException(heraEx, execCalTxn);
-				 execCalTxn.completed();
-				 throw heraEx;
-			 }
-		 }
+	private void handlecommit(boolean do_commit, CalTransaction execCalTxn) throws HeraIOException, HeraProtocolException, HeraClientException {
+		if (do_commit) {
+			NetStringObj resp = getResponse("HERA_AUTO_COMMIT");
+			if (resp.getCommand() != HeraConstants.HERA_OK) {
+				HeraClientException heraEx = new HeraClientException("commit: Error " + Integer.toString((int) resp.getCommand()));
+				handleException(heraEx, execCalTxn);
+				execCalTxn.completed();
+				throw heraEx;
+			}
+		}
 	}
 
 
@@ -488,7 +531,7 @@ public class HeraClientImpl implements HeraClient{
 	}
 
 	private void handleException(SQLException e,
-			CalTransaction transaction) {
+								 CalTransaction transaction) {
 		if (HeraJdbcDriverConstants.getInstance().shouldLogInCal(e)) {
 			String errorCode = "";
 			String errorMsg = "";
@@ -525,7 +568,8 @@ public class HeraClientImpl implements HeraClient{
 			// cal disabled return nulcaltransaction
 			fetchCalTxn = CalStreamUtils.getInstance().getDefaultCalStream().transaction("FETCH");
 		}
-		fetchCalTxn.setName(Long.toString(lastStmtId));
+		fetchCalTxn.setName(lastStmtId);
+		Timer.Sample fetchTimer = Timer.start(Metrics.globalRegistry);
 		fetchCalTxn.addData("HOST", serverLogicalName);
 
 		if (state == State.FETCH_DONE)
@@ -542,16 +586,29 @@ public class HeraClientImpl implements HeraClient{
 				throw heraEx;
 			}
 		}
-		ArrayList<ArrayList<byte[]> > result = load_results(Integer.MAX_VALUE);
+		ArrayList<ArrayList<byte[]> > result = null;
+		try {
+			result = load_results(Integer.MAX_VALUE);
+			fetchCalTxn.addData("bytes", String.valueOf(byteCount) );
+			fetchCalTxn.addData("rows", String.valueOf(result.size()) );
+			fetchCalTxn.setStatus("0");
+		} catch (Throwable ex) {
+			fetchCalTxn.setStatus(getThrowableName(ex) + "." + ex.getClass().getSimpleName());
+			throw ex;
+		} finally {
+			fetchCalTxn.completed();
+			fetchTimer.stop(fetchDurationTimer);
+			if("0".equals(fetchCalTxn.getStatus())){
+				fetchSuccessCounter.increment();
+			}
+			else{
+				fetchFailCounter.increment();
+			}
+		}
 
-		fetchCalTxn.addData("bytes", String.valueOf(byteCount) );
-		fetchCalTxn.addData("rows", String.valueOf(result.size()) );
-		fetchCalTxn.setStatus("0");
-		fetchCalTxn.completed();
-		
 		return result;
 	}
-	
+
 	public void bind(String _variable, BindType _type, byte[] _value) throws HeraIOException, HeraSQLException{
 		if (LOGGER.isDebugEnabled())
 			LOGGER.debug("HeraClient::bind()");
@@ -574,7 +631,7 @@ public class HeraClientImpl implements HeraClient{
 			throw new HeraSQLException("can't encode out variable name", e);
 		}
 	}
-	
+
 	@Override
 	public void bindArray(String _variable, int _max_sz, BindType _type, ArrayList<byte[]> _values) throws HeraIOException, HeraSQLException {
 		if (LOGGER.isDebugEnabled())
@@ -606,8 +663,8 @@ public class HeraClientImpl implements HeraClient{
 		}
 		columns = _bind_var_count;
 		return load_results(rows);
-	}	
-	
+	}
+
 	public ArrayList<ArrayList<byte[]> > load_results(int _rows) throws HeraClientException, HeraTimeoutException, HeraIOException, HeraInternalErrorException {
 		ArrayList<ArrayList<byte[]> > ret = new ArrayList<ArrayList<byte[]> >();
 		byteCount = 0;
@@ -665,7 +722,7 @@ public class HeraClientImpl implements HeraClient{
 			throw new HeraIOException(e,getConnectionMetaInfo());
 		}
 	}
-	
+
 	private void check_error(NetStringObj obj) throws HeraClientException {
 		String errorMessage = null;
 		try {
@@ -674,7 +731,7 @@ public class HeraClientImpl implements HeraClient{
 			throw new HeraClientException("Exception:", e);
 		}
 		Pair<String, Integer> errInfo = HeraJdbcUtil.ErrorToSqlStateAndVendorCodeConverter(errorMessage);
-			switch ((int)obj.getCommand()) {
+		switch ((int)obj.getCommand()) {
 			case HeraConstants.HERA_SQL_ERROR:
 				throw new HeraClientException(Consts.HERA_SQL_ERROR_PREFIX + errorMessage, errInfo.getFirst(), errInfo.getSecond());
 			case HeraConstants.HERA_ERROR:
@@ -683,9 +740,9 @@ public class HeraClientImpl implements HeraClient{
 				throw new HeraClientException("Hera markdown: " + errorMessage, errInfo.getFirst());
 			default:
 				throw new HeraClientException("Unknown error: cmd=" + obj.getCommand() + ", data=" + errorMessage);
-			}
+		}
 	}
-	
+
 	private NetStringObj read_response() throws HeraTimeoutException, HeraIOException {
 		try {
 			long start = System.currentTimeMillis();
@@ -716,7 +773,7 @@ public class HeraClientImpl implements HeraClient{
 		}
 		return topTransaction.getCorrelationId();
 	}
-	
+
 	@Override
 	public void sendCalCorrId() throws HeraIOException
 	{
@@ -727,7 +784,7 @@ public class HeraClientImpl implements HeraClient{
 			buffer += "&PoolStack: " + stackInfo.getPoolStack();
 		os.add(HeraConstants.CLIENT_CAL_CORRELATION_ID, buffer.getBytes());
 	}
-	
+
 	@Override
 	public String sendClientInfo(String info, String name)
 			throws HeraExceptionBase {
@@ -735,11 +792,11 @@ public class HeraClientImpl implements HeraClient{
 			LOGGER.debug("HeraClient::sendClientInfo()");
 		String buffer;
 		if (name.isEmpty())
-			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine + 
-				", Poolname: " + clientInfo.poolName + ", Command: " + info + ", " + clientInfo.poolStack + ", Name: " + name;
+			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine +
+					", Poolname: " + clientInfo.poolName + ", Command: " + info + ", " + clientInfo.poolStack + ", Name: " + name;
 		else
-			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine + 
-				", Poolname: " + clientInfo.poolName + ", Command: " + info + ", " + clientInfo.poolStack;
+			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine +
+					", Poolname: " + clientInfo.poolName + ", Command: " + info + ", " + clientInfo.poolStack;
 		os.add(HeraConstants.HERA_CLIENT_INFO, buffer.getBytes());
 		try {
 			os.flush();
@@ -758,12 +815,12 @@ public class HeraClientImpl implements HeraClient{
 
 	@Override
 	public void reset() {
-		os.reset();		
+		os.reset();
 	}
 
 	@Override
 	public void close() throws HeraIOException {
-		conn.close();		
+		conn.close();
 	}
 	/**
 	 * This really should be in a kernel jar somewhere
@@ -783,10 +840,10 @@ public class HeraClientImpl implements HeraClient{
 			}
 		}
 		return pid;
-    }
+	}
 	@Override
 	public ArrayList<HeraColumnMeta> getColumnMeta() throws HeraIOException {
-		return colMetaData;		
+		return colMetaData;
 	}
 
 	@Override

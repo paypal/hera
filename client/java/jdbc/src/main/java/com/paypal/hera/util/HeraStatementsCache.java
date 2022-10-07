@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.paypal.hera.cal.ClsLogOutputHelper;
 import com.paypal.hera.jdbc.HeraDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,20 +22,20 @@ public class HeraStatementsCache {
 		DML,
 		NON_DML
 	};
-	
+
 	public class ShardingInfo {
 		public String sk;
 		public ArrayList<Integer> skPos;
 		public ArrayList<Integer> scuttle_idPos;
 	}
-	
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(HeraStatementsCache.class);
 	static final Pattern escapePattern = Pattern.compile("[\\s]*\\{[\\s]*call[\\s]*(.*)[\\s]*\\}[\\s]*");
 	static final Pattern shardingHintPattern = Pattern.compile(".*/\\* HERASK=(.+)\\(([\\d,]+)\\),ScuttleId\\(([\\d,]+)\\) \\*/.*", Pattern.DOTALL);
-	
+
 	public class StatementCacheEntry {
 		private String parsedSQL;
-		private ArrayList<HeraColumnMeta> columnMeta; 
+		private ArrayList<HeraColumnMeta> columnMeta;
 		private HashMap<String, Integer> columnIndexes;
 		private int paramCount;
 		private StatementType statementType;
@@ -42,9 +43,12 @@ public class HeraStatementsCache {
 		private Map<String, String> paramPosToNameMap;
 		private boolean sqlEligibleForCache = true;
 		private boolean paramNameBindingEnabled = false;
+		private byte[] sqlByteArray= null;
+		private String lastStmtId;
+
 
 		private int timeoutInMilliSecond = -1;
-		
+
 		public int getParamCount() {
 			return paramCount;
 		}
@@ -52,7 +56,7 @@ public class HeraStatementsCache {
 		public ShardingInfo getShardingInfo() {
 			return shardingInfo;
 		}
-		
+
 		public Map<String, String> getParamPosToNameMap() {
 			return paramPosToNameMap;
 		}
@@ -68,12 +72,14 @@ public class HeraStatementsCache {
 		public StatementCacheEntry(String _sql, boolean _escapeProcessingEnabled,
 								   boolean _shardingEnabled, boolean _paramNameBindingEnabled,
 								   E_DATASOURCE_TYPE datasource, Map<String, Integer> queryTimeoutConfigs) {
-			parsedSQL = helperParseSQL(_sql, _escapeProcessingEnabled, 
+			parsedSQL = helperParseSQL(_sql, _escapeProcessingEnabled,
 					_shardingEnabled, _paramNameBindingEnabled, datasource, queryTimeoutConfigs);
+			lastStmtId = Long.toString(ClsLogOutputHelper.writeSQLStmt(parsedSQL));
 			paramNameBindingEnabled = _paramNameBindingEnabled;
 			setStatementType(StatementType.UNKNOWN);
+			sqlByteArray = parsedSQL.getBytes();
 		}
-		
+
 		public final String actualParamName(int _index) {
 
 			String paraName = null;
@@ -83,21 +89,21 @@ public class HeraStatementsCache {
 			else
 				paraName = buildParamName(_index);
 
-			if ( !paramNameBindingEnabled || paramPosToNameMap == null 
+			if ( !paramNameBindingEnabled || paramPosToNameMap == null
 					|| paramPosToNameMap.isEmpty()) {
 				return paraName;
 			}
-			
+
 			String actualName = paramPosToNameMap.get (paraName);
 			return actualName==null?paraName:actualName.trim();
 		}
-		
+
 
 		/***
 		 *  1> replace "?" with ":p1", ":p2"...
 		 *  2> bypass the comment inside the sql. in case that the comment or the begin or end of comment
 		 *  is inside the a string value, the method will not change that value.
-		 *  
+		 *
 		 *  3> find the total param count
 		 */
 		private String helperParseSQL(String _sql, boolean _escapeProcessingEnabled,
@@ -154,17 +160,17 @@ public class HeraStatementsCache {
 
 			if (_paramNameBindingEnabled) {
 
-				// get the hera param position to actual param name mappings, e.g. "p1"->"columnname1" 
+				// get the hera param position to actual param name mappings, e.g. "p1"->"columnname1"
 				paramPosToNameMap = HeraQueryParamNameBindingCache.
 						getInstance().getNameBindings(sb.toString());
 
 				//replace param position with param name, e.g. ":p1" with ":columnname1" etc.
 				return preprocessParamNames(sb.toString());
 			}
-				
+
 			return sb.toString();
 		}
-		
+
 		private String preprocessParamNames(String _sql) {
 			LOGGER.debug("Preprocess param names for: " + _sql);
 
@@ -188,14 +194,14 @@ public class HeraStatementsCache {
 			}
 			return true;
 		}
-		
+
 		private String preprocessEscape(String _sql, E_DATASOURCE_TYPE datasource) {
 			LOGGER.debug("Preprocess escape for: " + _sql);
 			Matcher m = escapePattern.matcher(_sql);
 			if (m.find()) {
 				if(datasource == E_DATASOURCE_TYPE.ORACLE) {
 					_sql = "BEGIN " +  m.group(1) + "; END;" ;
-					
+
 				} else {
 					_sql = "CALL " + m.group(1) + ";";
 				}
@@ -236,6 +242,12 @@ public class HeraStatementsCache {
 
 		public String getParsedSQL() {
 			return parsedSQL;
+		}
+		public byte[] getParsedSqlByte(){
+			return sqlByteArray;
+		}
+		public String getLastStmtId() {
+			return lastStmtId;
 		}
 		public ArrayList<HeraColumnMeta> getColumnMeta() {
 			return columnMeta;
@@ -283,47 +295,47 @@ public class HeraStatementsCache {
 			return timeout;
 		}
 	}
-	
+
 	private final static String PAR_PREFIX = "p";
 	private final static int PARAM_CNT_CACHE = 100;
 	private final static String[] PAR_NAMES = new String[PARAM_CNT_CACHE];
-	
+
 	private Object lock = new Object();
-	
+
 	private BoundLRUCaches<StatementCacheEntry> stmtCache;
-	
-	public HeraStatementsCache(int _size) {
-		stmtCache = new BoundLRUCaches<StatementCacheEntry>(_size);
+
+	public HeraStatementsCache(int _size, String _key) {
+		stmtCache = new BoundLRUCaches<StatementCacheEntry>(_size, _key);
 	}
 
 	private static final String buildParamName(int _index) {
 		return PAR_PREFIX + _index;
 	}
 	private static void init() {
-		
+
 		for (int i = 0; i < PAR_NAMES.length; i++)
 			PAR_NAMES[i] = buildParamName(i);
 	}
-	
+
 	static {
 		init();
 	}
-	
+
 	public static final String paramName(int _index) {
 		if (_index < PARAM_CNT_CACHE)
 			return PAR_NAMES[_index];
 		else
 			return buildParamName(_index);
 	}
-	
-	
+
+
 	/// parse the SQL statement transforming ? into parameter names
 	public StatementCacheEntry getEntry(String _sql, boolean _escapeProcessingEnabled,
-			boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
+										boolean _shardingEnabled, boolean _paramNameBindingEnabled, E_DATASOURCE_TYPE datasource) {
 		StatementCacheEntry entry = stmtCache.get(_sql);
 		if (entry == null) {
 			synchronized (lock) {
-				entry = new StatementCacheEntry(_sql, _escapeProcessingEnabled, 
+				entry = new StatementCacheEntry(_sql, _escapeProcessingEnabled,
 						_shardingEnabled, _paramNameBindingEnabled, datasource, HeraDriver.getQueryProperties());
 				if(entry.isSqlEligibleForCache()) {
 					stmtCache.put(_sql, entry);
