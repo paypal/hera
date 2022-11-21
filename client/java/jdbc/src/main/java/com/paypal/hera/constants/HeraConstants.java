@@ -62,5 +62,7 @@ public class HeraConstants {
 	public static final int PROTOCOL_VERSION = 1;
 	
 	public static final int MAX_SCUTTLE_BUCKETS = 1024;
-	
+	public static final String HERA_DB_TYPE_ORACLE = "oracle";
+	public static final String HERA_DB_TYPE_MYSQL = "mysql";
+	public static final String HERA_DB_TYPE_POSTGRES = "postgres";
 }

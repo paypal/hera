@@ -75,7 +75,7 @@ func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
 
 	var db *sql.DB
 	var err error
-	// 
+	//
 	// postgres://pqgotest:password@localhost/pqgotest?sslmode=verify-full
 	// user=pqgotest dbname=pqgotest sslmode=verify-full
 	// host=%s port=%d user=%s password=%s dbname=%s sslmode=disable
@@ -86,7 +86,7 @@ func (adapter *postgresAdapter) InitDB() (*sql.DB, error) {
 		attempt := 1
 		is_writable := false
 		for attempt <= 3 {
-			//db, err = sql.Open("postgres", fmt.Sprintf("user=%s password=%s %s", user, pass, curDs))
+			// db, err = sql.Open("postgres", fmt.Sprintf("user=%s password=%s %s", user, pass, curDs))
 			db, err = sql.Open("postgres", fmt.Sprintf("postgres://%s:%s@%s", user, pass, curDs))
 			if err != nil {
 				if logger.GetLogger().V(logger.Warning) {
@@ -308,7 +308,7 @@ func (adapter *postgresAdapter) ProcessResult(colType string, res string) string
 		var day, month, year, hour, min, sec, pr, tzh, tzm int
 		fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d%d:%d", &year, &month, &day, &hour, &min, &sec, &tzh, &tzm)
 		if tzh == 0 && tzm == 0 {
-			fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d.%d%d:%d", &year, &month, &day, &hour, &min, &sec, &pr, &tzh, &tzm)	
+			fmt.Sscanf(res, "%d-%d-%dT%d:%d:%d.%d%d:%d", &year, &month, &day, &hour, &min, &sec, &pr, &tzh, &tzm)
 		}
 		return fmt.Sprintf("%02d-%02d-%04d %02d:%02d:%02d.000 %+03d:%02d", day, month, year, hour, min, sec, tzh, tzm)
 	default:

@@ -91,8 +91,9 @@ func Run() {
 	//
 	// create singleton broker and start worker/pools
 	//
-	nameForTns := *namePtr;
-	CfgFromTns(nameForTns); if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
+	nameForTns := *namePtr
+	CfgFromTns(nameForTns)
+	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
 		}
@@ -132,7 +133,6 @@ func Run() {
 		}
 		FullShutdown()
 	}
-
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
 			break
@@ -146,7 +146,6 @@ func Run() {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
-
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))

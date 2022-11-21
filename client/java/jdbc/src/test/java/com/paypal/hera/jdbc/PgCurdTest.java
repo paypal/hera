@@ -11,22 +11,32 @@ import java.util.Properties;
 
 public class PgCurdTest {
    static String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
+   private static String dbName;
+   private static Connection dbConn;
     @BeforeClass
     public static void setup() throws SQLException {
+        Util.makeAndStartHeraMux(null);
+        dbConn = Util.makeDbConn();
+        DatabaseMetaData metaData = dbConn.getMetaData();
+        dbName = metaData.getDatabaseProductName();
+        dbConn.close();
+
+        Assert.assertTrue("Postgres DB expected...found DB:" + dbName,dbName.equalsIgnoreCase("postgres"));
+
         reset();
         initSetup();
     }
 
 
     @AfterClass
-    public static void teardown(){
-
-
+    public static void teardown() {
     }
 
 
     @Test
     public void testSimpleInsert() throws SQLException {
+
+        if(!dbName.equalsIgnoreCase("postgres")) return;
 
         Properties props = new Properties();
         props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
@@ -72,7 +82,7 @@ public class PgCurdTest {
         props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
         props.setProperty(HeraClientConfigHolder.SUPPORT_COLUMN_INFO_PROPERTY, "true");
         props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
-       Connection dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
+        Connection dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
 
         System.out.println( "dbConn==>"+ dbConn);
 

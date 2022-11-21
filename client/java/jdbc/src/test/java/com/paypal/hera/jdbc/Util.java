@@ -60,7 +60,7 @@ public class Util {
 		}
 	}
 
-	/** Compiles and starts Hera server and a docker Mysql. Cleans up 
+	/** Compiles and starts Hera server and a docker Mysql. Cleans up
 	old Hera and Mysql before it remakes new ones. Uses GOROOT to find 
 	go compiler and GOPATH to find the binaries and make a directory
 	with config and logs for the test hera server. */
@@ -73,52 +73,65 @@ public class Util {
 			throw new RuntimeException(e);
 		}
 	}
-	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
-		if (cfg == null) {
-			cfg = new HashMap<String,String>();
-		}
-		Runtime.getRuntime().exec("go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker").waitFor();
 
-		// TODO skip cleanup to allow use of server from prior test
-		String dockerName = "mysql55";
-		Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
-		Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
-		Runtime.getRuntime().exec("killall -ILL mux mysqlworker").waitFor();
-		// TODO better cleanup of old mux
-		
-		Runtime.getRuntime().exec("docker run --name "+dockerName+" -e MYSQL_ROOT_PASSWORD=1-testDb -e MYSQL_DATABASE=heratestdb -d mysql:latest").waitFor();
-
-        	// find its IP
-		ProcessBuilder pbIp = new ProcessBuilder(
-				"docker",
-				"inspect",
-				"--format",
-				"{{ .NetworkSettings.IPAddress }}",
-				dockerName);
-		Process p = pbIp.start();
-		BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-		p.waitFor();
-		String ip= reader.readLine();
-		// now try tcp to ip 3306 for mysql to come up
+	static boolean checkMySqlIsUp() {
 		boolean didConn = false;
-		for (int i = 0; i < 111; i++) {
-			Thread.sleep(1222);
+		for (int i = 0; i < 10; i++) {
 			Socket clientSocket = new Socket();
 			try {
-				clientSocket.connect(new InetSocketAddress(ip, 3306), 2000);
+				Thread.sleep(1222);
+				clientSocket.connect(new InetSocketAddress("0.0.0.0", 3306), 2000);
+				didConn = true;
+				clientSocket.close();
+				break;
 			} catch (ConnectException e) {
 				continue;
 			} catch (SocketTimeoutException e) {
 				continue;
+			} catch (IOException e) {
+				continue;
+			} catch (InterruptedException e) {
+				continue;
 			}
-			clientSocket.close();
-			didConn = true;
-			break;
 		}
-		if (!didConn) {
+		return didConn;
+	}
+	static void startMySqlContainer() throws IOException, InterruptedException {
+		if(checkMySqlIsUp()) return;
+
+		String dockerName = "mysql55";
+		Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+		Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
+		// ensure that localhost's port is mapped to container port,
+		// else hera worker can not reach mysql
+		Runtime.getRuntime()
+				.exec("docker run -p 3306:3306 --name "
+						+dockerName+
+						" -e TZ=America/Los_Angeles " +
+						"-e MYSQL_ROOT_PASSWORD=1-testDb " +
+						"-e MYSQL_DATABASE=heratestdb " +
+						"-d mysql:8.0.31").waitFor();
+
+		// best is to check this in mysql logs: "ready for start up"
+		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
+ 		// putting a long sleep is a work around
+		Thread.sleep(15000);
+
+		if (!checkMySqlIsUp()) {
+			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
 			throw new RuntimeException("mysql docker did not come up");
 		}
-		
+	}
+	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
+		startMySqlContainer();
+		if (cfg == null) {
+			cfg = new HashMap<String,String>();
+		}
+
+		Runtime.getRuntime().exec("go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker").waitFor();
+		Runtime.getRuntime().exec("killall -ILL mux mysqlworker").waitFor();
+
 		String gopath = System.getenv().get("GOPATH");
 		String basedir = gopath+"/srv/";
 		File basedirF = new File(basedir);
@@ -150,12 +163,12 @@ public class Util {
 
 		cfg.putIfAbsent("bind_ip", "0.0.0.0");
 		cfg.putIfAbsent("bind_port", "11111");
-		cfg.putIfAbsent("opscfg.hera-test.server.max_connections","2");
+		cfg.putIfAbsent("opscfg.hera.server.max_connections","2");
 		cfg.putIfAbsent("log_level","5");
 		cfg.putIfAbsent("rac_sql_interval","0");
 		cfg.putIfAbsent("database_type","mysql");
-		// cert_chain_file=srvChain.crt
-		// key_file=srv2.key
+//		cfg.putIfAbsent("cert_chain_file","srvChain.crt");
+//		cfg.putIfAbsent("key_file","srv2.key");
 		writer = new BufferedWriter(new FileWriter(basedir+"hera.txt"));
 		for (String key : cfg.keySet()) {
 			writer.write(key + "=" + cfg.get(key) + "\n");
@@ -166,12 +179,14 @@ public class Util {
 		ProcessBuilder pb = new ProcessBuilder("./mux", "--name", "hera-test");
 		pb.directory(basedirF);
 		Map<String,String> env = pb.environment();
-		env.put("TWO_TASK","tcp("+ip+":3306)/heratestdb");
+		// mysql connectivity works with localhost and not with docker container IP
+		env.put("TWO_TASK","tcp(127.0.0.1:3306)/heratestdb");
 		env.put("username","root");
 		env.put("password","1-testDb");
+//		env.put("certdir", basedir);
 		s_hera = pb.start();
 
-		didConn = false;
+		boolean didConn = false;
 		for (int i = 0; i < 111; i++) {
 			Thread.sleep(1222);
 			Socket clientSocket = new Socket();
