@@ -15,7 +15,8 @@ public class PgCurdTest {
    private static Connection dbConn;
     @BeforeClass
     public static void setup() throws SQLException {
-        Util.makeAndStartHeraMux(null);
+        //TODO: Do this for postgres. Until then a local hera instance is required to run these tests.
+        //Util.makeAndStartHeraMux(null);
         dbConn = Util.makeDbConn();
         DatabaseMetaData metaData = dbConn.getMetaData();
         dbName = metaData.getDatabaseProductName();
