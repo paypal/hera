@@ -51,6 +51,7 @@ jobs:
         
     - name: run hera mux and pg worker
       run: |
+        export GOPATH=`go env GOPATH`
         export username='postgres'
         export password='postgres'
         export TWO_TASK='127.0.0.1/postgres?connect_timeout=60&sslmode=disable'
@@ -75,5 +76,6 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: |
+        export GOPATH=`go env GOPATH`
         cd client/java/jdbc
         mvn test -Dtest=com.paypal.hera.jdbc.PostgresTestSuite
