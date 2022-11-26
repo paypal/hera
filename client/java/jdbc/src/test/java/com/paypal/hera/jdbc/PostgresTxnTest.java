@@ -21,9 +21,8 @@ public class PostgresTxnTest {
 	
 	@BeforeClass
 	public static void setUp() throws Exception {
-		//TODO: Do this for postgres. Until then a local hera instance is required to run these tests.
-//		Util.makeAndStartHeraMux(null);
-		dbConn = Util.makeDbConn();
+		UtilPostgres.makeAndStartHeraMux(null);
+		dbConn = UtilPostgres.makeDbConn();
 		// determine database server
 		HeraConnection hera = (HeraConnection)dbConn;
 		hera.setShardHint("shardid", "0");
@@ -95,7 +94,7 @@ public class PostgresTxnTest {
 		if (!isPostgres)
 			return;
 		//AutoCommit
-		dbConn2 = Util.makeDbConn();
+		dbConn2 = UtilPostgres.makeDbConn();
 		dbConn.setAutoCommit(true);
 		PreparedStatement pst2 = dbConn.prepareStatement("insert into "+TEST_TABLE+" ( id , note ) values ( ?, ? )" );
 		pst2.setInt(1, 11);

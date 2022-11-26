@@ -121,9 +121,9 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		String sval = config.getProperty(pr);
 		E_DATASOURCE_TYPE val = type;
 		if (sval != null) {
-			val = sval.equalsIgnoreCase(HeraConstants.HERA_DB_TYPE_MYSQL) ? E_DATASOURCE_TYPE.MYSQL :
+			val = sval.equalsIgnoreCase(HeraConstants.HERA_DB_TYPE_ORACLE) ? E_DATASOURCE_TYPE.ORACLE :
 					sval.equalsIgnoreCase(HeraConstants.HERA_DB_TYPE_POSTGRES) ? E_DATASOURCE_TYPE.POSTGRES :
-							E_DATASOURCE_TYPE.ORACLE;
+							E_DATASOURCE_TYPE.MYSQL;
 		}
 		return val;
 	}

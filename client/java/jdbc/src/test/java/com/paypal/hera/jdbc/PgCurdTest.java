@@ -13,6 +13,8 @@ public class PgCurdTest {
    static String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
     @BeforeClass
     public static void setup() throws SQLException {
+        UtilPostgres.makeAndStartHeraMux(null);
+
         reset();
         initSetup();
     }

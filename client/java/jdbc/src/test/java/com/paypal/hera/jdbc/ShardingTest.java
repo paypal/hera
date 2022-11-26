@@ -41,7 +41,7 @@ public class ShardingTest {
 	private boolean isMySQL;
 	
 	void cleanTable(Statement st, String startId, int rows, boolean commit) throws SQLException {
-		st.executeUpdate("delete from " + table + " where id >= " + startId + " and id < " + (Integer.parseInt(startId) + rows));
+		st.executeUpdate("drop table if exists " + table);
 		if (commit)
 			dbConn.commit();
 	}
@@ -59,7 +59,6 @@ public class ShardingTest {
 		props.setProperty(HeraClientConfigHolder.ENABLE_SHARDING_PROPERTY, "true");
 		Class.forName("com.paypal.hera.jdbc.HeraDriver");
 		dbConn = DriverManager.getConnection("jdbc:hera:" + host, props);
-		Util.runDml(dbConn, "create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))");
 
 		// determine database server
 		HeraConnection hera = (HeraConnection)dbConn;
@@ -73,6 +72,10 @@ public class ShardingTest {
 			isMySQL = true;
 			LOGGER.debug("Testing with MySQL");
 		}
+		if(!isMySQL) {
+			Util.runDml(dbConn, "create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))");
+		}
+
 		hera.resetShardHints();
 	}
 
