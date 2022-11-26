@@ -1,11 +1,8 @@
 package com.paypal.hera.jdbc;
 
 import com.paypal.hera.conf.HeraClientConfigHolder;
-import org.graalvm.compiler.debug.Assertions;
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
