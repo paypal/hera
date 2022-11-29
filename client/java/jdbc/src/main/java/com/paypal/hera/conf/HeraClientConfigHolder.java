@@ -2,6 +2,7 @@ package com.paypal.hera.conf;
 
 import java.util.*;
 
+import com.paypal.hera.constants.HeraConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +44,9 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 
 	public static final String DEFAULT_CONNECTION_FACTORY="com.paypal.hera.conn.HeraTCPConnectionFactory";
 	public static enum E_DATASOURCE_TYPE {
-		MySQL ,
+		MYSQL ,
 		ORACLE,
+		POSTGRES,
 		HERA;
 
 		public static E_DATASOURCE_TYPE validateAndReturnMatching(String label, E_DATASOURCE_TYPE defaultType) {
@@ -111,7 +113,19 @@ public final class HeraClientConfigHolder extends BaseHeraConfiguration {
 		enableParamNameBinding = validateAndReturnDefaultBoolean(ENABLE_PARAM_NAME_BINDING, DEFAULT_ENABLE_PARAM_NAME_BINDING);
 		isDBEncodingUTF8 = validateAndReturnDefaultBoolean(DB_ENCODING_UTF8, DEFAULT_DB_ENCODING_UTF8);
 		enableDateNullFix = validateAndReturnDefaultBoolean(ENABLE_DATE_NULL_FIX, DEFAULT_ENABLE_DATE_NULL_FIX);
-		datasourceType = E_DATASOURCE_TYPE.validateAndReturnMatching(config.getProperty(DATASOURCE_TYPE), E_DATASOURCE_TYPE.HERA);
+		// default is MySql as defined in client github documentation
+		datasourceType = validateAndReturnDefaultDatasource(DATASOURCE_TYPE, E_DATASOURCE_TYPE.MYSQL);
+	}
+
+	private E_DATASOURCE_TYPE validateAndReturnDefaultDatasource(String pr, E_DATASOURCE_TYPE type) {
+		String sval = config.getProperty(pr);
+		E_DATASOURCE_TYPE val = type;
+		if (sval != null) {
+			val = sval.equalsIgnoreCase(HeraConstants.HERA_DB_TYPE_ORACLE) ? E_DATASOURCE_TYPE.ORACLE :
+					sval.equalsIgnoreCase(HeraConstants.HERA_DB_TYPE_POSTGRES) ? E_DATASOURCE_TYPE.POSTGRES :
+							E_DATASOURCE_TYPE.MYSQL;
+		}
+		return val;
 	}
 
 	public Integer getResponseTimeoutMs() {

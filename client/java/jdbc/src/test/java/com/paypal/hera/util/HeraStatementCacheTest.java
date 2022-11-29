@@ -56,7 +56,7 @@ public class HeraStatementCacheTest {
         } catch (SQLException ex) {
             query = "Select now()";
             LOGGER.debug("Testing with MySQL");
-            datasource = HeraClientConfigHolder.E_DATASOURCE_TYPE.MySQL;
+            datasource = HeraClientConfigHolder.E_DATASOURCE_TYPE.MYSQL;
         } finally {
             st.close();
         }
