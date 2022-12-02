@@ -29,13 +29,13 @@ import com.paypal.hera.util.HeraJdbcConverter;
 import com.paypal.hera.util.HeraJdbcUtil;
 
 /** Helper functions for testing. */
-public class Util {
-	
-	/** Returns a new HeraConnection.  Connects to server in 
-	System.getProperty("SERVER_URL") and defaults to localhost:11111 */
+public class UtilPostgres {
+
+	/** Returns a new HeraConnection.  Connects to server in
+	 System.getProperty("SERVER_URL") and defaults to localhost:11111 */
 	public static HeraConnection makeDbConn() {
 		try {
-			String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+			String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
 			HeraClientConfigHolder.clear();
 			Properties props = new Properties();
 			props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
@@ -52,18 +52,18 @@ public class Util {
 
 	public static void runDml(Connection dbConn, String sql) {
 		try {
-	                PreparedStatement pst = dbConn.prepareStatement(sql);
-        	        pst.executeUpdate();
-                	dbConn.commit();
+			PreparedStatement pst = dbConn.prepareStatement(sql);
+			pst.executeUpdate();
+			dbConn.commit();
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	/** Compiles and starts Hera server and a docker Mysql. Cleans up
-	old Hera and Mysql before it remakes new ones. Uses GOROOT to find 
-	go compiler and GOPATH to find the binaries and make a directory
-	with config and logs for the test hera server. */
+	/** Compiles and starts Hera server and a docker postgres. Cleans up
+	 old Hera and Postgres before it remakes new ones. Uses GOROOT to find
+	 go compiler and GOPATH to find the binaries and make a directory
+	 with config and logs for the test hera server. */
 	public static void makeAndStartHeraMux(HashMap<String,String> cfg) {
 		try {
 			makeAndStartHeraMuxInternal(cfg);
@@ -74,13 +74,13 @@ public class Util {
 		}
 	}
 
-	static boolean checkMySqlIsUp() {
+	static boolean checkPostgresIsUp() {
 		boolean didConn = false;
 		for (int i = 0; i < 10; i++) {
 			Socket clientSocket = new Socket();
 			try {
 				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("0.0.0.0", 3306), 2000);
+				clientSocket.connect(new InetSocketAddress("0.0.0.0", 5432), 2000);
 				didConn = true;
 				clientSocket.close();
 				break;
@@ -96,41 +96,40 @@ public class Util {
 		}
 		return didConn;
 	}
-	static void startMySqlContainer() throws IOException, InterruptedException {
-		if(checkMySqlIsUp()) return;
+	static void startPostgresContainer() throws IOException, InterruptedException {
+		if(checkPostgresIsUp()) return;
 
-		String dockerName = "mysql55";
+		String dockerName = "postgres55";
 		Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
 		Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
 		// ensure that localhost's port is mapped to container port,
-		// else hera worker can not reach mysql
+		// else hera worker can not reach postgres
 		Runtime.getRuntime()
-				.exec("docker run -p 3306:3306 --name "
+				.exec("docker run -p 5432:5432 --name "
 						+dockerName+
 						" -e TZ=America/Los_Angeles " +
-						"-e MYSQL_ROOT_PASSWORD=1-testDb " +
-						"-e MYSQL_DATABASE=heratestdb " +
-						"-d mysql:8.0.31").waitFor();
+						"-e POSTGRES_PASSWORD=1-testPgDb " +
+						"-d postgres").waitFor();
 
-		// best is to check this in mysql logs: "ready for start up"
-		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
- 		// putting a long sleep is a work around
+		// best is to check this in postgres logs: "ready for start up"
+		// via : grep -i "database system is ready to accept connections" <(docker logs postgres 2>&1)
+		// putting a long sleep is a work around
 		Thread.sleep(15000);
 
-		if (!checkMySqlIsUp()) {
+		if (!checkPostgresIsUp()) {
 			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
 			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
-			throw new RuntimeException("mysql docker did not come up");
+			throw new RuntimeException("postgres docker did not come up");
 		}
 	}
 	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
-		startMySqlContainer();
+		startPostgresContainer();
 		if (cfg == null) {
 			cfg = new HashMap<String,String>();
 		}
 
-		Runtime.getRuntime().exec("go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker").waitFor();
-		Runtime.getRuntime().exec("killall -ILL mux mysqlworker").waitFor();
+		Runtime.getRuntime().exec("go install github.com/paypal/hera/mux github.com/paypal/hera/worker/postgresworker").waitFor();
+		Runtime.getRuntime().exec("killall -ILL mux postgresworker").waitFor();
 
 		String gopath = System.getenv().get("GOPATH");
 		String basedir = gopath+"/srv/";
@@ -142,14 +141,14 @@ public class Util {
 		symLinkTarget = new File(basedir+"mux");
 		if (!symLinkTarget.exists()) {
 			Files.createSymbolicLink(
-				symLinkTarget.toPath(),
-				(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
 		}
-		symLinkTarget = new File(basedir+"mysqlworker");
+		symLinkTarget = new File(basedir+"postgresworker");
 		if (!symLinkTarget.exists()) {
 			Files.createSymbolicLink(
-				symLinkTarget.toPath(),
-				(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
 		}
 
 		BufferedWriter writer;
@@ -166,7 +165,7 @@ public class Util {
 		cfg.putIfAbsent("opscfg.hera.server.max_connections","2");
 		cfg.putIfAbsent("log_level","5");
 		cfg.putIfAbsent("rac_sql_interval","0");
-		cfg.putIfAbsent("database_type","mysql");
+		cfg.putIfAbsent("database_type","postgres");
 //		cfg.putIfAbsent("cert_chain_file","srvChain.crt");
 //		cfg.putIfAbsent("key_file","srv2.key");
 		writer = new BufferedWriter(new FileWriter(basedir+"hera.txt"));
@@ -180,9 +179,9 @@ public class Util {
 		pb.directory(basedirF);
 		Map<String,String> env = pb.environment();
 		// mysql connectivity works with localhost and not with docker container IP
-		env.put("TWO_TASK","tcp(127.0.0.1:3306)/heratestdb");
-		env.put("username","root");
-		env.put("password","1-testDb");
+		env.put("TWO_TASK","127.0.0.1:5432/postgres?connect_timeout=60&sslmode=disable");
+		env.put("username","postgres");
+		env.put("password","1-testPgDb");
 //		env.put("certdir", basedir);
 		s_hera = pb.start();
 
@@ -206,5 +205,5 @@ public class Util {
 		}
 	}
 	static Process s_hera;
-	
+
 }

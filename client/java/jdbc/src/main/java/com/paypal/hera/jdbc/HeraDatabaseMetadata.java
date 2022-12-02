@@ -56,13 +56,19 @@ public class HeraDatabaseMetadata implements DatabaseMetaData {
 
 	public String getDatabaseProductVersion() throws SQLException {
 		connection.checkOpened();
-		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.MySQL)) {
-			PreparedStatement pst = connection.prepareStatement("select @@version");
-			ResultSet rs = pst.executeQuery();
-			if (rs.next()) {
-				return rs.getString(1);
-			}
+		PreparedStatement pst;
+		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.ORACLE)) {
+			pst = connection.prepareStatement("SELECT * FROM v$version WHERE banner LIKE 'Oracle%'");
+		} else if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.POSTGRES)) {
+			pst = connection.prepareStatement("select current_setting('server_version_num')");
+		} else { // default mysql
+			pst = connection.prepareStatement("select @@version");
 		}
+		ResultSet rs = pst.executeQuery();
+		if (rs.next()) {
+			return rs.getString(1);
+		}
+		// todo ideally below return should not be executed
 		return HeraClientConfigHolder.E_DATASOURCE_TYPE.HERA + " v 1.0";
 	}
 
@@ -676,7 +682,7 @@ public class HeraDatabaseMetadata implements DatabaseMetaData {
 		String[] types)
 		throws SQLException
 	{
-		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.MySQL)) {
+		if(connection.getDataSource().equals(HeraClientConfigHolder.E_DATASOURCE_TYPE.MYSQL)) {
 			String query = "SELECT TABLE_SCHEMA AS TABLE_CAT, NULL AS TABLE_SCHEM," +
 					" TABLE_NAME, CASE WHEN TABLE_TYPE='BASE TABLE' THEN CASE WHEN TABLE_SCHEMA = 'mysql' OR TABLE_SCHEMA = 'performance_schema' THEN 'SYSTEM TABLE' " +
 					"ELSE 'TABLE' END WHEN TABLE_TYPE='TEMPORARY' THEN 'LOCAL_TEMPORARY' ELSE TABLE_TYPE END AS TABLE_TYPE, " +

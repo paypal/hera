@@ -26,6 +26,7 @@ import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.concurrent.Executor;
 
+import com.paypal.hera.constants.HeraConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -660,7 +661,11 @@ public class HeraConnection implements Connection {
 	public E_DATASOURCE_TYPE getDataSource() {
 		return datasource;
 	}
-	
+	public String getDataSourceTypeString() {
+		return (datasource == E_DATASOURCE_TYPE.MYSQL) ? HeraConstants.HERA_DB_TYPE_MYSQL :
+				(datasource == E_DATASOURCE_TYPE.POSTGRES) ? HeraConstants.HERA_DB_TYPE_POSTGRES :
+						HeraConstants.HERA_DB_TYPE_ORACLE;
+	}
 	public void setFirstSQL(boolean isFirstSQL) {
 		getHeraClient().setFirstSQL(isFirstSQL);
 	}
