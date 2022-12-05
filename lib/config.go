@@ -166,6 +166,7 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
+	RandomStartMs int
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
@@ -450,6 +451,7 @@ func InitConfig() error {
 	if gAppConfig.EnableTAF {
 		defaultConns = 5
 	}
+	gAppConfig.RandomStartMs = cdb.GetOrDefaultInt("random_start_ms", 20000)
 	gAppConfig.MaxDbConnectsPerSec = cdb.GetOrDefaultInt("max_db_connects_per_sec", defaultConns)
 	gAppConfig.MaxDesiredHealthyWorkerPct = cdb.GetOrDefaultInt("max_desire_healthy_worker_pct", 90)
 	if gAppConfig.MaxDesiredHealthyWorkerPct > 100 {
