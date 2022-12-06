@@ -163,6 +163,7 @@ public class Util {
 
 		cfg.putIfAbsent("bind_ip", "0.0.0.0");
 		cfg.putIfAbsent("bind_port", "11111");
+		cfg.putIfAbsent("random_start_ms", "1");
 		cfg.putIfAbsent("opscfg.hera.server.max_connections","4");
 		cfg.putIfAbsent("log_level","5");
 		cfg.putIfAbsent("rac_sql_interval","0");
