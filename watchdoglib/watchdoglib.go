@@ -127,9 +127,15 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 	if processData.cmd != nil {
 		processData.cmd.Process.Release()
 	}
+
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("about to start '%s'", processData.PathToChildExecutable))
 	processCommand := exec.Command(processData.PathToChildExecutable, processData.Args...)
+	//Set process groupid so if the process dies the all it child will exit
+	processCommand.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 	processCommand.Stdout = os.Stdout
+	processCommand.Stderr = os.Stderr
 	err := processCommand.Start()
 	if err != nil {
 		processData.err = err
@@ -190,58 +196,64 @@ func (w *Watchdog) Start() {
 			select {
 			case <-w.ReqStopWatchdog:
 				logger.GetLogger().Log(logger.Info, "request to stop watchdog noted, exiting watchdog.start() loop")
+				w.Done <- true
 				return
 			case <-signalChild:
 				logger.GetLogger().Log(logger.Debug, "got signal <-signalChild")
-				for i := 0; i < 1000; i++ {
-					pid, err := syscall.Wait4(-1, &ws, syscall.WNOHANG, nil)
-					// pid > 0 => pid is the ID of the child that died, but
-					//  there could be other children that are signalling us
-					//  and not the one we in particular are waiting for.
-					// pid -1 && errno == ECHILD => no new status children
-					// pid -1 && errno != ECHILD => syscall interupped by signal
-					// pid == 0 => no more children to wait for.
-					logger.GetLogger().Log(logger.Info, fmt.Sprintf(" pid=%v  ws=%v and err == %v", pid, ws, err))
-					switch {
-					case err != nil:
-						err = fmt.Errorf("wait4() got error back: '%s' and ws:%v", err, ws)
-						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("warning in reaploop, wait4 returned error: '%s'. ws=%v", err, ws))
-						w.SetErr(err)
-						continue reaploop
-					case pid > 0:
-						for index := range w.processList {
-							if pid == w.processList[index].currPid {
-								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw its child pid: %d, process '%s' finish with waitstatus: %v.", pid, w.processList[index].PathToChildExecutable, ws))
+				for pIndex := range w.processList {
+					procData := w.processList[pIndex]
+					for i := 0; i < 1000; i++ {
+						pid, err := syscall.Wait4(-procData.currPid, &ws, syscall.WNOHANG, nil)
+						// pid > 0 => pid is the ID of the child that died, but
+						//  there could be other children that are signalling us
+						//  and not the one we in particular are waiting for.
+						// pid -1 && errno == ECHILD => no new status children
+						// pid -1 && errno != ECHILD => syscall interupped by signal
+						// pid == 0 => no more children to wait for.
+						logger.GetLogger().Log(logger.Info, fmt.Sprintf(" pid=%v  ws=%v and err == %v", pid, ws, err))
+						switch {
+						case err != nil:
+							err = fmt.Errorf("wait4() got error back: '%s' and ws:%v", err, ws)
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("warning in reaploop, wait4 returned error: '%s'. ws=%v", err, ws))
+							w.SetErr(err)
+							continue reaploop
+						case pid > 0:
+							if pid == procData.currPid {
 								w.mut.Lock()
-								w.processList[index].currPid = 0
-								startError := w.processList[index].startProcess(w.pid)
+								//Sending kill
+								syscall.Kill(-pid, syscall.SIGTERM)
+								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw its child pid: %d, process '%s' finish with waitstatus: %v.", pid, procData.PathToChildExecutable, ws))
+								procData.currPid = 0
+								//Kill mux childs before spawning new processes
+								startError := procData.startProcess(w.pid)
 								w.mut.Unlock()
 								if startError != nil {
 									return
 								}
-								break
+								continue reaploop
+							} else {
+								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw different child pid: %d, process '%s' finish with waitstatus: %v.", pid, procData.PathToChildExecutable, ws))
 							}
+							if w.exitAfterReaping {
+								logger.GetLogger().Log(logger.Alert, "watchdog sees exitAfterReaping. exiting now.")
+								return
+							}
+							continue reaploop
+						case pid == 0:
+							// this is what we get when SIGSTOP is sent on OSX. ws == 0 in this case.
+							// Note that on OSX we never get a SIGCONT signal.
+							// Under WNOHANG, pid == 0 means there is nobody left to wait for,
+							// so just go back to waiting for another SIGCHLD.
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("pid=0 on wait4, (perhaps SIGSTOP?): nobody left to wait for, keep looping. ws = %v", ws))
+							continue reaploop
+						default:
+							logger.GetLogger().Log(logger.Alert, " warning in reaploop: wait4 negative or not our pid, sleep and try again")
+							time.Sleep(time.Millisecond)
 						}
-						if w.exitAfterReaping {
-							logger.GetLogger().Log(logger.Alert, "watchdog sees exitAfterReaping. exiting now.")
-							return
-						}
-						continue reaploop
-					case pid == 0:
-						// this is what we get when SIGSTOP is sent on OSX. ws == 0 in this case.
-						// Note that on OSX we never get a SIGCONT signal.
-						// Under WNOHANG, pid == 0 means there is nobody left to wait for,
-						// so just go back to waiting for another SIGCHLD.
-						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("pid=0 on wait4, (perhaps SIGSTOP?): nobody left to wait for, keep looping. ws = %v", ws))
-						continue reaploop
-					default:
-						logger.GetLogger().Log(logger.Alert, " warning in reaploop: wait4 negative or not our pid, sleep and try again")
-						time.Sleep(time.Millisecond)
-					}
-				} // end for i
-				w.SetErr(fmt.Errorf("could not reap child pid %d or obtain wait4(WNOHANG)==0 even after 1000 attempts", w.pid))
-				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("%s", w.err))
-				return
+						w.SetErr(fmt.Errorf("could not reap child pid %d or obtain wait4(WNOHANG)==0 even after 1000 attempts", w.pid))
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("%s", w.err))
+					} // end for i
+				} //end of processlist
 			} // end select
 		} // end for reaploop
 	}()

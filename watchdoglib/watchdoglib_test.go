@@ -9,11 +9,11 @@ import (
 
 func TestListenInterruptSignalKillWatchDog(t *testing.T) {
 
-	duration := 30 * time.Second
+	duration := 25 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 
 	defer cancel()
-	processList := [][]string{{"/bin/sleep", "5"}, {"/Users/rasamala/sleep", "10"}}
+	processList := [][]string{{"/bin/sleep", "5"}}
 	watcher := NewWatchdog(processList)
 	watcher.Start()
 
@@ -66,23 +66,23 @@ func TestTermChildAndStopWatchDog(t *testing.T) {
 
 func TestWatchDogChildProcess(t *testing.T) {
 
-	duration := 120 * time.Second
+	duration := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 
 	defer cancel()
-	processList := [][]string{{"/bin/sleep", "50"}, {"/bin/sleep", "150"}}
+	processList := [][]string{{"/bin/sleep", "50"}, {"/bin/sleep", "20"}}
 	watcher := NewWatchdog(processList)
 	watcher.Start()
 
 	// give it a second to get started
-	time.Sleep(2 * time.Millisecond)
+	//time.Sleep(20 * time.Millisecond)
 
 	// current Process ID is available here; if 0 then
 	// it is between restarts and you should poll again.
 	pid := watcher.pid
 	fmt.Printf("Watchdog start child process at: %d\n", pid)
 	// ready to stop both child and watchdog
-	// watcher.TermChildAndStopWatchdog <- true
+	watcher.ReqStopWatchdog <- true
 
 	select {
 	case <-watcher.Done:
