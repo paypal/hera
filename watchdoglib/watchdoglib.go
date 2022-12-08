@@ -158,6 +158,8 @@ func (w *Watchdog) Start() {
 	go func() {
 		defer func() {
 			signal.Stop(signalChild) // reverse the effect of the above Notify()
+			w.mut.Lock()
+			defer w.mut.Unlock()
 			if w.processData != nil {
 				if w.processData.cmd != nil {
 					logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog releasing child process by killing it: %d", w.processData.currPid))
@@ -173,9 +175,7 @@ func (w *Watchdog) Start() {
 			}
 			close(w.Done)
 			// can deadlock if we don't close(w.Done) before grabbing the mutex:
-			w.mut.Lock()
 			w.shutdown = true
-			w.mut.Unlock()
 		}()
 		//Iterate over processes and start each child-process daemon
 		err := w.processData.startProcess(w.pid)
