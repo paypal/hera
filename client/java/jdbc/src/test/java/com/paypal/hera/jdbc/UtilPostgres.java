@@ -80,7 +80,7 @@ public class UtilPostgres {
 			Socket clientSocket = new Socket();
 			try {
 				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("0.0.0.0", 5432), 2000);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 5432), 2000);
 				didConn = true;
 				clientSocket.close();
 				break;

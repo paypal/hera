@@ -80,7 +80,7 @@ public class Util {
 			Socket clientSocket = new Socket();
 			try {
 				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("0.0.0.0", 3306), 2000);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 3306), 2000);
 				didConn = true;
 				clientSocket.close();
 				break;
@@ -161,7 +161,7 @@ public class Util {
 		writer.write("cal_pool_stack_enable=true\n");
 		writer.close();
 
-		cfg.putIfAbsent("bind_ip", "0.0.0.0");
+		cfg.putIfAbsent("bind_ip", "127.0.0.1");
 		cfg.putIfAbsent("bind_port", "11111");
 		cfg.putIfAbsent("opscfg.hera.server.max_connections","2");
 		cfg.putIfAbsent("log_level","5");
