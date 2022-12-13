@@ -76,7 +76,6 @@ public class MockSignalFxMeterRegistry extends SignalFxMeterRegistry {
             }
 
         }
-        super.publish();
     }
 
     public Map<String, ArrayList<MeterInfoTest>> getMeterInfoMap() {

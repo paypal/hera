@@ -18,7 +18,7 @@ public class SfxConfig implements SignalFxConfig {
      */
     @Override
     public String uri() {
-        return "https://otelmetrics-pp-observability.us-central1.gcp.dev.paypalinc.com:23081/v2/datapoint";
+        return "";
     }
 
     /**
