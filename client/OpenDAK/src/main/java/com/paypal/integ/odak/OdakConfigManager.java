@@ -70,6 +70,14 @@ public class OdakConfigManager {
 		return false;
 	}
 
+	public void addPoolConfig(String dataSourceName, PoolConfig config) {
+		PoolConfig existingConfig = configs.putIfAbsent(dataSourceName, config);
+		if (existingConfig != null) {
+			throw new OdakConfigException(
+					"Validation error: multiple configs for the same pool specified, or duplicate initialization");
+		}
+	}
+
 	public PoolConfig getPoolConfig(String host) throws InitializationException {
 		if (host == null) {
 			throw new InitializationException("OCP dataSource name cannot be null");
@@ -82,7 +90,7 @@ public class OdakConfigManager {
 		}
 		return config;
 	}
-	
+
 	public void loadConfig() throws OdakConfigException {
 		try {
 			boolean odakEnabled = isODAKEnabled();

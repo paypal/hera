@@ -19,7 +19,7 @@ public class SpringJDBCTemplateTest {
     public void springJdbcTemplate() {
         StringBuilder message = new StringBuilder();
         try {
-            message.append("Spring JDBC Template Test result: ").append(employeeRepository.findById(1)).append("\n");
+            message.append("Spring JDBC Template Test result: ").append(employeeRepository.findById(1, false)).append("\n");
         }catch (Exception e) {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }

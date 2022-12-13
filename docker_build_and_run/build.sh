@@ -18,7 +18,9 @@ if [ "$BUILD_HERA" = true ] ; then
   rsync -av --exclude mock --exclude tests --exclude docker_build_and_run .. src/github.com/paypal/hera
   cd src/github.com/paypal/hera/client/java/jdbc/
   mvn clean install -DskipTests;
-  cd ../../../../../../../
+  cd ../../OpenDAK/
+  mvn clean install -DskipTests;
+  cd ../../../../../../
   docker build -f HeraDockerfile -t hera-oss .
 fi
 

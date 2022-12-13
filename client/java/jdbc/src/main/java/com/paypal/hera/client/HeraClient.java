@@ -48,4 +48,6 @@ public interface HeraClient {
 
 	public void setReadOnly(boolean readOnly);
 	public boolean isReadOnly();
+
+	public String getHeraClientConnID();
 }

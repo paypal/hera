@@ -1494,7 +1494,7 @@ if (ngx.shared.mock_response:get("DISABLE_LOG") == nil) then
 	red:set_timeouts(1000, 1000, 1000)
 	local ok, err = red:connect("127.0.0.1", 6379)
 	if not ok then
-		log_to_file(ngx.DEBUG, "failed to connect to redis: " .. sock_id + " " + err)
+		log_to_file(ngx.DEBUG, "failed to connect to redis: " .. sock_id .. " " .. err)
 	end
 end
 

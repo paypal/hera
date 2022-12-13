@@ -15,6 +15,7 @@ import java.sql.SQLXML;
 import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Struct;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -61,9 +62,9 @@ public class OdakConnection implements Connection {
 		setCreateTime(System.currentTimeMillis());
 		setLastUseTime(System.currentTimeMillis());
 		if(conn instanceof HeraConnection){
-			HeraConnection occConn = (HeraConnection) conn;
+			HeraConnection heraConnection = (HeraConnection) conn;
 			try {
-				this.occConnUUID = occConn.getClientInfo(HeraConnection.OCC_CLIENT_CONN_ID);
+				this.occConnUUID = heraConnection.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID);
 			} catch (SQLException e) {
 				String msg = "getClientInfo failed. Occ connection id will not be populated";
 				logger.info("ODAK_OCC_CONN_ID - {}", msg);
@@ -281,7 +282,7 @@ public class OdakConnection implements Connection {
 		}
 	}
 
-	public HeraConnection getOccConnection() {
+	public HeraConnection getHeraConnection() {
 		if (jdbcConn instanceof HeraConnection) {
 			return (HeraConnection) jdbcConn;
 		}
@@ -446,7 +447,8 @@ public class OdakConnection implements Connection {
 
 	@Override
 	public void rollback() throws SQLException {
-		logger.debug("OCPPoolableConnection:Rollback()");
+		logger.debug("OCPPoolableConnection:Rollback() {}" +
+				jdbcConn.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID));
 		jdbcConn.rollback();
 		/*
 		 * If rollback is called from app code, we don't want to set dirty flag
@@ -677,7 +679,7 @@ public class OdakConnection implements Connection {
 
 	@Override
 	public String getClientInfo(String name) throws SQLException {
-		throw new UnsupportedOperationException(UNSUPPORTED_OPERATION);
+		return getHeraConnection().getClientInfo(name);
 	}
 
 	@Override

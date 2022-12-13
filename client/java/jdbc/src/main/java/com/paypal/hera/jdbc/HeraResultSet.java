@@ -24,10 +24,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import com.paypal.hera.client.HeraClient;
 import com.paypal.hera.conf.HeraClientConfigHolder;
@@ -37,6 +34,7 @@ import com.paypal.hera.ex.HeraIOException;
 import com.paypal.hera.ex.HeraRuntimeException;
 import com.paypal.hera.ex.HeraSQLException;
 import com.paypal.hera.ex.HeraTimeoutException;
+import com.paypal.hera.util.HeraColumnMeta;
 import com.paypal.hera.util.HeraJdbcConverter;
 
 public class HeraResultSet implements ResultSet {
@@ -74,11 +72,18 @@ public class HeraResultSet implements ResultSet {
 		data = new ArrayList<ArrayList<byte[]>>();
 		currRowIdx = 0;
 	}
-	public  HeraResultSet(ArrayList<ArrayList<byte[]>> data, HashMap<String, Integer> columnIndexes) {
+	public  HeraResultSet(HeraConnection connection, HeraStatement statement,
+						  ArrayList<ArrayList<byte[]>> data, HashMap<String, Integer> columnIndexes) {
+		this.connection = connection;
+		this.stmt = statement;
+		HeraColumnMeta meta = new HeraColumnMeta();
+		meta.setName("GENERATED_ID");
+		meta.setType(2);
+		this.metaData = new HeraResultSetMetaData(new ArrayList<>(Collections.singletonList(meta)));
 		isFetchDone = true;
 		this.data = data;
 		this.columnIndexes = columnIndexes;
-		currRowIdx = 0;
+		currRowIdx = -1;
 	}
 	void fetchAllData() throws HeraExceptionBase {
 		while (!isFetchDone) {
