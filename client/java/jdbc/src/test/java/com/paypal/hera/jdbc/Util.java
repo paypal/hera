@@ -96,6 +96,24 @@ public class Util {
 		}
 		return didConn;
 	}
+	static boolean checkDockerLogs(String cmd) {
+		for(int i = 0; i < 10; i++){
+			try{
+				ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
+				builder.redirectErrorStream(true);
+				Process process = builder.start();
+				InputStream is = process.getInputStream();
+				BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+				if (reader.readLine() != null){
+					return true;
+				}
+			}
+			catch (IOException ex){
+				ex.printStackTrace();
+			}
+		}
+		return false;
+	}
 	static void startMySqlContainer() throws IOException, InterruptedException {
 		if(checkMySqlIsUp()) return;
 
@@ -112,10 +130,10 @@ public class Util {
 						"-e MYSQL_DATABASE=heratestdb " +
 						"-d mysql:8.0.31").waitFor();
 
-		// best is to check this in mysql logs: "ready for start up"
-		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
- 		// putting a long sleep is a work around
-		Thread.sleep(15000);
+		String cmd = "grep -i \"ready for start up\" <(docker logs mysql55 2>&1)";
+		if (!checkDockerLogs(cmd)){
+			throw new RuntimeException("mysql docker didn't start");
+		}
 
 		if (!checkMySqlIsUp()) {
 			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
@@ -123,8 +141,56 @@ public class Util {
 			throw new RuntimeException("mysql docker did not come up");
 		}
 	}
+
+	static boolean checkOccMockUp() {
+		boolean didConn = false;
+		for (int i = 0; i < 10; i++) {
+			Socket clientSocket = new Socket();
+			try {
+				Thread.sleep(1222);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 13916), 2000);
+				didConn = true;
+				clientSocket.close();
+				break;
+			} catch (ConnectException e) {
+				continue;
+			} catch (SocketTimeoutException e) {
+				continue;
+			} catch (IOException e) {
+				continue;
+			} catch (InterruptedException e) {
+				continue;
+			}
+		}
+		return didConn;
+	}
+	static void startOccMock() throws IOException, InterruptedException {
+		if(checkOccMockUp()) return;
+
+		String dockerName = "occmock";
+		Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+		Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
+		// ensure that localhost's port is mapped to container port,
+		// else hera worker can not reach mysql
+		Runtime.getRuntime()
+				.exec("docker run -d -e TZ=America/Los_Angeles " +
+						"-p 13916:13916 artifactory.paypalcorp.com/javadataaccess/daloccmock:latest --name "
+						+dockerName).waitFor();
+
+		// best is to check this in mysql logs: "ready for start up"
+		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
+		// putting a long sleep is a work around
+		Thread.sleep(15000);
+
+		if (!checkOccMockUp()) {
+			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
+			throw new RuntimeException("occmock docker did not come up");
+		}
+	}
 	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
 		startMySqlContainer();
+//		startOccMock();
 		if (cfg == null) {
 			cfg = new HashMap<String,String>();
 		}

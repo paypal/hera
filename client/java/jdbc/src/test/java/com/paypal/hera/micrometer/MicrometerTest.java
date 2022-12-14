@@ -1,5 +1,7 @@
 package com.paypal.hera.micrometer;
 
+import com.paypal.dal.occmockclient.OCCMockAction;
+import com.paypal.dal.occmockclient.OCCMockHelper;
 import com.paypal.hera.client.HeraClientImpl;
 import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.jdbc.Util;
@@ -29,7 +31,7 @@ public class MicrometerTest {
     private static final String sINT_VAL2 = "777334";
     private static final Integer iINT_VAL2 = 777334;
     private static final Integer iINT_VAL3 = 777335;
-    private static final Integer STEP_MS = 20000;
+    private static final Integer STEP_MS = 60000;
 
 
     private static MicrometerTestSetup setup = MicrometerTestSetup.getInstance();
@@ -163,7 +165,7 @@ public class MicrometerTest {
     }
 
     @Test
-    public void test_prepare_st() throws IOException, SQLException, InterruptedException {
+    public void testCounts() throws IOException, SQLException, InterruptedException {
         Statement st = dbConn.createStatement();
         cleanTable(st, sID_START, 20, false);
         final int ROWS = 10;
@@ -188,9 +190,16 @@ public class MicrometerTest {
 
         pst.clearParameters();
 
-        pst.setInt(1, iINT_VAL1);
-        pst.setString(2, "abcd");
-        pst.executeQuery();
+        try{
+            OCCMockHelper.addMock("fetch_fail", OCCMockAction.TIMEOUT_ON_FETCH);
+            pst = dbConn.prepareStatement("select /* fetch_fail */ int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+            pst.setInt(1, iINT_VAL1);
+            pst.setString(2, "abcd");
+            pst.executeQuery();
+        }
+        finally{
+            OCCMockHelper.removeMock("fetch_fail");
+        }
 
         cleanTable(dbConn.createStatement(), sID_START, 20, true);
 
@@ -219,7 +228,7 @@ public class MicrometerTest {
                 int val = ((Double) info.getValue()).intValue();
                 execSum += val;
                 Assert.assertEquals("unknown", info.getHost());
-                Assert.assertEquals(0, info.getSqlHash());
+                Assert.assertEquals("0", info.getSqlHash());
             }
             Assert.assertEquals(19, execSum);
 
@@ -228,7 +237,7 @@ public class MicrometerTest {
                 int val = ((Double) info.getValue()).intValue();
                 execFailSum += val;
                 Assert.assertEquals("unknown", info.getHost());
-                Assert.assertEquals(0, info.getSqlHash());
+                Assert.assertEquals("0", info.getSqlHash());
             }
             Assert.assertEquals(1, execFailSum);
 
@@ -237,7 +246,7 @@ public class MicrometerTest {
                 int val = ((Double) info.getValue()).intValue();
                 fetchSum += val;
                 Assert.assertEquals("unknown", info.getHost());
-                Assert.assertEquals(0, info.getSqlHash());
+                Assert.assertEquals("0", info.getSqlHash());
 
             }
             Assert.assertEquals(4, fetchSum);
