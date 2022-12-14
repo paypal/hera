@@ -102,6 +102,7 @@ func (m *mux) setupConfig() error {
 	} else if m.wType == PostgresWorker {
 		m.appcfg["child.executable"] = "postgresworker"
 	}
+	m.appcfg["random_start_ms"] = "1"
 	err := createCfg(m.appcfg, "hera")
 	if err != nil {
 		return err
