@@ -12,4 +12,6 @@ public interface HeraClientConnection {
 	public void close() throws HeraIOException;
 	public int getSoTimeout() throws SocketException;
 	public void setSoTimeout(int tmo) throws SocketException ;
+
+	public String getConnectionId();
 }

@@ -17,6 +17,16 @@ public class EmployeeQueries {
             "FROM employee " +
             "where ID= :id";
 
+    public static final String FIND_BY_NAME = "SELECT /* Employee.FIND_BY_NAME */ " +
+            "ID, NAME, TIME_CREATED, VERSION " +
+            "FROM employee " +
+            "where NAME= :name";
+
+
+    public static final String FIND_MAX_ID = "SELECT /* Employee.FIND_MAX_ID */ " +
+            "MAX(ID) " +
+            "FROM employee";
+
     /**
      * Employee.UPDATE_BY_ID
      */
@@ -28,6 +38,6 @@ public class EmployeeQueries {
      * Employee.INSERT
      */
     public static final String INSERT = "INSERT /* Employee.INSERT */ INTO employee " + 
-            "(NAME, TIME_CREATED, VERSION) " + 
+            "(NAME, TIME_CREATED, VERSION) " +
             "VALUES (:name, :timeCreated, :version)";
 }

@@ -122,6 +122,7 @@ public class MySqlLastInsertIdTest {
 		pst2.setString(2, "eleven");
 		pst2.executeUpdate();
 		rs = pst2.getGeneratedKeys();
+		rs.next();
 		long id = -1;
 		try {
 			id = rs.getLong(1);
@@ -136,6 +137,7 @@ public class MySqlLastInsertIdTest {
 		pst2.setString(2, "twelve");
 		pst2.executeUpdate();
 		ResultSet rs3 = pst2.getGeneratedKeys();
+		rs3.next();
 		long id3 = -1;
 		try {
 			id3 = rs3.getLong(1);
@@ -188,6 +190,7 @@ public class MySqlLastInsertIdTest {
 		pst2.setString(2, "eleven b");
 		pst2.executeUpdate();
 		rs = pst2.getGeneratedKeys();
+		rs.next();
 		id = -1;
 		try {
 			id = rs.getLong(1);

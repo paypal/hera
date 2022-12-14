@@ -141,7 +141,8 @@ public class OdakAdapter implements CmConnectionCallback {
 			try {
 				if (conn.getAutoCommit()) {
 					// sih.enableForUse();
-					logger.info("Exception received. Not in transaction. Rolling back - conn: {},  exception: {} ",
+					if (e != null)
+						logger.info("Exception received. Not in transaction. Rolling back - conn: {},  exception: {} ",
 							conn, e.getMessage());
 					conn.rollback();
 					conn.setDirty(false);

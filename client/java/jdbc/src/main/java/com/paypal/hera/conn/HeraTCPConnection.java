@@ -28,6 +28,8 @@ public class HeraTCPConnection implements HeraClientConnection {
 	private Socket socket;
 	private OutputStream requestStream;
 	private InputStream responseStream;
+
+	private final String connectionId = java.util.UUID.randomUUID().toString();
 	
 	public HeraTCPConnection(HeraConnectionConfig config) throws HeraExceptionBase {
 			int retries = 0;
@@ -117,6 +119,11 @@ public class HeraTCPConnection implements HeraClientConnection {
 	@Override
 	public void setSoTimeout(int tmo) throws SocketException {
 		socket.setSoTimeout(tmo);		
+	}
+
+	@Override
+	public String getConnectionId(){
+		return connectionId;
 	}
 
 }

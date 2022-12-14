@@ -17,6 +17,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.naming.NamingException;
 
+import com.paypal.hera.client.HeraClient;
+import com.paypal.hera.jdbc.HeraConnection;
+import com.paypal.hera.jdbc.HeraDriver;
 import org.apache.commons.lang3.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -157,7 +160,8 @@ public class OdakPool {
 			// concurrently afterwards.
 			if (conn.tryToSetActiveFromIdle()) {
 				// may not be idle anymore if in-process of getting closed.
-				logger.debug("Getting connection from the OCP pool {}", getName());
+				logger.debug("Getting connection from the OCP pool {} {}", getName(),
+						conn.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID));
 				addActiveConn(conn); // not have to be atomic with poll
 				return conn;
 			} else {
@@ -401,7 +405,8 @@ public class OdakPool {
 	 * @param conn
 	 */
 	void returnConnection(OdakConnection conn) throws SQLException{
-		logger.debug("Returning connection to pool {}", getName());
+		logger.debug("Returning connection to pool {} {}", getName(),
+				conn.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID));
 		conn.rollbackDirty();
 		removeActiveConn(conn);
 		/*
@@ -777,7 +782,8 @@ public class OdakPool {
 			return;
 		}
 		freeConns.add(conn);
-		logger.debug("Connection is successfully returned back to the pool {}", getName());
+		logger.debug("Connection is successfully returned back to the pool {} {}", getName(),
+				conn.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID));
 	}
 
 	private void removeIdleConn(OdakConnection conn) {

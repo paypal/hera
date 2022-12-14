@@ -21,7 +21,7 @@ class HeraIntegratedSpringApplicationTests {
             String sslEnv = System.getenv("HERA_DISABLE_SSL");
             if (sslEnv != null && sslEnv.equalsIgnoreCase("true"))
                 disableSSL = true;
-            String host = "1:127.0.0.1:10101";
+            String host = "1:127.0.0.1:10102";
             Properties props = new Properties();
             System.setProperty("javax.net.ssl.trustStore", "src/main/resources/cert/hera.jks");
             System.setProperty("javax.net.ssl.trustStorePassword", "herabox");
