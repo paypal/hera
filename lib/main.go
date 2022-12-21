@@ -34,6 +34,22 @@ import (
 // the "infinite loop" as a goroutine and waits on the worker broker channel for the signal to exit
 func Run() {
 	signal.Ignore(syscall.SIGPIPE)
+	processPanicSignal := make(chan os.Signal, 1)
+	mux_process_id := syscall.Getpid()
+	signal.Notify(processPanicSignal, syscall.SIGTERM, syscall.SIGABRT, syscall.SIGHUP, syscall.SIGINT)
+
+	//Go routine will listen on MUX dealth signal and cleanup its child resources
+	go func() {
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Mux Added Signal listener for MUX process: %d", mux_process_id))
+		sig := <-processPanicSignal //When it receives death signal
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Receiced terminate signal: %s for MUX: %d", sig.String(), mux_process_id))
+		signal.Stop(processPanicSignal)
+		err := syscall.Kill(-mux_process_id, syscall.SIGTERM)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Failed to reeleasing MUX process: %d, and error is: %s", mux_process_id, err))
+		}
+	}()
+
 	namePtr := flag.String("name", "", "module name in v$session table")
 	flag.Parse()
 
