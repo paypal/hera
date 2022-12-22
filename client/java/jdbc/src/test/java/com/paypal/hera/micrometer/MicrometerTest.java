@@ -1,13 +1,12 @@
 package com.paypal.hera.micrometer;
 
-import com.paypal.dal.occmockclient.OCCMockAction;
-import com.paypal.dal.occmockclient.OCCMockHelper;
 import com.paypal.hera.client.HeraClientImpl;
 import com.paypal.hera.conf.HeraClientConfigHolder;
-import com.paypal.hera.jdbc.Util;
+import com.paypal.hera.jdbc.UtilHeraBox;
 import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.paypal.dal.heramockclient.*;
 
 
 import java.io.IOException;
@@ -17,6 +16,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static com.paypal.hera.constants.MicrometerConsts.*;
+import static org.junit.Assert.fail;
 
 public class MicrometerTest {
     private static Connection dbConn;
@@ -44,8 +44,8 @@ public class MicrometerTest {
 
     @BeforeClass
     public static void setUp() throws Exception {
-        Util.makeAndStartHeraMux(null);
-        host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
+        UtilHeraBox.makeAndStartHeraBox();
+        host = System.getProperty("SERVER_URL", "1:127.0.0.1:10102");
         table = System.getProperty("TABLE_NAME", "jdbc_hera_test");
         HeraClientConfigHolder.clear();
         Properties props = new Properties();
@@ -159,8 +159,9 @@ public class MicrometerTest {
     }
 
     @AfterClass
-    public static void cleanUpAll() throws SQLException {
+    public static void cleanUpAll() throws SQLException, IOException {
         dbConn.close();
+        UtilHeraBox.stopHeraBox();
         LOGGER.info("Done");
     }
 
@@ -190,16 +191,16 @@ public class MicrometerTest {
 
         pst.clearParameters();
 
-        try{
-            OCCMockHelper.addMock("fetch_fail", OCCMockAction.TIMEOUT_ON_FETCH);
+//        try{
+//            OCCMockHelper.addMock("fetch_fail", OCCMockAction.TIMEOUT_ON_FETCH);
             pst = dbConn.prepareStatement("select /* fetch_fail */ int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
             pst.setInt(1, iINT_VAL1);
             pst.setString(2, "abcd");
             pst.executeQuery();
-        }
-        finally{
-            OCCMockHelper.removeMock("fetch_fail");
-        }
+//        }
+//        finally{
+//            OCCMockHelper.removeMock("fetch_fail");
+//        }
 
         cleanTable(dbConn.createStatement(), sID_START, 20, true);
 
@@ -212,15 +213,15 @@ public class MicrometerTest {
             ArrayList<MeterInfoTest> fetchSuccess = publishedData.get(FETCH_SUCCESS_COUNT);
 
             if(execSuccess == null){
-                Assert.fail("No data sent");
+                fail("No data sent");
             }
 
             if(execFail == null){
-                Assert.fail("No data sent");
+                fail("No data sent");
             }
 
             if(fetchSuccess == null){
-                Assert.fail("No data sent");
+                fail("No data sent");
             }
 
             int execSum = 0;
@@ -250,6 +251,36 @@ public class MicrometerTest {
 
             }
             Assert.assertEquals(4, fetchSum);
+        }
+
+    }
+
+    @Test
+    public void testMock() throws SQLException {
+        Statement st = dbConn.createStatement();
+        cleanTable(st, sID_START, 20, false);
+        final int ROWS = 10;
+        for (int i = 0; i < ROWS; i++)
+            Assert.assertTrue("Insert row", st.executeUpdate("insert into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + i) + "," + sINT_VAL1 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+        Assert.assertTrue("Insert row", st.executeUpdate("insert into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + ROWS) + "," + sINT_VAL2 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+        dbConn.commit();
+
+        PreparedStatement pst;
+
+        HERAMockHelper.addMock("testMock", HERAMockAction.RESPOND_WITH_BACKLOG);
+        pst = dbConn.prepareStatement("select /* testMock */ int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+        pst.setInt(1, iINT_VAL1);
+        pst.setString(2, "abcd");
+        pst.setFetchSize(0);
+        try{
+            pst.executeQuery();
+            fail("should've failed");
+        }
+        catch(Exception ex){
+            ex.printStackTrace();
+        }
+        finally{
+            HERAMockHelper.removeMock("testMock");
         }
 
     }

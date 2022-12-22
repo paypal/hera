@@ -142,55 +142,8 @@ public class Util {
 		}
 	}
 
-	static boolean checkOccMockUp() {
-		boolean didConn = false;
-		for (int i = 0; i < 10; i++) {
-			Socket clientSocket = new Socket();
-			try {
-				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("127.0.0.1", 13916), 2000);
-				didConn = true;
-				clientSocket.close();
-				break;
-			} catch (ConnectException e) {
-				continue;
-			} catch (SocketTimeoutException e) {
-				continue;
-			} catch (IOException e) {
-				continue;
-			} catch (InterruptedException e) {
-				continue;
-			}
-		}
-		return didConn;
-	}
-	static void startOccMock() throws IOException, InterruptedException {
-		if(checkOccMockUp()) return;
-
-		String dockerName = "occmock";
-		Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
-		Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
-		// ensure that localhost's port is mapped to container port,
-		// else hera worker can not reach mysql
-		Runtime.getRuntime()
-				.exec("docker run -d -e TZ=America/Los_Angeles " +
-						"-p 13916:13916 artifactory.paypalcorp.com/javadataaccess/daloccmock:latest --name "
-						+dockerName).waitFor();
-
-		// best is to check this in mysql logs: "ready for start up"
-		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
-		// putting a long sleep is a work around
-		Thread.sleep(15000);
-
-		if (!checkOccMockUp()) {
-			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
-			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
-			throw new RuntimeException("occmock docker did not come up");
-		}
-	}
 	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
 		startMySqlContainer();
-//		startOccMock();
 		if (cfg == null) {
 			cfg = new HashMap<String,String>();
 		}
@@ -227,7 +180,7 @@ public class Util {
 		writer.write("cal_pool_stack_enable=true\n");
 		writer.close();
 
-		cfg.putIfAbsent("bind_ip", "127.0.0.1");
+		cfg.putIfAbsent("bind_ip", "0.0.0.0");
 		cfg.putIfAbsent("bind_port", "11111");
 		cfg.putIfAbsent("opscfg.hera.server.max_connections","2");
 		cfg.putIfAbsent("log_level","5");
@@ -257,7 +210,7 @@ public class Util {
 			Thread.sleep(1222);
 			Socket clientSocket = new Socket();
 			try {
-				clientSocket.connect(new InetSocketAddress("localhost", 11111), 2000);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 11111), 2000);
 			} catch (ConnectException e) {
 				continue;
 			} catch (SocketTimeoutException e) {
