@@ -177,9 +177,8 @@ public class MicrometerTest {
 
         PreparedStatement pst;
 
-        pst = dbConn.prepareStatement("select int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+        pst = dbConn.prepareStatement("select /* fetch_fail */ int_val, str_val from " + table + " where int_val=?");
         pst.setInt(1, iINT_VAL1);
-        pst.setString(2, "abcd");
         pst.setFetchSize(0);
         pst.executeQuery();
 
@@ -189,20 +188,20 @@ public class MicrometerTest {
         pst.setInt(1, iINT_VAL2);
         pst.executeQuery();
 
-        pst.clearParameters();
+        HERAMockHelper.addMock("fetch_fail", "0 3:3 2,3:3 0,, NEXT_NEWSTRING 0 8:4 777333,6:3 ,, NEXT_NEWSTRING 6,");
 
-//        try{
-//            OCCMockHelper.addMock("fetch_fail", OCCMockAction.TIMEOUT_ON_FETCH);
-            pst = dbConn.prepareStatement("select /* fetch_fail */ int_val, str_val, float_val from " + table + " where int_val=? and str_val=?");
+        try{
             pst.setInt(1, iINT_VAL1);
-            pst.setString(2, "abcd");
             pst.executeQuery();
-//        }
-//        finally{
-//            OCCMockHelper.removeMock("fetch_fail");
-//        }
+            fail("should've failed");
 
-        cleanTable(dbConn.createStatement(), sID_START, 20, true);
+        }
+        catch (Exception ex){
+            ex.printStackTrace();
+        }
+        finally{
+            HERAMockHelper.removeMock("fetch_fail");
+        }
 
         Thread.sleep(STEP_MS);
 
@@ -211,6 +210,7 @@ public class MicrometerTest {
             ArrayList<MeterInfoTest> execSuccess = publishedData.get(EXEC_SUCCESS_COUNT);
             ArrayList<MeterInfoTest> execFail = publishedData.get(EXEC_FAIL_COUNT);
             ArrayList<MeterInfoTest> fetchSuccess = publishedData.get(FETCH_SUCCESS_COUNT);
+            ArrayList<MeterInfoTest> fetchFail = publishedData.get(FETCH_FAIL_COUNT);
 
             if(execSuccess == null){
                 fail("No data sent");
@@ -224,6 +224,10 @@ public class MicrometerTest {
                 fail("No data sent");
             }
 
+            if(fetchFail == null){
+                fail("No data sent");
+            }
+
             int execSum = 0;
             for (MeterInfoTest info : execSuccess) {
                 int val = ((Double) info.getValue()).intValue();
@@ -231,7 +235,7 @@ public class MicrometerTest {
                 Assert.assertEquals("unknown", info.getHost());
                 Assert.assertEquals("0", info.getSqlHash());
             }
-            Assert.assertEquals(19, execSum);
+            Assert.assertTrue(execSum >= 17);
 
             int execFailSum = 0;
             for (MeterInfoTest info : execFail) {
@@ -240,7 +244,7 @@ public class MicrometerTest {
                 Assert.assertEquals("unknown", info.getHost());
                 Assert.assertEquals("0", info.getSqlHash());
             }
-            Assert.assertEquals(1, execFailSum);
+            Assert.assertEquals(2, execFailSum);
 
             int fetchSum = 0;
             for (MeterInfoTest info : fetchSuccess) {
@@ -250,7 +254,16 @@ public class MicrometerTest {
                 Assert.assertEquals("0", info.getSqlHash());
 
             }
-            Assert.assertEquals(4, fetchSum);
+            Assert.assertEquals(3, fetchSum);
+
+            int fetchFailSum = 0;
+            for (MeterInfoTest info : fetchFail) {
+                int val = ((Double) info.getValue()).intValue();
+                fetchFailSum += val;
+                Assert.assertEquals("unknown", info.getHost());
+                Assert.assertEquals("0", info.getSqlHash());
+            }
+            Assert.assertEquals(1, fetchFailSum);
         }
 
     }
