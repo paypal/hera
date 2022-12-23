@@ -170,24 +170,26 @@ func Run() {
 
 	go srv.Run()
 
-	// Defer release resource in case of any abnormal exit of for application
-	defer releaseResource(mux_process_id)
-
-	<-GetWorkerBrokerInstance().Stopped()
-
 	//
 	// calling releasectxresource right before exit only serves as an example on how
 	// to release resources allocated by cal for a given thread group, which in
 	// this case is thread group calDefaultThreadGroupName.
 	//
-	cal.ReleaseCxtResource()
+	defer func() {
+		cal.ReleaseCxtResource()
+	}()
+
+	// Defer release resource in case of any abnormal exit of for application
+	defer handlePanicAndReleaseResource(mux_process_id)
+
+	<-GetWorkerBrokerInstance().Stopped()
 }
 
 /*
  * When mux dies with any reason like death from explisit OS signal or due to any panioc errors
  * It will kills the all mux childred by using mux process ID and relase CAL resources
  */
-func releaseResource(mux_process_id int) {
+func handlePanicAndReleaseResource(mux_process_id int) {
 	// detect if panic occurs or not
 	panic_data := recover()
 	if panic_data != nil {
@@ -198,11 +200,18 @@ func releaseResource(mux_process_id int) {
 			logger.GetLogger().Log(logger.Alert, "Failed to fetch process group: ", err)
 		}
 		err = syscall.Kill(-pgid, syscall.SIGTERM)
-		time.Sleep(10 * time.Second)
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Failed to reeleasing MUX process: %d, and error is: %s", mux_process_id, err))
 		}
-		logger.GetLogger().Log(logger.Alert, "Successfully released resources")
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Successfully released resources related MUX process: %d", mux_process_id))
+		<-GetWorkerBrokerInstance().Stopped()
+
+		//
+		// calling releasectxresource right before exit only serves as an example on how
+		// to release resources allocated by cal for a given thread group, which in
+		// this case is thread group calDefaultThreadGroupName.
+		//
+		cal.ReleaseCxtResource()
 		os.Exit(1)
 	}
 }
