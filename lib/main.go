@@ -34,21 +34,12 @@ import (
 // the "infinite loop" as a goroutine and waits on the worker broker channel for the signal to exit
 func Run() {
 	signal.Ignore(syscall.SIGPIPE)
-	processPanicSignal := make(chan os.Signal, 1)
 	mux_process_id := syscall.Getpid()
-	signal.Notify(processPanicSignal, syscall.SIGTERM, syscall.SIGABRT, syscall.SIGHUP, syscall.SIGINT)
 
-	//Go routine will listen on MUX dealth signal and cleanup its child resources
-	go func() {
-		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Mux Added Signal listener for MUX process: %d", mux_process_id))
-		sig := <-processPanicSignal //When it receives death signal
-		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Receiced terminate signal: %s for MUX: %d", sig.String(), mux_process_id))
-		signal.Stop(processPanicSignal)
-		err := syscall.Kill(-mux_process_id, syscall.SIGTERM)
-		if err != nil {
-			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Failed to reeleasing MUX process: %d, and error is: %s", mux_process_id, err))
-		}
-	}()
+	//Register for mux process death signals
+	go muxProcessSingalHandling(mux_process_id)
+	// Defer release resource in case of any abnormal exit of for application
+	defer releaseResource(mux_process_id)
 
 	namePtr := flag.String("name", "", "module name in v$session table")
 	flag.Parse()
@@ -185,7 +176,31 @@ func Run() {
 	go srv.Run()
 
 	<-GetWorkerBrokerInstance().Stopped()
+}
 
+/*
+ * It register for mux death signal from OS and release resources
+ */
+func muxProcessSingalHandling(mux_process_id int) {
+	processPanicSignal := make(chan os.Signal, 1)
+	signal.Notify(processPanicSignal, syscall.SIGTERM, syscall.SIGABRT, syscall.SIGHUP, syscall.SIGINT)
+	logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Mux Added Signal listener for MUX process: %d", mux_process_id))
+	sig := <-processPanicSignal //When it receives death signal
+	logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Receiced terminate signal: %s for MUX: %d", sig.String(), mux_process_id))
+	signal.Stop(processPanicSignal)
+	releaseResource(mux_process_id)
+}
+
+/*
+ * When mux dies with any reason like death from explisit OS signal or due to any panioc errors
+ * It will kills the all mux childred by using mux process ID and relase CAL resources
+ */
+func releaseResource(mux_process_id int) {
+	logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Mux process: %d exited, so releasing its children and other resources", mux_process_id))
+	err := syscall.Kill(-mux_process_id, syscall.SIGTERM)
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Failed to reeleasing MUX process: %d, and error is: %s", mux_process_id, err))
+	}
 	//
 	// calling releasectxresource right before exit only serves as an example on how
 	// to release resources allocated by cal for a given thread group, which in
