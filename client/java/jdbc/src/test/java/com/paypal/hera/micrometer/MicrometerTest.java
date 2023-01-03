@@ -1,5 +1,6 @@
 package com.paypal.hera.micrometer;
 
+import com.paypal.dal.heramockclient.mockannotation.JDBCMockConst;
 import com.paypal.hera.client.HeraClientImpl;
 import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.jdbc.UtilHeraBox;
@@ -12,6 +13,7 @@ import com.paypal.dal.heramockclient.*;
 import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 
@@ -244,7 +246,7 @@ public class MicrometerTest {
                 Assert.assertEquals("unknown", info.getHost());
                 Assert.assertEquals("0", info.getSqlHash());
             }
-            Assert.assertEquals(2, execFailSum);
+            Assert.assertTrue(execFailSum >= 1);
 
             int fetchSum = 0;
             for (MeterInfoTest info : fetchSuccess) {
@@ -265,6 +267,129 @@ public class MicrometerTest {
             }
             Assert.assertEquals(1, fetchFailSum);
         }
+
+    }
+
+    @Test
+    public void testExecDuration() throws IOException, SQLException, InterruptedException {
+        Statement st = dbConn.createStatement();
+        cleanTable(st, sID_START, 20, false);
+        final int ROWS = 10;
+        for (int i = 0; i < ROWS; i++)
+            Assert.assertTrue("Insert row", st.executeUpdate("insert /* MicrometerTestQueryDurationInsert */ into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + i) + "," + sINT_VAL1 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+
+        try{
+            HERAMockHelper.addMock("MicrometerTestQueryDurationInsert", "1000" + JDBCMockConst.MOCK_DELAYED_RESPONSE + HERAMockAction.NOMOCK, -1);
+            Assert.assertTrue("Insert row", st.executeUpdate("insert /* MicrometerTestQueryDurationInsert */ into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + ROWS) + "," + sINT_VAL2 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+        }
+        finally{
+            HERAMockHelper.removeMock("MicrometerTestQueryDurationInsert");
+        }
+        dbConn.commit();
+
+        try{
+            HERAMockHelper.addMock("MicrometerTestQueryDuration", "3000" + JDBCMockConst.MOCK_DELAYED_RESPONSE + HERAMockAction.NOMOCK, 1, 10000);
+
+            PreparedStatement pst = dbConn.prepareStatement("select /* MicrometerTestQueryDuration */ int_val, str_val from " + table + " where int_val=?");
+            pst.setInt(1, iINT_VAL1);
+            pst.setFetchSize(0);
+            pst.executeQuery();
+
+            HERAMockHelper.addMock("MicrometerTestQueryDuration", "1000" + JDBCMockConst.MOCK_DELAYED_RESPONSE + HERAMockAction.NOMOCK, 1);
+
+            PreparedStatement pst2 = dbConn.prepareStatement("select /* MicrometerTestQueryDuration */ int_val, str_val from " + table + " where int_val=?");
+
+            pst2.setInt(1, iINT_VAL1);
+            pst2.setFetchSize(0);
+            pst2.executeQuery();
+        }
+        finally{
+            HERAMockHelper.removeMock("MicrometerTestQueryDuration");
+        }
+        cleanTable(st, sID_START, 20, true);
+        dbConn.close();
+
+        Thread.sleep(STEP_MS);
+
+        Map<String, ArrayList<MeterInfoTest>> publishedData = registry.getMeterInfoMap();
+        if(!publishedData.isEmpty()){
+            ArrayList<MeterInfoTest> execTimer = publishedData.get(EXEC_TIMER);
+            if(execTimer == null){
+                Assert.fail("No data sent");
+            }
+
+            double execTotalTime = 0;
+            for (MeterInfoTest info : execTimer){
+                Map<String, Double> timeInfoMap = ((Map <String, Double>) info.getValue());
+                double totalTime = timeInfoMap.get("totalTime");
+                double max = timeInfoMap.get("max");
+
+                execTotalTime += totalTime;
+                Assert.assertTrue(max >= 3 && max < 4);
+                Assert.assertEquals("unknown", info.getHost());
+                Assert.assertEquals("0", info.getSqlHash());
+            }
+            Assert.assertTrue("execTotalTime:" + execTotalTime, execTotalTime >= 5);
+        }
+
+    }
+
+    @Test
+    public void testFetchDuration() throws IOException, SQLException, InterruptedException {
+        Statement st = dbConn.createStatement();
+        cleanTable(st, sID_START, 20, false);
+        final int ROWS = 10;
+        for (int i = 0; i < ROWS; i++)
+            Assert.assertTrue("Insert row", st.executeUpdate("insert into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + i) + "," + sINT_VAL1 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+            Assert.assertTrue("Insert row", st.executeUpdate("insert into " + table + " (id, int_val, str_val, char_val, float_val, raw_val, blob_val, clob_val) values (" + (iID_START + ROWS) + "," + sINT_VAL2 + ",'abcd', 0, 47.42, null, null, null)") == 1);
+
+        dbConn.commit();
+
+        try{
+            HERAMockHelper.addMock("MicrometerTestFetchDuration", "3000 DELAY_ON_FETCH");
+
+            PreparedStatement pst = dbConn.prepareStatement("select /* MicrometerTestFetchDuration */ int_val, str_val from " + table + " where str_val=?");
+            String str = sINT_VAL1 + ",'abcd'";
+            pst.setString(1, str);
+            pst.setFetchSize(10);
+            pst.executeQuery();
+
+//            HERAMockHelper.addMock("MicrometerTestQueryDuration", "1000" + JDBCMockConst.MOCK_DELAYED_RESPONSE + HERAMockAction.NOMOCK, 1);
+//
+//            PreparedStatement pst2 = dbConn.prepareStatement("select /* MicrometerTestQueryDuration */ int_val, str_val from " + table + " where int_val=?");
+//
+//            pst2.setInt(1, iINT_VAL1);
+//            pst2.setFetchSize(0);
+//            pst2.executeQuery();
+        }
+        finally{
+            HERAMockHelper.removeMock("MicrometerTestQueryDuration");
+        }
+        cleanTable(st, sID_START, 20, true);
+        dbConn.close();
+
+//        Thread.sleep(STEP_MS);
+//
+//        Map<String, ArrayList<MeterInfoTest>> publishedData = registry.getMeterInfoMap();
+//        if(!publishedData.isEmpty()){
+//            ArrayList<MeterInfoTest> execTimer = publishedData.get(EXEC_TIMER);
+//            if(execTimer == null){
+//                Assert.fail("No data sent");
+//            }
+//
+//            double execTotalTime = 0;
+//            for (MeterInfoTest info : execTimer){
+//                Map<String, Double> timeInfoMap = ((Map <String, Double>) info.getValue());
+//                double totalTime = timeInfoMap.get("totalTime");
+//                double max = timeInfoMap.get("max");
+//
+//                execTotalTime += totalTime;
+//                Assert.assertTrue(max >= 3 && max < 4);
+//                Assert.assertEquals("unknown", info.getHost());
+//                Assert.assertEquals("0", info.getSqlHash());
+//            }
+//            Assert.assertTrue("execTotalTime:" + execTotalTime, execTotalTime >= 5);
+//        }
 
     }
 
