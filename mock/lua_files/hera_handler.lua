@@ -17,6 +17,14 @@ local function run_capture(cmd)
 	return s
 end
 
+local function ends_with(str, ending)
+	return ending == "" or str:sub(-#ending) == ending
+end
+
+local function starts_with(str, start)
+	return str:sub(1, #start) == start
+end
+
 local function split(s, delimiter)
 	local result = {};
 	for match in (s..delimiter):gmatch("(.-)"..delimiter) do
@@ -291,7 +299,10 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 			delay = r[1]
 		end
 		if a.get(cm) then
-			if string.find(client_data, a.get_command(cm)) == 1 then
+			-- if command matches
+			if string.find(client_data, a.get_command(cm)) == 1 or
+					-- if delay on fetch and client_data sent has fetch alone
+					starts_with(client_data, "7 ") then
 				m_data = a.get_response(cm)
 				if m_data == "DELAY_ON_COMMIT" then
 					m_data = delay .. " MOCK_DELAYED_RESPONSE NOMOCK"
@@ -310,14 +321,6 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 		end
 	end
 	return m_data
-end
-
-local function ends_with(str, ending)
-	return ending == "" or str:sub(-#ending) == ending
-end
-
-local function starts_with(str, start)
-	return str:sub(1, #start) == start
 end
 
 local function check_and_capture_response(sock, resp, log_id)
