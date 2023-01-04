@@ -1,5 +1,6 @@
 package com.paypal.hera.integration.sampleapp;
 
+import com.paypal.dal.heramockclient.HERAMockAction;
 import com.paypal.dal.heramockclient.HERAMockException;
 import com.paypal.dal.heramockclient.HERAMockHelper;
 
@@ -7,6 +8,10 @@ import com.paypal.hera.integration.sampleapp.dataaccess.EmployeeRepository;
 import com.paypal.hera.integration.sampleapp.dataaccess.entity.EmployeeEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.Disposable;
@@ -85,6 +90,25 @@ public class SampleAPI {
         return employeeRepository.findById(1, false).toString();
     }
 
+    @Transactional
+    private void delayOnCommit() {
+        DataSourceTransactionManager dataSourceTransactionManager = new DataSourceTransactionManager();
+        dataSourceTransactionManager.setDataSource(openDAKDataSource);
+        DefaultTransactionDefinition definition = new DefaultTransactionDefinition();
+        TransactionStatus status = dataSourceTransactionManager.getTransaction(definition);
+        try {
+            EmployeeEntity employee = new EmployeeEntity();
+            employee.setName("mockedResponse");
+            employee.setVersion(100);
+            employee.setTimeCreated(Timestamp.valueOf(LocalDateTime.now()));
+            HERAMockHelper.addMock("Employee.INSERT", "2000" + HERAMockAction.DELAY_ON_COMMIT);
+            employeeRepository.insert(employee, true);
+            dataSourceTransactionManager.commit(status);
+        } catch (Exception e) {
+            dataSourceTransactionManager.rollback(status);
+        }
+    }
+
     @GetMapping("/basicTest")
     public String simple() {
         StringBuilder message = new StringBuilder();
@@ -94,6 +118,7 @@ public class SampleAPI {
         }catch (Exception e) {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }
+
         return message.toString();
     }
 
@@ -105,8 +130,10 @@ public class SampleAPI {
         }catch (Exception e) {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }
+        delayOnCommit();
         return message.toString();
     }
+
 
     @GetMapping("/springJdbcTemplate")
     public String springJdbcTemplate() {

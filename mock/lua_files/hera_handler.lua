@@ -284,9 +284,18 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 	if cm then
 		log_to_file(ngx.DEBUG, log_id .. " finding mock resp for ".. sock_id .. " to " .. cm)
 		local a = require("mock_constant_response")
+		local delay = nil
+		if string.find(cm, " DELAY_ON_COMMIT") then
+			local r = split(cm, " DELAY_ON_COMMIT")
+			cm = "DELAY_ON_COMMIT"
+			delay = r[1]
+		end
 		if a.get(cm) then
 			if string.find(client_data, a.get_command(cm)) == 1 then
 				m_data = a.get_response(cm)
+				if m_data == "DELAY_ON_COMMIT" then
+					m_data = delay .. " MOCK_DELAYED_RESPONSE NOMOCK"
+				end
 				log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. sock_id)
 				ngx.shared.mock_connection:delete(sock_id)
 				local key = ngx.shared.mock_connection_corr:get(sock_id)
@@ -898,7 +907,16 @@ local function get_mock_data(client_data, log_id, sock, r_sock)
 
 	if string.len(response_mock_data) > 0 then
 		local a = require("mock_constant_response")
+		local delay = nil
+		if string.find(response_mock_data, " DELAY_ON_COMMIT") then
+			local r = split(response_mock_data, " DELAY_ON_COMMIT")
+			response_mock_data = "DELAY_ON_COMMIT"
+			delay = r[1]
+		end
 		if a.get(response_mock_data) then
+			if delay ~= nil then
+				response_mock_data = delay .. " DELAY_ON_COMMIT"
+			end
 			log_to_file(ngx.DEBUG, log_id .. " setting future mock in this connection ".. sock_id .. " to " .. response_mock_data)
 			local _, error,_ = ngx.shared.mock_connection:set(sock_id, response_mock_data, 600)
 			if (error ~= nil ) then
@@ -981,7 +999,7 @@ local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 			log_to_file(ngx.DEBUG, line)
 			log_to_file(ngx.DEBUG, r[2])
 			local t = tonumber(r[1])/1000
-			log_to_file(ngx.DEBUG, log_id .. " START sleeping " .. t .. " seconds")
+			log_to_file(ngx.DEBUG, log_id .. " START sleeping " .. t .. " seconds " .. r[2])
 			timeout = "delayed " .. t .. " seconds"
 			ngx.sleep(t)
 			if r[2] == "NOMOCK" or r[2] == "NOMOCK," then

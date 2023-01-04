@@ -10,7 +10,8 @@ local data = {
     ["TIMEOUT_ON_ROLLBACK,"] = { ["command"] = "9,", [ "response" ] = "timeout" },
     ["PROTOCOL_ERROR_ON_COMMIT,"] = { ["command"] = "8,", ["response"] = "0"},
     ["PROTOCOL_EXTRA_DATA_ON_ROLLBACK,"] = { ["command"] = "9,", ["response"] = "5, NEXT_NEWSTRING 5"},
-    ["PROTOCOL_ERROR_ON_ROLLBACK,"] = { ["command"] = "9,", ["response"] = "0"}
+    ["PROTOCOL_ERROR_ON_ROLLBACK,"] = { ["command"] = "9,", ["response"] = "0"},
+    ["DELAY_ON_COMMIT"] = { ["command"] = "8,", [ "response" ] = "DELAY_ON_COMMIT" },
 }
 
 function _M.get(name)
