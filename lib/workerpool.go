@@ -117,7 +117,10 @@ func (pool *WorkerPool) spawnWorker(wid int) error {
 	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
-	millis := rand.Intn(100)
+	millis := rand.Intn(GetConfig().RandomStartMs)
+	if logger.GetLogger().V(logger.Alert) {
+		logger.GetLogger().Log(logger.Alert, wid, "randomized start ms",millis)
+	}
 	time.Sleep(time.Millisecond * time.Duration(millis))
 
 	initLimit := pool.desiredSize * GetConfig().InitLimitPct / 100

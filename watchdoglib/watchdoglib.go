@@ -32,7 +32,7 @@ type Watchdog struct {
 	err             error
 
 	mut              sync.Mutex
-	processList      []*ProcessData
+	processData      *ProcessData
 	shutdown         bool
 	exitAfterReaping bool
 }
@@ -59,21 +59,18 @@ func NewChildProcess(pathToChildExecutable string, args ...string) *ProcessData 
  * Will use the list to construct the watchdog instance.
  * This watchdog instance monitors all provided processes in list
  */
-func NewWatchdog(executableList [][]string) *Watchdog {
+func NewWatchdog(executable []string) *Watchdog {
 
-	processList := []*ProcessData{}
-	for i := range executableList {
-		if len(executableList[i]) == 1 {
-			procData := NewChildProcess(executableList[i][0])
-			processList = append(processList, procData)
-		} else {
-			procData := NewChildProcess(executableList[i][0], executableList[i][1:]...)
-			processList = append(processList, procData)
-		}
+	processData := &ProcessData{}
+
+	if len(executable) == 1 {
+		processData = NewChildProcess(executable[0])
+	} else {
+		processData = NewChildProcess(executable[0], executable[1:]...)
 	}
 
 	w := &Watchdog{
-		processList:     processList,
+		processData:     processData,
 		ReqStopWatchdog: make(chan bool),
 		Done:            make(chan bool),
 	}
@@ -129,7 +126,12 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 	}
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("about to start '%s'", processData.PathToChildExecutable))
 	processCommand := exec.Command(processData.PathToChildExecutable, processData.Args...)
+	//Set process groupid so if the process dies the all it child will exit
+	processCommand.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 	processCommand.Stdout = os.Stdout
+	processCommand.Stderr = os.Stderr
 	err := processCommand.Start()
 	if err != nil {
 		processData.err = err
@@ -146,8 +148,7 @@ func (processData *ProcessData) startProcess(parentProcessId int) error {
 
 //Start watchdog process
 func (w *Watchdog) Start() {
-	processStartFailureCount := 0
-	signalChild := make(chan os.Signal, len(w.processList))
+	signalChild := make(chan os.Signal, 1)
 
 	signal.Ignore(syscall.SIGPIPE)
 	signal.Notify(signalChild, syscall.SIGCHLD)
@@ -157,44 +158,44 @@ func (w *Watchdog) Start() {
 	go func() {
 		defer func() {
 			signal.Stop(signalChild) // reverse the effect of the above Notify()
-			if w.processList != nil {
-				for index := range w.processList {
-					if w.processList[index].cmd != nil {
-						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog releasing child process : %d", w.processList[index].currPid))
-						if err3 := w.processList[index].cmd.Process.Kill(); err3 != nil {
-							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog failed to release child process : %d", w.processList[index].currPid))
-						}
+			w.mut.Lock()
+			defer w.mut.Unlock()
+			if w.processData != nil {
+				if w.processData.cmd != nil {
+					logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog releasing child process by killing it: %d", w.processData.currPid))
+					syscall.Kill(-w.processData.currPid, syscall.SIGTERM)
+					var ws2 syscall.WaitStatus
+					_, err := syscall.Wait4(-w.processData.currPid, &ws2, syscall.WNOHANG, nil)
+					w.processData.currPid = 0
+					w.processData.cmd = nil
+					if err != nil {
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog failed to release child process : %d", w.processData.currPid))
 					}
 				}
 			}
 			close(w.Done)
 			// can deadlock if we don't close(w.Done) before grabbing the mutex:
-			w.mut.Lock()
 			w.shutdown = true
-			w.mut.Unlock()
 		}()
 		//Iterate over processes and start each child-process daemon
-		for index := range w.processList {
-			err := w.processList[index].startProcess(w.pid)
-			if err != nil {
-				processStartFailureCount++
-			}
-		}
-		if processStartFailureCount == len(w.processList) {
-			logger.GetLogger().Log(logger.Alert, "starting of all child processes failed")
+		err := w.processData.startProcess(w.pid)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "starting of child processes failed")
 			return
 		}
+
 		var ws syscall.WaitStatus
 	reaploop:
 		for {
 			select {
 			case <-w.ReqStopWatchdog:
 				logger.GetLogger().Log(logger.Info, "request to stop watchdog noted, exiting watchdog.start() loop")
+				w.Done <- true
 				return
 			case <-signalChild:
 				logger.GetLogger().Log(logger.Debug, "got signal <-signalChild")
 				for i := 0; i < 1000; i++ {
-					pid, err := syscall.Wait4(-1, &ws, syscall.WNOHANG, nil)
+					pid, err := syscall.Wait4(-w.processData.currPid, &ws, syscall.WNOHANG, nil)
 					// pid > 0 => pid is the ID of the child that died, but
 					//  there could be other children that are signalling us
 					//  and not the one we in particular are waiting for.
@@ -209,18 +210,21 @@ func (w *Watchdog) Start() {
 						w.SetErr(err)
 						continue reaploop
 					case pid > 0:
-						for index := range w.processList {
-							if pid == w.processList[index].currPid {
-								logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw its child pid: %d, process '%s' finish with waitstatus: %v.", pid, w.processList[index].PathToChildExecutable, ws))
-								w.mut.Lock()
-								w.processList[index].currPid = 0
-								startError := w.processList[index].startProcess(w.pid)
-								w.mut.Unlock()
-								if startError != nil {
-									return
-								}
-								break
+						if pid == w.processData.currPid {
+							w.mut.Lock()
+							//Sending kill
+							syscall.Kill(-pid, syscall.SIGTERM)
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw its child pid: %d, process '%s' finish with waitstatus: %v.", pid, w.processData.PathToChildExecutable, ws))
+							w.processData.currPid = 0
+							//Kill mux childs before spawning new processes
+							startError := w.processData.startProcess(w.pid)
+							w.mut.Unlock()
+							if startError != nil {
+								return
 							}
+							continue reaploop
+						} else {
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog saw different child pid: %d, finish with waitstatus: %v.", pid, ws))
 						}
 						if w.exitAfterReaping {
 							logger.GetLogger().Log(logger.Alert, "watchdog sees exitAfterReaping. exiting now.")
@@ -241,7 +245,6 @@ func (w *Watchdog) Start() {
 				} // end for i
 				w.SetErr(fmt.Errorf("could not reap child pid %d or obtain wait4(WNOHANG)==0 even after 1000 attempts", w.pid))
 				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("%s", w.err))
-				return
 			} // end select
 		} // end for reaploop
 	}()
