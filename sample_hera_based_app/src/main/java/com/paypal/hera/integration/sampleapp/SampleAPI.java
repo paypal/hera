@@ -90,7 +90,6 @@ public class SampleAPI {
         return employeeRepository.findById(1, false).toString();
     }
 
-    @Transactional
     private void delayOnCommit() {
         DataSourceTransactionManager dataSourceTransactionManager = new DataSourceTransactionManager();
         dataSourceTransactionManager.setDataSource(openDAKDataSource);
@@ -107,6 +106,21 @@ public class SampleAPI {
         } catch (Exception e) {
             dataSourceTransactionManager.rollback(status);
         }
+    }
+
+    private void delayOnExec() {
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.setId(1);
+        employee.setName("mockedResponse");
+        employee.setVersion(100);
+        try {
+            HERAMockHelper.addMock("Employee.FIND_BY_ID", employee, 1, 120,
+                    false, 2000);
+        } catch (HERAMockException e) {
+            e.printStackTrace();
+        }
+        employeeRepository.findById(1, false);
+
     }
 
     @GetMapping("/basicTest")
@@ -131,6 +145,7 @@ public class SampleAPI {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }
         delayOnCommit();
+        delayOnExec();
         return message.toString();
     }
 

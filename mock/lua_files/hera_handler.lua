@@ -708,6 +708,12 @@ local function check_object_mock_trim_meta_data(mock_data, client_data, log_id, 
 			new_mock_data = get_object_mock_rows(mock_data, client_data, key, log_id, forever_mock)
 			log_to_file(ngx.DEBUG, log_id .. " queried without meta - so just trimming meta " .. new_mock_data)
 		end
+
+		if string.find(mock_data, " MOCK_DELAYED_RESPONSE ") then
+			local r = split(mock_data, " MOCK_DELAYED_RESPONSE ")
+			new_mock_data = r[1] .. " MOCK_DELAYED_RESPONSE " .. new_mock_data
+			log_to_file(ngx.DEBUG, log_id .. " had delay " .. new_mock_data)
+		end
 	end
 	return new_mock_data;
 end
@@ -987,6 +993,8 @@ end
 local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 	local delimiter = " NEXT_NEWSTRING "
 	local timeout = ""
+	local new_mock = ""
+	local response_started = false
 	for line in (mock_data..delimiter):gmatch("(.-)"..delimiter) do
 		if string.find(line, "response_timeout") then
 			timeout = "timed-out"
@@ -1005,9 +1013,15 @@ local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 			if r[2] == "NOMOCK" or r[2] == "NOMOCK," then
 				return "", timeout
 			end
-			return r[2], timeout
+			new_mock = r[2]
+			response_started = true
+		elseif response_started == true then
+			new_mock = new_mock .. delimiter .. line
+			log_to_file(ngx.DEBUG, log_id .. " new mock ".. new_mock)
 		end
-		break
+	end
+	if new_mock ~= "" then
+		return new_mock, timeout
 	end
 	return mock_data, timeout
 end
