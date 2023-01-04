@@ -454,7 +454,7 @@ local function check_and_capture_request(key, response_mock_data, r_sock, client
 		log_to_file(ngx.DEBUG, log_id .. " setting connection capture mock " .. sock_id .. ": " .. raw_key .. ":" .. r_sock)
 		return true
 	elseif response_mock_data == "CAPTURE_SQL," then
-		_, error,_ = ngx.shared.capture_key:set(r_sock, response_mock_data .. key, 600)
+		local _, error,_ = ngx.shared.capture_key:set(r_sock, response_mock_data .. key, 600)
 		if (error ~= nil ) then
             log_to_file(ngx.ERR, log_id .. " failed to set shared memory " .. error)
         end
@@ -1216,7 +1216,7 @@ local function read_loop(sock, up_sock, from_stream, to_stream, key, log_id, red
 		-- the mock data. Just breaking the loop will close the socket from server and client side
 		if string.len(mock_data) > 0 then
 			if mock_data == "response_timeout" or mock_data == "timeout" then
-				timeout_sleep(keyword, sock, log_id)
+				timeout_sleep(mock_data, sock, log_id)
 			else
 				local socket_close = send_mock_resp(mock_data, up_sock, sock, log_id, red)
 				if socket_close == true then
