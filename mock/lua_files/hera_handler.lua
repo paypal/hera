@@ -297,6 +297,10 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 			local r = split(cm, " DELAY_ON_COMMIT")
 			cm = "DELAY_ON_COMMIT"
 			delay = r[1]
+		elseif string.find(cm, " DELAY_ON_FETCH") then
+			local r = split(cm, " DELAY_ON_FETCH")
+			cm = "DELAY_ON_FETCH"
+			delay = r[1]
 		end
 		if a.get(cm) then
 			-- if command matches
@@ -304,15 +308,17 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 					-- if delay on fetch and client_data sent has fetch alone
 					starts_with(client_data, "7 ") then
 				m_data = a.get_response(cm)
-				if m_data == "DELAY_ON_COMMIT" then
+				if m_data == "DELAY_ON_COMMIT" or m_data == "DELAY_ON_FETCH" then
 					m_data = delay .. " MOCK_DELAYED_RESPONSE NOMOCK"
 				end
-				log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. sock_id)
-				ngx.shared.mock_connection:delete(sock_id)
-				local key = ngx.shared.mock_connection_corr:get(sock_id)
-				if key ~= nil then
-					log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. key)
-					ngx.shared.mock_response:delete(key)
+				if m_data == "DELAY_ON_COMMIT" then
+					log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. sock_id)
+					ngx.shared.mock_connection:delete(sock_id)
+					local key = ngx.shared.mock_connection_corr:get(sock_id)
+					if key ~= nil then
+						log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. key)
+						ngx.shared.mock_response:delete(key)
+					end
 				end
 			else
 				m_data = ""
@@ -922,9 +928,14 @@ local function get_mock_data(client_data, log_id, sock, r_sock)
 			response_mock_data = "DELAY_ON_COMMIT"
 			delay = r[1]
 		end
+		if string.find(response_mock_data, " DELAY_ON_FETCH") then
+			local r = split(response_mock_data, " DELAY_ON_FETCH")
+			response_mock_data = "DELAY_ON_FETCH"
+			delay = r[1]
+		end
 		if a.get(response_mock_data) then
 			if delay ~= nil then
-				response_mock_data = delay .. " DELAY_ON_COMMIT"
+				response_mock_data = delay .. " " .. response_mock_data
 			end
 			log_to_file(ngx.DEBUG, log_id .. " setting future mock in this connection ".. sock_id .. " to " .. response_mock_data)
 			local _, error,_ = ngx.shared.mock_connection:set(sock_id, response_mock_data, 600)

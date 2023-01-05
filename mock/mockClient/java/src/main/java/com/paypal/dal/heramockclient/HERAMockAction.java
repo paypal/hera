@@ -8,6 +8,7 @@ public class HERAMockAction {
     public static final String FAIL_SET_SHAREDID = "FAIL_SET_SHAREDID";
     public static final String TIMEOUT_ON_COMMIT = "TIMEOUT_ON_COMMIT";
     public static final String DELAY_ON_COMMIT = " DELAY_ON_COMMIT";
+    public static final String DELAY_ON_FETCH = " DELAY_ON_FETCH";
     public static final String TIMEOUT_ON_ROLLBACK = "TIMEOUT_ON_ROLLBACK";
     public static final String FAIL_ON_PING = "FAIL_ON_PING";
     public static final String TIMEOUT = "timeout";
