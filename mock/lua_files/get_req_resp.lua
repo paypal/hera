@@ -63,10 +63,17 @@ local d2 = string.sub(d, sp+1)
 local resp = "nil"
 
 log_to_file(ngx.DEBUG, "get_lua_resp id " ..  d2)
-for i=1, ngx.shared.capture_order_counter:get(d2),1 do
+local counter = ngx.shared.capture_order_counter:get(d2)
+if counter == nil then
+    counter = 1
+end
+for i=1, counter,1 do
     local line = ngx.shared.capture_order:get(d2 .. ':' .. i)
+    if line == nil then
+        line = d2
+    end
     log_to_file(ngx.DEBUG, "get_lua_resp line " ..  line .. " " .. d2 .. " " .. i)
-    if starts_with(line, d2) then
+    if starts_with(line, d2) or starts_with(line, "CAPTURE_SQL," .. d2) then
         if ngx.shared.capture_req_resp:get(line) then
             if resp == "nil" then
                 resp = ""

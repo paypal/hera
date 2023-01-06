@@ -25,7 +25,7 @@ public class SpringJDBCconfig {
         String sslEnv = System.getenv("HERA_DISABLE_SSL");
         if (sslEnv != null && sslEnv.equalsIgnoreCase("true"))
             disableSSL = true;
-        String host = "1:127.0.0.1:10101";
+        String host = "1:127.0.0.1:10102";
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName(HeraDriver.class.getName());
         dataSource.setUrl("jdbc:hera:" + host);
@@ -48,7 +48,7 @@ public class SpringJDBCconfig {
         String sslEnv = System.getenv("HERA_DISABLE_SSL");
         if (sslEnv != null && sslEnv.equalsIgnoreCase("true"))
             disableSSL = true;
-        String host = "1:127.0.0.1:10101";
+        String host = "1:127.0.0.1:10102";
 
         HikariConfig config = new HikariConfig();
         config.setDriverClassName(HeraDriver.class.getName());

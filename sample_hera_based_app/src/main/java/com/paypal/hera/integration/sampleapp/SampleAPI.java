@@ -1,5 +1,6 @@
 package com.paypal.hera.integration.sampleapp;
 
+import com.paypal.dal.heramockclient.HERAMockAction;
 import com.paypal.dal.heramockclient.HERAMockException;
 import com.paypal.dal.heramockclient.HERAMockHelper;
 
@@ -7,6 +8,9 @@ import com.paypal.hera.integration.sampleapp.dataaccess.EmployeeRepository;
 import com.paypal.hera.integration.sampleapp.dataaccess.entity.EmployeeEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.Disposable;
@@ -17,7 +21,6 @@ import reactor.core.scheduler.Schedulers;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -85,6 +88,51 @@ public class SampleAPI {
         return employeeRepository.findById(1, false).toString();
     }
 
+    private void delayOnCommit() {
+        DataSourceTransactionManager dataSourceTransactionManager = new DataSourceTransactionManager();
+        dataSourceTransactionManager.setDataSource(openDAKDataSource);
+        DefaultTransactionDefinition definition = new DefaultTransactionDefinition();
+        TransactionStatus status = dataSourceTransactionManager.getTransaction(definition);
+        try {
+            EmployeeEntity employee = new EmployeeEntity();
+            employee.setName("mockedResponse");
+            employee.setVersion(100);
+            employee.setTimeCreated(Timestamp.valueOf(LocalDateTime.now()));
+            HERAMockHelper.addMock("Employee.INSERT", "2000" + HERAMockAction.DELAY_ON_COMMIT);
+            employeeRepository.insert(employee, true);
+            dataSourceTransactionManager.commit(status);
+        } finally {
+            if(!status.isCompleted())
+                dataSourceTransactionManager.rollback(status);
+        }
+    }
+
+    private void delayOnExec() {
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.setId(1);
+        employee.setName("mockedResponse");
+        employee.setVersion(100);
+        try {
+            HERAMockHelper.addMock("Employee.FIND_BY_ID", employee, 1, 120,
+                    false, 2000);
+        } catch (HERAMockException e) {
+            e.printStackTrace();
+        }
+        employeeRepository.findById(1, false);
+
+    }
+
+    private void delayOnFetch() {
+        EmployeeEntity employee = new EmployeeEntity();
+        employee.setId(1);
+        employee.setName("mockedResponse");
+        employee.setVersion(100);
+        HERAMockHelper.addMock("Employee.FIND_BY_NAME", "2000" + HERAMockAction.DELAY_ON_FETCH);
+
+        employeeRepository.findByName("test", false, 50);
+
+    }
+
     @GetMapping("/basicTest")
     public String simple() {
         StringBuilder message = new StringBuilder();
@@ -94,6 +142,7 @@ public class SampleAPI {
         }catch (Exception e) {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }
+
         return message.toString();
     }
 
@@ -105,8 +154,12 @@ public class SampleAPI {
         }catch (Exception e) {
             message.append("Exception: ").append(e.getMessage()).append("\n");
         }
+        delayOnCommit();
+        delayOnExec();
+        delayOnFetch();
         return message.toString();
     }
+
 
     @GetMapping("/springJdbcTemplate")
     public String springJdbcTemplate() {
@@ -123,7 +176,7 @@ public class SampleAPI {
     public String openDAKTest() {
         StringBuilder message = new StringBuilder();
         int totalCalls = 1000;
-        int parallel = 50;
+        int parallel = 25;
         try {
             message.append("Spring JDBC Template Test result: ").append(employeeRepository.findById(1, true)).append("\n");
         }catch (Exception e) {
@@ -139,7 +192,7 @@ public class SampleAPI {
     public String hikariTest() {
         StringBuilder message = new StringBuilder();
         int totalCalls = 1000;
-        int parallel = 50;
+        int parallel = 25;
         try {
             message.append("Spring JDBC Template Test result: ").append(employeeRepository.findById(1, false)).append("\n");
         }catch (Exception e) {
@@ -153,11 +206,15 @@ public class SampleAPI {
 
     void callInParallel(int numOfQueries, int parallel, boolean isOdak) {
         Scheduler scheduler = Schedulers.newParallel(parallel, executor);
-        int nextVal = employeeRepository.maxId() + 1;
+        int nextVal = 1;
+//        try {
+//            nextVal = employeeRepository.maxId() + 1;
+//        }catch (Exception ignored) {
+//        }
         List<Input> inputs = new ArrayList<>();
         for (int i = nextVal; i<nextVal + numOfQueries; i++) {
             EmployeeEntity employee = new EmployeeEntity();
-            employee.setName("test" + i);
+            employee.setName("test");
             employee.setVersion(1);
             employee.setTimeCreated(Timestamp.valueOf(LocalDateTime.now()));
             inputs.add(new Input(isOdak, employee));
@@ -180,14 +237,22 @@ public class SampleAPI {
     }
 
     private void doQuery(Input input) {
+        DataSourceTransactionManager dataSourceTransactionManager = new DataSourceTransactionManager();
+        dataSourceTransactionManager.setDataSource(openDAKDataSource);
+        DefaultTransactionDefinition definition = new DefaultTransactionDefinition();
+        TransactionStatus status = dataSourceTransactionManager.getTransaction(definition);
+        Long id = employeeRepository.insert(input.entity, input.isOdak);
         try {
-            employeeRepository.insert(input.entity, input.isOdak);
-            employeeRepository.findByName(input.entity.getName(), input.isOdak);
+            employeeRepository.findById(id.intValue(), input.isOdak);
             numberOfQueriesSucceeded.addAndGet(1);
+            dataSourceTransactionManager.commit(status);
         }catch (Exception e) {
-            System.out.println(e.getMessage() + " : " + input.entity.getId());
-//            e.printStackTrace();
+            System.out.println(e.getMessage() + " : " + id + ":" + numberOfQueriesSucceeded.get());
+            e.printStackTrace();
             numberOfQueriesFailed.addAndGet(1);
+        } finally {
+            if(!status.isCompleted())
+                dataSourceTransactionManager.rollback(status);
         }
     }
 }

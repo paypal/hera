@@ -4,7 +4,6 @@ import com.paypal.hera.integration.sampleapp.dataaccess.entity.EmployeeEntity;
 import com.paypal.hera.integration.sampleapp.dataaccess.mapper.EmployeeRowMapper;
 import com.paypal.hera.integration.sampleapp.dataaccess.EmployeeRepository;
 
-import javax.annotation.Generated;
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 
@@ -17,8 +16,7 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
 
-import java.sql.Statement;
-import java.util.Map;
+import java.util.List;
 
 
 /**
@@ -88,13 +86,16 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
     }
 
     @Override
-    public EmployeeEntity findByName(String name, boolean odak) {
+    public List<EmployeeEntity> findByName(String name, boolean odak, int fetchSize) {
         final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource()
                 .addValue("name", name);
-        if (odak)
-            return odakNamedJdbcTemplate.queryForObject(EmployeeQueries.FIND_BY_NAME,
+        if (odak) {
+            odakJdbcTemplate.setFetchSize(fetchSize);
+            return new NamedParameterJdbcTemplate(odakJdbcTemplate).query(EmployeeQueries.FIND_BY_NAME,
                     mapSqlParameterSource, new EmployeeRowMapper());
-        return namedJdbcTemplate.queryForObject(EmployeeQueries.FIND_BY_NAME,
+        }
+        jdbcTemplate.setFetchSize(fetchSize);
+        return new NamedParameterJdbcTemplate(jdbcTemplate).query(EmployeeQueries.FIND_BY_NAME,
                 mapSqlParameterSource, new EmployeeRowMapper());
     }
 
@@ -125,7 +126,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
      * @return number of rows inserted
      */
     @Override
-    public int insert(final EmployeeEntity employee, final boolean odak) {
+    public Long insert(final EmployeeEntity employee, final boolean odak) {
 
         final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource()
             .addValue("name", employee.getName())
@@ -134,9 +135,10 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         if (odak) {
             odakNamedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource, keyHolder);
+            return (Long) keyHolder.getKey();
         }
-        namedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource);
-        return 1;
+        namedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource, keyHolder);
+        return (Long) keyHolder.getKey();
     }
 
     @Override

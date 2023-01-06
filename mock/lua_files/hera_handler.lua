@@ -17,6 +17,14 @@ local function run_capture(cmd)
 	return s
 end
 
+local function ends_with(str, ending)
+	return ending == "" or str:sub(-#ending) == ending
+end
+
+local function starts_with(str, start)
+	return str:sub(1, #start) == start
+end
+
 local function split(s, delimiter)
 	local result = {};
 	for match in (s..delimiter):gmatch("(.-)"..delimiter) do
@@ -284,15 +292,33 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 	if cm then
 		log_to_file(ngx.DEBUG, log_id .. " finding mock resp for ".. sock_id .. " to " .. cm)
 		local a = require("mock_constant_response")
+		local delay = nil
+		if string.find(cm, " DELAY_ON_COMMIT") then
+			local r = split(cm, " DELAY_ON_COMMIT")
+			cm = "DELAY_ON_COMMIT"
+			delay = r[1]
+		elseif string.find(cm, " DELAY_ON_FETCH") then
+			local r = split(cm, " DELAY_ON_FETCH")
+			cm = "DELAY_ON_FETCH"
+			delay = r[1]
+		end
 		if a.get(cm) then
-			if string.find(client_data, a.get_command(cm)) == 1 then
+			-- if command matches
+			if string.find(client_data, a.get_command(cm)) == 1 or
+					-- if delay on fetch and client_data sent has fetch alone
+					starts_with(client_data, "7 ") then
 				m_data = a.get_response(cm)
-				log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. sock_id)
-				ngx.shared.mock_connection:delete(sock_id)
-				local key = ngx.shared.mock_connection_corr:get(sock_id)
-				if key ~= nil then
-					log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. key)
-					ngx.shared.mock_response:delete(key)
+				if m_data == "DELAY_ON_COMMIT" or m_data == "DELAY_ON_FETCH" then
+					m_data = delay .. " MOCK_DELAYED_RESPONSE NOMOCK"
+				end
+				if m_data == "DELAY_ON_COMMIT" then
+					log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. sock_id)
+					ngx.shared.mock_connection:delete(sock_id)
+					local key = ngx.shared.mock_connection_corr:get(sock_id)
+					if key ~= nil then
+						log_to_file(ngx.DEBUG, log_id .. " deleting mock for  ".. key)
+						ngx.shared.mock_response:delete(key)
+					end
 				end
 			else
 				m_data = ""
@@ -301,14 +327,6 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 		end
 	end
 	return m_data
-end
-
-local function ends_with(str, ending)
-	return ending == "" or str:sub(-#ending) == ending
-end
-
-local function starts_with(str, start)
-	return str:sub(1, #start) == start
 end
 
 local function check_and_capture_response(sock, resp, log_id)
@@ -445,7 +463,7 @@ local function check_and_capture_request(key, response_mock_data, r_sock, client
 		log_to_file(ngx.DEBUG, log_id .. " setting connection capture mock " .. sock_id .. ": " .. raw_key .. ":" .. r_sock)
 		return true
 	elseif response_mock_data == "CAPTURE_SQL," then
-		_, error,_ = ngx.shared.capture_key:set(r_sock, response_mock_data .. key, 600)
+		local _, error,_ = ngx.shared.capture_key:set(r_sock, response_mock_data .. key, 600)
 		if (error ~= nil ) then
             log_to_file(ngx.ERR, log_id .. " failed to set shared memory " .. error)
         end
@@ -699,6 +717,12 @@ local function check_object_mock_trim_meta_data(mock_data, client_data, log_id, 
 			new_mock_data = get_object_mock_rows(mock_data, client_data, key, log_id, forever_mock)
 			log_to_file(ngx.DEBUG, log_id .. " queried without meta - so just trimming meta " .. new_mock_data)
 		end
+
+		if string.find(mock_data, " MOCK_DELAYED_RESPONSE ") then
+			local r = split(mock_data, " MOCK_DELAYED_RESPONSE ")
+			new_mock_data = r[1] .. " MOCK_DELAYED_RESPONSE " .. new_mock_data
+			log_to_file(ngx.DEBUG, log_id .. " had delay " .. new_mock_data)
+		end
 	end
 	return new_mock_data;
 end
@@ -898,7 +922,21 @@ local function get_mock_data(client_data, log_id, sock, r_sock)
 
 	if string.len(response_mock_data) > 0 then
 		local a = require("mock_constant_response")
+		local delay = nil
+		if string.find(response_mock_data, " DELAY_ON_COMMIT") then
+			local r = split(response_mock_data, " DELAY_ON_COMMIT")
+			response_mock_data = "DELAY_ON_COMMIT"
+			delay = r[1]
+		end
+		if string.find(response_mock_data, " DELAY_ON_FETCH") then
+			local r = split(response_mock_data, " DELAY_ON_FETCH")
+			response_mock_data = "DELAY_ON_FETCH"
+			delay = r[1]
+		end
 		if a.get(response_mock_data) then
+			if delay ~= nil then
+				response_mock_data = delay .. " " .. response_mock_data
+			end
 			log_to_file(ngx.DEBUG, log_id .. " setting future mock in this connection ".. sock_id .. " to " .. response_mock_data)
 			local _, error,_ = ngx.shared.mock_connection:set(sock_id, response_mock_data, 600)
 			if (error ~= nil ) then
@@ -969,6 +1007,8 @@ end
 local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 	local delimiter = " NEXT_NEWSTRING "
 	local timeout = ""
+	local new_mock = ""
+	local response_started = false
 	for line in (mock_data..delimiter):gmatch("(.-)"..delimiter) do
 		if string.find(line, "response_timeout") then
 			timeout = "timed-out"
@@ -981,15 +1021,21 @@ local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 			log_to_file(ngx.DEBUG, line)
 			log_to_file(ngx.DEBUG, r[2])
 			local t = tonumber(r[1])/1000
-			log_to_file(ngx.DEBUG, log_id .. " START sleeping " .. t .. " seconds")
+			log_to_file(ngx.DEBUG, log_id .. " START sleeping " .. t .. " seconds " .. r[2])
 			timeout = "delayed " .. t .. " seconds"
 			ngx.sleep(t)
 			if r[2] == "NOMOCK" or r[2] == "NOMOCK," then
 				return "", timeout
 			end
-			return r[2], timeout
+			new_mock = r[2]
+			response_started = true
+		elseif response_started == true then
+			new_mock = new_mock .. delimiter .. line
+			log_to_file(ngx.DEBUG, log_id .. " new mock ".. new_mock)
 		end
-		break
+	end
+	if new_mock ~= "" then
+		return new_mock, timeout
 	end
 	return mock_data, timeout
 end
@@ -1198,7 +1244,7 @@ local function read_loop(sock, up_sock, from_stream, to_stream, key, log_id, red
 		-- the mock data. Just breaking the loop will close the socket from server and client side
 		if string.len(mock_data) > 0 then
 			if mock_data == "response_timeout" or mock_data == "timeout" then
-				timeout_sleep(keyword, sock, log_id)
+				timeout_sleep(mock_data, sock, log_id)
 			else
 				local socket_close = send_mock_resp(mock_data, up_sock, sock, log_id, red)
 				if socket_close == true then
