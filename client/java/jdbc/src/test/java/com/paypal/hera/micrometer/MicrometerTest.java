@@ -351,7 +351,7 @@ public class MicrometerTest {
             PreparedStatement pst = dbConn.prepareStatement("select /* MicrometerTestFetchDuration */ int_val, str_val from " + table + " where str_val=?");
             String str = sINT_VAL1 + ",'abcd'";
             pst.setString(1, str);
-            pst.setFetchSize(10);
+            pst.setFetchSize(1);
             pst.executeQuery();
 
 //            HERAMockHelper.addMock("MicrometerTestQueryDuration", "1000" + JDBCMockConst.MOCK_DELAYED_RESPONSE + HERAMockAction.NOMOCK, 1);

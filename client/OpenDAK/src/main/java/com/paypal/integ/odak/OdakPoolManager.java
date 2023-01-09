@@ -47,7 +47,7 @@ public class OdakPoolManager {
 	 * @return
 	 * @throws NamingException
 	 */
-	public OdakPool createPool(String host, CmConnectionCallback cmProxyCallbakUplink) throws NamingException {
+	public OdakPool createPool(String host, CmConnectionCallback cmProxyCallbakUplink) {
 		//ConnectionPoolConfig existingConfig = ConnectionPoolFactory.getInstance().getPoolConfig(host);
 		//JdbcDriverAdapter jdbcdriverAdapter = JdbcDriverAdapterFactory.getAdapter(existingConfig);
 		PoolConfig ocpConfig = OdakConfigManager.getInstance().getPoolConfig(host);
@@ -74,14 +74,19 @@ public class OdakPoolManager {
 		return pool;
 	}
 
+	public void init() throws InitializationException {
+		init(false);
+	}
+
 	/**
 	 * Initializes OCP pool, if present. DALMaintainer registration for OCP
 	 * pools will be skipped as part of DcpConnectionPool.create
 	 * 
 	 * @throws InitializationException
 	 */
-	public void init() throws InitializationException {
-		OdakConfigManager.getInstance().loadConfig();
+	public void init(boolean configLoaded) throws InitializationException {
+		if(!configLoaded)
+			OdakConfigManager.getInstance().loadConfig();
 		if (!OdakConfigManager.getInstance().isOcpPoolConfigured()) {
 			String msg = String.format("No OCP pool detected in the dsimport.xml");
 			logger.info("ODAK_INIT - {}", msg);

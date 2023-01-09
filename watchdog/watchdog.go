@@ -67,11 +67,9 @@ func main() {
 		logger.GetLogger().Log(logger.Alert, "watchdog process already running:", pidErr.Error())
 		os.Exit(1)
 	}
-	processList := [][]string{}
 	muxProcess := []string{muxpath, "--name", *namePtr}
-	processList = append(processList, muxProcess)
 	logger.GetLogger().Log(logger.Alert, "Starting watchdog process.")
-	watcher := watchdoglib.NewWatchdog(processList)
+	watcher := watchdoglib.NewWatchdog(muxProcess)
 	//Start watcher
 	watcher.Start()
 	// give it a second to get started

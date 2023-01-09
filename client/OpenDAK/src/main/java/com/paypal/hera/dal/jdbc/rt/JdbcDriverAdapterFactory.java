@@ -1,5 +1,7 @@
 package com.paypal.hera.dal.jdbc.rt;
 
+import com.paypal.hera.jdbc.HeraDriver;
+
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -40,6 +42,14 @@ public class JdbcDriverAdapterFactory {
 //		return getAdapter(dsName, url);
 //	}
 
+
+	public static void initAdapter() {
+		JdbcDriverAdapter jdbcDriverAdapter = new HeraJDBCDriverAdapter();
+		JdbcDriverAdapterEntryStr jdbcDriverAdapterEntryStr = new JdbcDriverAdapterEntryStr(
+				HeraDriver.class.getName(), jdbcDriverAdapter
+		);
+		s_driverTable.add(jdbcDriverAdapterEntryStr);
+	}
 	public static JdbcDriverAdapter getAdapter(String dsName, String url)
 	{
 		JdbcDriverAdapter result = findAdapterForUrl(url);
@@ -85,8 +95,8 @@ public class JdbcDriverAdapterFactory {
 		return null;
 	}
 
-	private static JdbcDriverAdapter findAdapterForDriver(
-		String driverClassName)
+	public static JdbcDriverAdapter findAdapterForDriver(
+			String driverClassName)
 	{
 		// Loop through the table and find the first matching adapter
 		for (int i = 0; i < s_driverTable.size(); i++) {

@@ -2,7 +2,8 @@ package com.paypal.hera.integration.sampleapp.dataaccess;
 
 import com.paypal.hera.integration.sampleapp.dataaccess.entity.EmployeeEntity;
 
-import javax.annotation.Generated;
+import javax.sql.DataSource;
+import java.util.List;
 
 /**
  * EmployeeRepository: interface to the application to talk to database layer.
@@ -17,7 +18,9 @@ public interface EmployeeRepository {
      * @return EmployeeEntity
 
      */
-    EmployeeEntity findById(Integer id);
+    EmployeeEntity findById(Integer id, boolean odak);
+
+    List<EmployeeEntity> findByName(String name, boolean odak, int fetchSize);
 
     /**
      * Update by ID Interface returns number of rows affected
@@ -34,6 +37,9 @@ public interface EmployeeRepository {
      *
      * @return number of rows inserted
      */
-    int insert(final EmployeeEntity employee);
+    Long insert(final EmployeeEntity employee, final boolean odak);
 
+    Integer maxId();
+
+    DataSource getDataSource();
 }

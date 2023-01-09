@@ -4,7 +4,6 @@ import com.paypal.hera.integration.sampleapp.dataaccess.entity.EmployeeEntity;
 import com.paypal.hera.integration.sampleapp.dataaccess.mapper.EmployeeRowMapper;
 import com.paypal.hera.integration.sampleapp.dataaccess.EmployeeRepository;
 
-import javax.annotation.Generated;
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 
@@ -13,7 +12,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 
 /**
@@ -29,14 +32,29 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
      */
     private JdbcTemplate jdbcTemplate;
 
+    private DataSource dataSource;
+
+    private JdbcTemplate odakJdbcTemplate;
+
+    public DataSource getDataSource() {
+        return dataSource;
+    }
+
+
+
     /**
      * namedJdbcTemplate used to query - bind keys are named
      */
     NamedParameterJdbcTemplate namedJdbcTemplate;
 
+    NamedParameterJdbcTemplate odakNamedJdbcTemplate;
+
     @Autowired
-    public EmployeeRepositoryImpl(@Qualifier(value = "mysqlHikariDataSource") DataSource dataSource) {
+    public EmployeeRepositoryImpl(@Qualifier(value = "heraDataSourceWithHikari") DataSource dataSource,
+                                  @Qualifier(value = "heraDataSourceWithOpenDAK") DataSource odakDataSource) {
+        this.dataSource = dataSource;
         jdbcTemplate = new JdbcTemplate(dataSource);
+        odakJdbcTemplate = new JdbcTemplate(odakDataSource);
     }
 
     @PostConstruct
@@ -45,6 +63,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
      */
     void createNamedJdbcTemplate() {
         namedJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
+        odakNamedJdbcTemplate = new NamedParameterJdbcTemplate(odakJdbcTemplate);
     }
 
     /**
@@ -54,13 +73,30 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
      * @return EmployeeEntity
      */
     @Override
-    public EmployeeEntity findById(final Integer id) {
+    public EmployeeEntity findById(final Integer id, boolean odak) {
 
         final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource()
         .addValue("id", id);
 
+        if (odak)
+            return odakNamedJdbcTemplate.queryForObject(EmployeeQueries.FIND_BY_ID,
+                    mapSqlParameterSource, new EmployeeRowMapper());
         return namedJdbcTemplate.queryForObject(EmployeeQueries.FIND_BY_ID, 
             mapSqlParameterSource, new EmployeeRowMapper());
+    }
+
+    @Override
+    public List<EmployeeEntity> findByName(String name, boolean odak, int fetchSize) {
+        final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource()
+                .addValue("name", name);
+        if (odak) {
+            odakJdbcTemplate.setFetchSize(fetchSize);
+            return new NamedParameterJdbcTemplate(odakJdbcTemplate).query(EmployeeQueries.FIND_BY_NAME,
+                    mapSqlParameterSource, new EmployeeRowMapper());
+        }
+        jdbcTemplate.setFetchSize(fetchSize);
+        return new NamedParameterJdbcTemplate(jdbcTemplate).query(EmployeeQueries.FIND_BY_NAME,
+                mapSqlParameterSource, new EmployeeRowMapper());
     }
 
 
@@ -90,15 +126,28 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
      * @return number of rows inserted
      */
     @Override
-    public int insert(final EmployeeEntity employee) {
+    public Long insert(final EmployeeEntity employee, final boolean odak) {
 
         final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource()
-            .addValue("id", employee.getId())
             .addValue("name", employee.getName())
             .addValue("timeCreated", employee.getTimeCreated())
             .addValue("version", employee.getVersion());
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        if (odak) {
+            odakNamedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource, keyHolder);
+            return (Long) keyHolder.getKey();
+        }
+        namedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource, keyHolder);
+        return (Long) keyHolder.getKey();
+    }
 
-        return namedJdbcTemplate.update(EmployeeQueries.INSERT, mapSqlParameterSource);
+    @Override
+    public Integer maxId() {
+
+        final MapSqlParameterSource mapSqlParameterSource = new MapSqlParameterSource();
+
+        return odakNamedJdbcTemplate.queryForObject(EmployeeQueries.FIND_MAX_ID,
+                mapSqlParameterSource, Integer.class);
     }
 
 

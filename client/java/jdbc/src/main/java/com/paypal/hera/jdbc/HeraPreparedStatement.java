@@ -30,11 +30,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.ParsePosition;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
 import org.slf4j.Logger;
@@ -77,8 +73,14 @@ public class HeraPreparedStatement extends HeraStatement implements PreparedStat
 		converter = heraConnection.getConverter();
 		batched_in_params = new ArrayList<Pair<BindType, ArrayList<byte[]> > >();
 		max_batched_value_size = new ArrayList<Integer>();
-		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraPreparedStatement created, id: " + this.hashCode() + ", conn id: " + heraConnection.hashCode() + ", SQL: " + _sql);
+		if (LOGGER.isDebugEnabled()) {
+			try {
+				LOGGER.debug("HeraPreparedStatement created, id: " + this.hashCode() + ", conn id: " +
+						heraConnection.getClientInfo(HeraConnection.HERA_CLIENT_CONN_ID) + ", SQL: " + _sql);
+			} catch (SQLException ignored) {
+
+			}
+		}
 	}
 
 	protected void prepare() throws HeraExceptionBase {
@@ -96,6 +98,7 @@ public class HeraPreparedStatement extends HeraStatement implements PreparedStat
 			throw new HeraSQLException("Illegal number of bind parameters, trying to bind " + params.size() + " instead of " + stCache.getParamCount());
 
 		for (Entry<Integer, Pair<BindType, byte[]>> entry : params.entrySet()){
+
 			connection.getHeraClient().bind(stCache.actualParamName(entry.getKey()), 
 						entry.getValue().getFirst(), entry.getValue().getSecond());
 		}

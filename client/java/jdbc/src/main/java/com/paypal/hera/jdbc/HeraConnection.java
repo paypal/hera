@@ -26,7 +26,6 @@ import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.concurrent.Executor;
 
-import com.paypal.hera.constants.HeraConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,7 +68,7 @@ public class HeraConnection implements Connection {
 	private int shardID;
 	private static final String SERVER_LOGICAL_NAME = "host";
 	private static final String CAL_LOGGING_OPTIONS = "calLogOption";
-	public static final String OCC_CLIENT_CONN_ID = "OccClientConnID";
+	public static final String HERA_CLIENT_CONN_ID = "HeraClientConnID";
 
 	public HeraConnection(Properties _props, String _address, String _port, String _url) throws HeraIOException, HeraConfigException {
 		if (LOGGER.isDebugEnabled()) {
@@ -445,6 +444,10 @@ public class HeraConnection implements Connection {
 	}
 
 	public String getClientInfo(String name) throws SQLException {
+		if (name.equals(HERA_CLIENT_CONN_ID) && heraClient != null)
+		{
+			return heraClient.getHeraClientConnID();
+		}
 		throw new SQLFeatureNotSupportedException("HeraConnection.getClientInfo is not implemented");
 	}
 
@@ -661,11 +664,7 @@ public class HeraConnection implements Connection {
 	public E_DATASOURCE_TYPE getDataSource() {
 		return datasource;
 	}
-	public String getDataSourceTypeString() {
-		return (datasource == E_DATASOURCE_TYPE.MYSQL) ? HeraConstants.HERA_DB_TYPE_MYSQL :
-				(datasource == E_DATASOURCE_TYPE.POSTGRES) ? HeraConstants.HERA_DB_TYPE_POSTGRES :
-						HeraConstants.HERA_DB_TYPE_ORACLE;
-	}
+	
 	public void setFirstSQL(boolean isFirstSQL) {
 		getHeraClient().setFirstSQL(isFirstSQL);
 	}

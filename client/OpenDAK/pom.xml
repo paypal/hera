@@ -8,6 +8,8 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.source>18</maven.compiler.source>
+		<maven.compiler.target>18</maven.compiler.target>
 	</properties>
 
 	<dependencies>
@@ -37,7 +39,7 @@
 		<dependency>
 			<groupId>com.paypal.hera</groupId>
 			<artifactId>hera-jdbc</artifactId>
-			<version>0.0.24</version>
+			<version>0.0.27</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jmockit</groupId>
@@ -72,44 +74,6 @@
 				<directory>${project.basedir}/src/test/resources</directory>
 			</testResource>
 		</testResources>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<dependencies>
-					<dependency>
-						<groupId>org.apache.maven.surefire</groupId>
-						<artifactId>surefire-junit4</artifactId>
-						<version>2.10</version>
-					</dependency>
-				</dependencies>
-				<configuration>
-					<forkMode>always</forkMode>
-					<forkCount>1</forkCount>
-					<reuseForks>false</reuseForks>
-					<argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
-					<includes>
-						<include>com/ebay/integ/dal/tests/AllTests1.java</include>
-						<include>com/ebay/integ/dal/tests/AllTests2.java</include>
-						<include>**/InitConfigBeanTests1.class</include>
-						<include>**/InitConfigBeanTests2.class</include>
-						<include>**/InitConfigBeanTests3.class</include>
-						<include>**/MultiThreadTests.class</include>
-						<include>**/MultiThreadFailTests.class</include>
-						<runInitSuite6>**/SingleThreadTests.class</runInitSuite6>
-						<include>**/DalInitTimeoutTests.class</include>
-						<include>**/OCCAcceptFail.class</include>
-						<include>**/QueryEndToEnd.class</include>
-						<include>**/ConnectionPoolTearDown.class</include>
-						<include>**/OdakPoolTest.class</include>
-						<include>**/OdakConfigManagerTest.class</include>
-						<include>**/OdakConnectionTest.class</include>
-						<include>**/OdakGroomerTest.class</include>
-					</includes>
-					<testFailureIgnore>true</testFailureIgnore>
-				</configuration>
-			</plugin>
-		</plugins>
 	</build>
 
 

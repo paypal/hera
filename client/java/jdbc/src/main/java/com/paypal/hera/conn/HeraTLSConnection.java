@@ -36,7 +36,9 @@ public class HeraTLSConnection implements HeraClientConnection {
 	private Socket socket;
 	private OutputStream requestStream;
 	private InputStream responseStream;
-	
+
+	private final String connectionId = java.util.UUID.randomUUID().toString();
+
 	public HeraTLSConnection(HeraConnectionConfig config) throws HeraExceptionBase {
 			int retries = 0;
 			CalTransaction calTrans = null;
@@ -134,5 +136,11 @@ public class HeraTLSConnection implements HeraClientConnection {
 	public void setSoTimeout(int tmo) throws SocketException {
 		socket.setSoTimeout(tmo);		
 	}
+
+	@Override
+	public String getConnectionId() {
+		return connectionId;
+	}
+
 
 }

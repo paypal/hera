@@ -20,6 +20,7 @@ import com.paypal.hera.ex.HeraInternalErrorException;
 import com.paypal.hera.ex.HeraProtocolException;
 import com.paypal.hera.ex.HeraSQLException;
 import com.paypal.hera.ex.HeraTimeoutException;
+import com.paypal.hera.jdbc.HeraConnection;
 import com.paypal.hera.util.*;
 
 import io.micrometer.core.instrument.Counter;
@@ -35,6 +36,7 @@ import java.lang.management.ManagementFactory;
 import java.net.SocketException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 
 @SuppressWarnings("deprecation")
@@ -173,7 +175,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public boolean execute(int _num_rows, boolean _add_commit) throws HeraIOException, HeraTimeoutException, HeraClientException, HeraProtocolException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::execute(" + _num_rows + ")");
+			LOGGER.debug("HeraClient::execute(" + _num_rows + ") {}", conn.getConnectionId());
 
 		CalTransaction execCalTxn = startCalExecTransaction();
 		Timer.Sample execTimer = Timer.start(Metrics.globalRegistry);
@@ -195,8 +197,8 @@ public class HeraClientImpl implements HeraClient{
 			else
 				check_error(obj);
 			if (LOGGER.isDebugEnabled())
-				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows);
-
+				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows +
+						" connId:" +  conn.getConnectionId());
 
 			if (columns > 0) {
 				//non-DML(select) like executeQuery
@@ -253,7 +255,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public ArrayList<HeraColumnMeta> execQuery(int _num_rows, boolean _column_meta) throws HeraIOException, HeraTimeoutException, HeraClientException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::execQuery(" + _num_rows + ")");
+			LOGGER.debug("HeraClient::execQuery(" + _num_rows + ") connId: " + conn.getConnectionId());
 
 		CalTransaction execCalTxn = startCalExecTransaction();
 		Timer.Sample execTimer = Timer.start(Metrics.globalRegistry);
@@ -283,8 +285,8 @@ public class HeraClientImpl implements HeraClient{
 			else
 				check_error(obj);
 			if (LOGGER.isDebugEnabled())
-				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows);
-			ArrayList<HeraColumnMeta> columnMeta = null;
+				LOGGER.debug("HeraClient::execQuery() returned cols=" + columns + ",rows=" + rows +
+						" connId: " + conn.getConnectionId());			ArrayList<HeraColumnMeta> columnMeta = null;
 			if (_column_meta && (columnNamesEnabled || columnInfoEnabled)) {
 				columnMeta = new ArrayList<HeraColumnMeta>();
 				// column names
@@ -443,8 +445,8 @@ public class HeraClientImpl implements HeraClient{
 
 	public void execDML(boolean _add_commit) throws SQLException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::execDML(" + _add_commit + ")");
-		if (readOnly) {
+			LOGGER.debug("HeraClient::execDML(" + _add_commit + ") " +
+					"connId: " + conn.getConnectionId() + " SQL: " + this.sql);		if (readOnly) {
 			String msg = "DML Operation called on ReadOnly Connection";
 			LOGGER.error("HeraClient::execDML " + msg);
 			throw new SQLException(msg);
@@ -472,8 +474,8 @@ public class HeraClientImpl implements HeraClient{
 			else
 				check_error(obj);
 			if (LOGGER.isDebugEnabled())
-				LOGGER.debug("HeraClient::execDML() returned cols=" + columns + ",rows=" + rows);
-		} catch (IOException e) {
+				LOGGER.debug("HeraClient::execDML() returned cols=" + columns + ",rows=" + rows
+						+ " connId: " + conn.getConnectionId());		} catch (IOException e) {
 			HeraIOException heraEx = new HeraIOException(e);
 			handleException(heraEx, execCalTxn);
 			do_commit = false;
@@ -559,7 +561,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public ArrayList<ArrayList<byte[]> > fetch(int _num_rows) throws HeraIOException, HeraClientException, HeraTimeoutException, HeraInternalErrorException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::fetch(" + _num_rows + ")");
+			LOGGER.debug("HeraClient::fetch(" + _num_rows + ") connId: " + conn.getConnectionId());
 
 		CalTransaction fetchCalTxn;
 		if(!calLogFrequency.equals(DISABLE_CAL)) {
@@ -611,7 +613,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public void bind(String _variable, BindType _type, byte[] _value) throws HeraIOException, HeraSQLException{
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::bind()");
+			LOGGER.debug("HeraClient::bind() {} {}", conn.getConnectionId(), _value);
 		try {
 			os.add(HeraConstants.HERA_BIND_NAME, HeraJdbcConverter.string2hera(_variable));
 		} catch (UnsupportedEncodingException e) {
@@ -624,7 +626,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public void bindOut(String _variable) throws HeraIOException, HeraSQLException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::bind_out()");
+			LOGGER.debug("HeraClient::bind_out() {}", conn.getConnectionId());
 		try {
 			os.add(HeraConstants.HERA_BIND_OUT_NAME, HeraJdbcConverter.string2hera(_variable));
 		} catch (UnsupportedEncodingException e) {
@@ -635,7 +637,7 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public void bindArray(String _variable, int _max_sz, BindType _type, ArrayList<byte[]> _values) throws HeraIOException, HeraSQLException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::bindArray()");
+			LOGGER.debug("HeraClient::bindArray() {}", conn.getConnectionId());
 		try {
 			os.add(HeraConstants.HERA_BIND_NAME, HeraJdbcConverter.string2hera(_variable));
 		} catch (UnsupportedEncodingException e) {
@@ -652,7 +654,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public ArrayList<ArrayList<byte[]> > fetchOutBindVars(int _bind_var_count) throws HeraTimeoutException, HeraIOException, HeraClientException, HeraInternalErrorException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::fetch_out_bind_vars()");
+			LOGGER.debug("HeraClient::fetch_out_bind_vars() {}", conn.getConnectionId());
 		NetStringObj obj = read_response();
 		if (obj.getCommand() != HeraConstants.HERA_VALUE)
 			check_error(obj);
@@ -697,7 +699,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public void commit() throws HeraClientException, HeraIOException, HeraProtocolException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::commit()");
+			LOGGER.debug("HeraClient::commit() {}", conn.getConnectionId());
 		os.add(HeraConstants.HERA_COMMIT);
 		try {
 			os.flush();
@@ -711,7 +713,7 @@ public class HeraClientImpl implements HeraClient{
 
 	public void rollback() throws HeraIOException, HeraProtocolException, HeraClientException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::rollback()");
+			LOGGER.debug("HeraClient::rollback() {}", conn.getConnectionId());
 		os.add(HeraConstants.HERA_ROLLBACK);
 		try {
 			os.flush();
@@ -789,7 +791,7 @@ public class HeraClientImpl implements HeraClient{
 	public String sendClientInfo(String info, String name)
 			throws HeraExceptionBase {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::sendClientInfo()");
+			LOGGER.debug("HeraClient::sendClientInfo() {}", conn.getConnectionId());
 		String buffer;
 		if (name.isEmpty())
 			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine +
@@ -854,7 +856,7 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public int getNumShards() throws HeraIOException, HeraProtocolException, HeraClientException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::getNumShards()");
+			LOGGER.debug("HeraClient::getNumShards() {}", conn.getConnectionId());
 		os.add(HeraConstants.HERA_GET_NUM_SHARDS);
 		try {
 			os.flush();
@@ -870,7 +872,7 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public void setShard(int _shard_id) throws HeraIOException, HeraProtocolException, HeraClientException {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::setShard()");
+			LOGGER.debug("HeraClient::setShard() {}", conn.getConnectionId());
 		os.add(HeraConstants.HERA_SET_SHARD_ID, _shard_id);
 		try {
 			os.flush();
@@ -885,7 +887,7 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public void ping(int tmo) throws HeraExceptionBase {
 		if (LOGGER.isDebugEnabled())
-			LOGGER.debug("HeraClient::sendPing()");
+			LOGGER.debug("HeraClient::sendPing() {}", conn.getConnectionId());
 		os.add(HeraConstants.SERVER_PING_COMMAND, "".getBytes());
 		try {
 			os.flush();
@@ -942,6 +944,11 @@ public class HeraClientImpl implements HeraClient{
 	@Override
 	public boolean isReadOnly() {
 		return this.readOnly;
+	}
+
+	@Override
+	public String getHeraClientConnID(){
+		return conn.getConnectionId();
 	}
 
 }

@@ -42,6 +42,8 @@ public class PoolConfig {
 	private String username;
 	private String password;
 	private Properties connectionProperties;
+
+	boolean useSSLConnection = true;
 	private final static Logger logger = LoggerFactory.getLogger(PoolConfig.class);
 
 	private void buildConnectionProperties() {
@@ -199,6 +201,14 @@ public class PoolConfig {
 
 	public String getUrl() {
 		return url;
+	}
+
+	public void setUseSSLConnection(boolean useSSLConnection) {
+		this.useSSLConnection = useSSLConnection;
+	}
+
+	public boolean isUseSSLConnection() {
+		return useSSLConnection;
 	}
 
 	public void setUrl(String url) {
