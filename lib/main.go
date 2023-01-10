@@ -186,8 +186,8 @@ func Run() {
 }
 
 /*
- * When mux dies with any reason like death from explisit OS signal or due to any panioc errors
- * It will kills the all mux childred by using mux process ID and relase CAL resources
+ * When mux dies with any reason like death from explicit OS signal or due to any panic errors
+ * then it will kills all mux children by using mux process ID and relase CAL resources.
  */
 func handlePanicAndReleaseResource(mux_process_id int) {
 	// detect if panic occurs or not
