@@ -24,5 +24,3 @@ log_level=5
 rac_sql_interval=0
 
 database_type=mysql
-
-max_fetch_block_size=1
