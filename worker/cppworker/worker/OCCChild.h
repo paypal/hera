@@ -275,6 +275,8 @@ private:
 	bool m_sql_rewritten;
 	bool m_enable_sql_rewrite;
 	std::string m_orig_query_hash;
+	int bits_to_match; // Sampled Bind Hash logging
+	int bit_mask; // Compute based on bits_to_match
 
 public:
 	// need to pass in a server socket which is already bound to the correct port
