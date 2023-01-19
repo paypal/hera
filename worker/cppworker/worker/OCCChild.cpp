@@ -244,7 +244,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_last_exec_rc(OCIR_OK),
 	m_restart_window(DEFAULT_WINDOW),
 	m_sql_rewritten(false),
-	m_enable_sql_rewrite(false)
+	m_enable_sql_rewrite(false),
+	bits_to_match(1),
+	bit_mask(0)
 {
 
 	std::string cval;
@@ -300,6 +302,14 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		max_fetch_block_size = DEFAULT_MAX_FETCH_BLOCK_SIZE;
 	max_rows = max_fetch_block_size;
 
+	if (config->get_value("bits_to_match", cval)) {
+		bits_to_match = StringUtil::to_int(cval);
+	}
+
+	bit_mask = (1<<bits_to_match) - 1;
+	if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "bind hash logging is enabled...bits_to_match: %d, bit_mask: %llu", bits_to_match, bit_mask);
+	}
 	// use non-blocking calls?
 	use_nonblock = config->is_switch_enabled("use_nonblocking", FALSE);
 
@@ -1028,12 +1038,28 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (c)
 			{
 				if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
-					std::string bind_hash_str_val;
-					for (unsigned int i = 0; i < bind_array->size(); i++) {
-						unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
-						StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
-						c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
-						bind_hash_str_val.clear();
+					unsigned long long int corrid = strtoull(m_corr_id.c_str(), NULL , 16);	
+					if (errno == ERANGE) {
+						std::ostringstream msg;
+						msg << "m_err=error on strtoull(), errno=" << errno;
+						WRITE_LOG_ENTRY(logfile, LOG_WARNING, "%s", msg.str().c_str());
+						errno = 0;
+						CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_ERROR);
+						e_name.AddData(msg.str());
+						e_name.AddData("corr_id_", m_corr_id);
+						e_name.Completed();
+					}
+					if (bit_mask == (corrid & bit_mask)) { // Allow
+						CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_OK);
+						e_name.AddData("corr_id_", m_corr_id);
+						e_name.Completed();
+						std::string bind_hash_str_val;
+						for (unsigned int i = 0; i < bind_array->size(); i++) {
+							unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
+							StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
+							c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
+							bind_hash_str_val.clear();
+						}
 					}
                 		}
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
