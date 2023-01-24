@@ -23,7 +23,7 @@ public class PgCurdTest {
 
     @AfterClass
     public static void teardown() throws IOException, InterruptedException {
-        UtilPostgres.stopPostgresContainer();
+//        UtilPostgres.stopPostgresContainer();
     }
 
 
