@@ -40,7 +40,7 @@ public class UtilHeraBox {
     }
     public static void buildHeraBoxImageWithMock() throws IOException, InterruptedException {
         if(!checkImageBuilt(HERA_OSS, "latest") || !checkImageBuilt(HERA_MOCK, "latest")){
-            ProcessBuilder pb = new ProcessBuilder("./build.sh");
+            ProcessBuilder pb = new ProcessBuilder("bash", "-c", "./build.sh");
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
