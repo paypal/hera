@@ -1,6 +1,7 @@
 package com.paypal.hera.jdbc;
 
 
+import com.paypal.hera.micrometer.MicrometerTest;
 import org.junit.AfterClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
@@ -12,6 +13,7 @@ import java.io.IOException;
 @Suite.SuiteClasses({
         MySqlLastInsertIdTest.class,
         MySqlTxnTest.class,
+        MicrometerTest.class
 })
 
 
