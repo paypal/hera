@@ -70,7 +70,7 @@ public class PostgresTxnTest {
 	public static void cleanUpAll() throws SQLException, IOException, InterruptedException {
 		dbConn.close();
 		dbConn2.close();
-//		UtilPostgres.stopPostgresContainer();
+		UtilPostgres.stopPostgresContainer();
 		LOGGER.info("Done");
 	}
 

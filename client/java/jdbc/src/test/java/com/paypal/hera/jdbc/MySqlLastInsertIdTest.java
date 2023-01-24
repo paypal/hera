@@ -61,7 +61,7 @@ public class MySqlLastInsertIdTest {
 	@After
 	public void cleanUp() throws SQLException, IOException, InterruptedException {
 		dbConn.close();
-//		Util.stopMySqlContainer();
+		Util.stopMySqlContainer();
 
 	}
 
