@@ -97,7 +97,7 @@ public class UtilHeraBox {
         Map<String, String> env = pb.environment();
         env.put("START_HERA_SAMPLE_APP", "false");
         env.put("HERA_DISABLE_SSL", "true");
-        String dir = GO_PATH+"/src/github.com/paypal/hera/docker_build_and_run";
+        String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
@@ -117,7 +117,7 @@ public class UtilHeraBox {
     public static void stopHeraBox() throws IOException {
         ProcessBuilder pb = new ProcessBuilder( "./stop.sh");
         pb.redirectErrorStream(true);
-        String dir = GO_PATH+"/src/github.com/paypal/hera/docker_build_and_run";
+        String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
