@@ -3,12 +3,14 @@ package com.paypal.hera.util;
 import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.jdbc.HeraConnection;
 import com.paypal.hera.jdbc.Util;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.SocketException;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -60,6 +62,12 @@ public class HeraStatementCacheTest {
         } finally {
             st.close();
         }
+    }
+
+    @AfterClass
+    public static void cleanUp() throws SQLException, IOException, InterruptedException {
+        dbConn.close();
+        Util.stopMySqlContainer();
     }
 
     private int runInternal(String sql) throws SQLException {
