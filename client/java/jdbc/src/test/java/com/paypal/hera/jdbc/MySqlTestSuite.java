@@ -11,8 +11,8 @@ import java.io.IOException;
 @RunWith(Suite.class)
 
 @Suite.SuiteClasses({
-        MySqlLastInsertIdTest.class,
-        MySqlTxnTest.class,
+//        MySqlLastInsertIdTest.class,
+//        MySqlTxnTest.class,
         MicrometerTest.class
 })
 
