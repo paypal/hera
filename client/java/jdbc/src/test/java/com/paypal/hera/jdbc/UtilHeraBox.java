@@ -130,7 +130,7 @@ public class UtilHeraBox {
                     symLinkTarget.toPath(),
                     (new File(GO_PATH+"/bin/" + symLinkTarget.getName())).toPath());
         }
-        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls -lrt " + GO_PATH);
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls " + basedir);
         Process process = pb.start();
         printOutput(process);
 //        buildHeraBoxImageWithMock();
