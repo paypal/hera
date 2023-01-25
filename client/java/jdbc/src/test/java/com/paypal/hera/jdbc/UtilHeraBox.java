@@ -40,11 +40,11 @@ public class UtilHeraBox {
     }
     public static void buildHeraBoxImageWithMock() throws IOException, InterruptedException {
         if(!checkImageBuilt(HERA_OSS, "latest") || !checkImageBuilt(HERA_MOCK, "latest")){
-            ProcessBuilder pb = new ProcessBuilder( "./build.sh");
+            ProcessBuilder pb = new ProcessBuilder("bash", "-c", "./build.sh");
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = GO_PATH+"/docker_build_and_run";
+            String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
@@ -110,6 +110,7 @@ public class UtilHeraBox {
     }
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
+        Runtime.getRuntime().exec("go install github.com/paypal/hera/docker_build_and_run").waitFor();
         buildHeraBoxImageWithMock();
         startHeraBox();
     }
