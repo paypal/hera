@@ -1,15 +1,10 @@
 package com.paypal.hera.jdbc;
 
-import com.paypal.hera.client.HeraClientImpl;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.nio.file.Files;
 import java.util.Map;
 
 public class UtilHeraBox {
@@ -21,8 +16,6 @@ public class UtilHeraBox {
     private static int HERA_MYSQL_PORT = 3306;
     private static String HOSTNAME = "127.0.0.1";
     private static String GO_PATH = System.getenv().get("GOPATH");
-    static final Logger LOGGER = LoggerFactory.getLogger(UtilHeraBox.class);
-
     static boolean checkImageBuilt(String imageName, String version){
         for(int i = 0; i < 50; i++){
             try{
@@ -51,7 +44,7 @@ public class UtilHeraBox {
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
+            String dir = "docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
@@ -93,7 +86,7 @@ public class UtilHeraBox {
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         String line = null;
         while ((line = reader.readLine()) != null)
-            LOGGER.info(line);
+            System.out.println(line);
     }
 
      static void startHeraBox() throws IOException {
@@ -117,24 +110,8 @@ public class UtilHeraBox {
     }
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
-        Runtime.getRuntime().exec("go install github.com/paypal/hera/docker_build_and_run").waitFor();
-        String basedir = GO_PATH+"/srv/";
-        File basedirF = new File(basedir);
-        basedirF.mkdir();
-
-
-        File symLinkTarget;
-        symLinkTarget = new File(basedir+"docker_build_and_run");
-        if (!symLinkTarget.exists()) {
-            Files.createSymbolicLink(
-                    symLinkTarget.toPath(),
-                    (new File(GO_PATH+"/bin/" + symLinkTarget.getName())).toPath());
-        }
-        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls " + basedir+"docker_build_and_run");
-        Process process = pb.start();
-        printOutput(process);
-//        buildHeraBoxImageWithMock();
-//        startHeraBox();
+        buildHeraBoxImageWithMock();
+        startHeraBox();
     }
 
     public static void stopHeraBox() throws IOException {
