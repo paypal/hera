@@ -51,7 +51,7 @@ public class UtilHeraBox {
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
+            String dir = GO_PATH+"/srv/docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
@@ -130,11 +130,8 @@ public class UtilHeraBox {
                     symLinkTarget.toPath(),
                     (new File(GO_PATH+"/bin/" + symLinkTarget.getName())).toPath());
         }
-        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls " + basedir);
-        Process process = pb.start();
-        printOutput(process);
-//        buildHeraBoxImageWithMock();
-//        startHeraBox();
+        buildHeraBoxImageWithMock();
+        startHeraBox();
     }
 
     public static void stopHeraBox() throws IOException {
