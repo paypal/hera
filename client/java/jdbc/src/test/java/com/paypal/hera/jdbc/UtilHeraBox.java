@@ -46,11 +46,14 @@ public class UtilHeraBox {
     }
     public static void buildHeraBoxImageWithMock() throws IOException, InterruptedException {
         if(!checkImageBuilt(HERA_OSS, "latest") || !checkImageBuilt(HERA_MOCK, "latest")){
-            ProcessBuilder pb = new ProcessBuilder( "./build.sh");
+            ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "./build.sh");
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = "/docker_build_and_run";
+            String currentPath = System.getProperty("user.dir");
+            File curr = new File(currentPath);
+            String base = curr.getParentFile().getParentFile().getParent();
+            String dir = base + "/docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
@@ -116,15 +119,8 @@ public class UtilHeraBox {
     }
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
-        String currentPath = System.getProperty("user.dir");
-        File curr = new File(currentPath);
-        String base = curr.getParentFile().getParentFile().getParent();
-        ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "ls " + base + "/docker_build_and_run");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-        printOutput(process);
-//        buildHeraBoxImageWithMock();
-//        startHeraBox();
+        buildHeraBoxImageWithMock();
+        startHeraBox();
     }
 
     public static void stopHeraBox() throws IOException {
