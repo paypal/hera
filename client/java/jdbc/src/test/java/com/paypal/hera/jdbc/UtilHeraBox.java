@@ -20,7 +20,7 @@ public class UtilHeraBox {
     private static int HERA_MYSQL_PORT = 3306;
     private static String HOSTNAME = "127.0.0.1";
     private static String GO_PATH = System.getenv().get("GOPATH");
-    static final Logger LOGGER = LoggerFactory.getLogger(HeraClientImpl.class);
+    static final Logger LOGGER = LoggerFactory.getLogger(UtilHeraBox.class);
 
     static boolean checkImageBuilt(String imageName, String version){
         for(int i = 0; i < 50; i++){
@@ -101,12 +101,15 @@ public class UtilHeraBox {
      static void startHeraBox() throws IOException {
         if (checkConnectionUp(HOSTNAME, MOCK_PORT) && checkConnectionUp(HOSTNAME, HERA_BOX_PORT) &&
                 checkConnectionUp(HOSTNAME, HERA_MYSQL_PORT)) return;
-        ProcessBuilder pb = new ProcessBuilder( "./start.sh");
+        ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "./start.sh");
         pb.redirectErrorStream(true);
         Map<String, String> env = pb.environment();
         env.put("START_HERA_SAMPLE_APP", "false");
         env.put("HERA_DISABLE_SSL", "true");
-        String dir = "/docker_build_and_run";
+        String currentPath = System.getProperty("user.dir");
+        File curr = new File(currentPath);
+        String base = curr.getParentFile().getParentFile().getParent();
+        String dir = base + "/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
@@ -124,9 +127,12 @@ public class UtilHeraBox {
     }
 
     public static void stopHeraBox() throws IOException {
-        ProcessBuilder pb = new ProcessBuilder( "./stop.sh");
+        ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "./stop.sh");
         pb.redirectErrorStream(true);
-        String dir = "/docker_build_and_run";
+        String currentPath = System.getProperty("user.dir");
+        File curr = new File(currentPath);
+        String base = curr.getParentFile().getParentFile().getParent();
+        String dir = base + "/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
