@@ -116,7 +116,7 @@ public class UtilHeraBox {
     }
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "ls " + "docker_build_and_run");
+        ProcessBuilder pb = new ProcessBuilder( "bash", "-c", "ls " + System.getProperty("user.dir") + "/docker_build_and_run");
         pb.redirectErrorStream(true);
         Process process = pb.start();
         printOutput(process);
