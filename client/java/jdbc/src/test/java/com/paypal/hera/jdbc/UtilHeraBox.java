@@ -111,7 +111,7 @@ public class UtilHeraBox {
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
         Runtime.getRuntime().exec("go install github.com/paypal/hera/docker_build_and_run").waitFor();
-        ProcessBuilder pb = new ProcessBuilder("ls " + GO_PATH);
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls " + GO_PATH);
         Process process = pb.start();
         printOutput(process);
 //        buildHeraBoxImageWithMock();
