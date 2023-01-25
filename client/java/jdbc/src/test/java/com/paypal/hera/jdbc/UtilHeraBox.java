@@ -44,7 +44,7 @@ public class UtilHeraBox {
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
+            String dir = GO_PATH+"/docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
