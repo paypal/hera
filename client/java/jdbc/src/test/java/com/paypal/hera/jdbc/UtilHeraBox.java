@@ -1,5 +1,9 @@
 package com.paypal.hera.jdbc;
 
+import com.paypal.hera.client.HeraClientImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
@@ -16,6 +20,8 @@ public class UtilHeraBox {
     private static int HERA_MYSQL_PORT = 3306;
     private static String HOSTNAME = "127.0.0.1";
     private static String GO_PATH = System.getenv().get("GOPATH");
+    static final Logger LOGGER = LoggerFactory.getLogger(UtilHeraBox.class);
+
     static boolean checkImageBuilt(String imageName, String version){
         for(int i = 0; i < 50; i++){
             try{
@@ -86,7 +92,7 @@ public class UtilHeraBox {
         BufferedReader reader = new BufferedReader(new InputStreamReader(is));
         String line = null;
         while ((line = reader.readLine()) != null)
-            System.out.println(line);
+            LOGGER.info(line);
     }
 
      static void startHeraBox() throws IOException {
