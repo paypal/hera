@@ -9,6 +9,7 @@ import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.nio.file.Files;
 import java.util.Map;
 
 public class UtilHeraBox {
@@ -117,7 +118,19 @@ public class UtilHeraBox {
 
     public static void makeAndStartHeraBox() throws IOException, InterruptedException {
         Runtime.getRuntime().exec("go install github.com/paypal/hera/docker_build_and_run").waitFor();
-        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls " + GO_PATH);
+        String basedir = GO_PATH+"/srv/";
+        File basedirF = new File(basedir);
+        basedirF.mkdir();
+
+
+        File symLinkTarget;
+        symLinkTarget = new File(basedir+"docker_build_and_run");
+        if (!symLinkTarget.exists()) {
+            Files.createSymbolicLink(
+                    symLinkTarget.toPath(),
+                    (new File(GO_PATH+"/bin/" + symLinkTarget.getName())).toPath());
+        }
+        ProcessBuilder pb = new ProcessBuilder("bash", "-c", "ls -lrt " + GO_PATH);
         Process process = pb.start();
         printOutput(process);
 //        buildHeraBoxImageWithMock();
