@@ -34,6 +34,8 @@ import (
 // the "infinite loop" as a goroutine and waits on the worker broker channel for the signal to exit
 func Run() {
 	signal.Ignore(syscall.SIGPIPE)
+	mux_process_id := syscall.Getpid()
+
 	namePtr := flag.String("name", "", "module name in v$session table")
 	flag.Parse()
 
@@ -168,12 +170,48 @@ func Run() {
 
 	go srv.Run()
 
-	<-GetWorkerBrokerInstance().Stopped()
-
 	//
 	// calling releasectxresource right before exit only serves as an example on how
 	// to release resources allocated by cal for a given thread group, which in
 	// this case is thread group calDefaultThreadGroupName.
 	//
-	cal.ReleaseCxtResource()
+	defer func() {
+		cal.ReleaseCxtResource()
+	}()
+
+	// Defer release resource in case of any abnormal exit of for application
+	defer handlePanicAndReleaseResource(mux_process_id)
+
+	<-GetWorkerBrokerInstance().Stopped()
+}
+
+/*
+ * When mux dies with any reason like death from explicit OS signal or due to any panic errors
+ * then it will kills all mux children by using mux process ID and relase CAL resources.
+ */
+func handlePanicAndReleaseResource(mux_process_id int) {
+	// detect if panic occurs or not
+	panic_data := recover()
+	if panic_data != nil {
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Mux process: %d exited with panic: %s, so releasing its children and other resources", mux_process_id, panic_data))
+		pgid, err := syscall.Getpgid(mux_process_id)
+		if err != nil {
+			pgid = mux_process_id
+			logger.GetLogger().Log(logger.Alert, "Failed to fetch process group: ", err)
+		}
+		err = syscall.Kill(-pgid, syscall.SIGTERM)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Failed to reeleasing MUX process: %d, and error is: %s", mux_process_id, err))
+		}
+		logger.GetLogger().Log(logger.Alert, fmt.Sprintf("Successfully released resources related MUX process: %d", mux_process_id))
+		<-GetWorkerBrokerInstance().Stopped()
+
+		//
+		// calling releasectxresource right before exit only serves as an example on how
+		// to release resources allocated by cal for a given thread group, which in
+		// this case is thread group calDefaultThreadGroupName.
+		//
+		cal.ReleaseCxtResource()
+		os.Exit(1)
+	}
 }
