@@ -40,11 +40,11 @@ public class UtilHeraBox {
     }
     public static void buildHeraBoxImageWithMock() throws IOException, InterruptedException {
         if(!checkImageBuilt(HERA_OSS, "latest") || !checkImageBuilt(HERA_MOCK, "latest")){
-            ProcessBuilder pb = new ProcessBuilder("bash", "-c", "./build.sh");
+            ProcessBuilder pb = new ProcessBuilder( "./build.sh");
             pb.redirectErrorStream(true);
             Map<String, String> env = pb.environment();
             env.put("BUILD_SAMPLE_APP", "false");
-            String dir = "docker_build_and_run";
+            String dir = "/docker_build_and_run";
             pb.directory(new File(dir));
             Process process = pb.start();
             printOutput(process);
@@ -97,7 +97,7 @@ public class UtilHeraBox {
         Map<String, String> env = pb.environment();
         env.put("START_HERA_SAMPLE_APP", "false");
         env.put("HERA_DISABLE_SSL", "true");
-        String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
+        String dir = "/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
@@ -117,7 +117,7 @@ public class UtilHeraBox {
     public static void stopHeraBox() throws IOException {
         ProcessBuilder pb = new ProcessBuilder( "./stop.sh");
         pb.redirectErrorStream(true);
-        String dir = GO_PATH+"/github.com/paypal/hera/docker_build_and_run";
+        String dir = "/docker_build_and_run";
         pb.directory(new File(dir));
         Process process = pb.start();
         printOutput(process);
