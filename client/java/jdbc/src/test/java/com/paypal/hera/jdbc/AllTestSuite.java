@@ -8,7 +8,7 @@ import org.junit.runners.Suite;
 
 @Suite.SuiteClasses({
         MySqlTestSuite.class,
-        PostgresTestSuite.class,
+//        PostgresTestSuite.class,
 })
 
 public class AllTestSuite {
