@@ -26,15 +26,17 @@ public class UtilHeraBox {
         for(int i = 0; i < 50; i++){
             try{
                 Thread.sleep(1222);
-                String cmd = "docker image inspect " + imageName + ":" + version;
+                String cmd = "docker images";
                 ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
                 builder.redirectErrorStream(true);
                 Process process = builder.start();
-                InputStream is = process.getInputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-                if (!reader.readLine().equals("[]")){
-                    return true;
-                }
+                printOutput(process);
+
+//                InputStream is = process.getInputStream();
+//                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+//                if (!reader.readLine().equals("[]")){
+//                    return true;
+//                }
             }
             catch (IOException ex){
                 ex.printStackTrace();
