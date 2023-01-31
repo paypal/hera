@@ -63,8 +63,10 @@ public class MySqlTxnTest {
 	}
 
 	@After
-	public void cleanUp() throws SQLException {
+	public void cleanUp() throws SQLException, IOException, InterruptedException {
 		dbConn.close();
+		Util.stopMySqlContainer();
+
 	}
 
 	public static String TEST_TABLE = "test_mysql_txn";

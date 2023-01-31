@@ -80,10 +80,11 @@ public class ShardingTest {
 	}
 
 	@After
-	public void cleanUp() throws SQLException {
+	public void cleanUp() throws SQLException, IOException, InterruptedException {
 		Statement st = dbConn.createStatement();
 		cleanTable(st, sID_START, 20, true);
 		dbConn.close();
+		Util.stopMySqlContainer();
 	}
 	
 	@Test

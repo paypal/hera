@@ -6,6 +6,7 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.sql.*;
 import java.util.Properties;
 
@@ -21,7 +22,8 @@ public class PgCurdTest {
 
 
     @AfterClass
-    public static void teardown() {
+    public static void teardown() throws IOException, InterruptedException {
+        UtilPostgres.stopPostgresContainer();
     }
 
 

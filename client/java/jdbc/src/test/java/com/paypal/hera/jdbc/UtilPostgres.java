@@ -80,7 +80,7 @@ public class UtilPostgres {
 			Socket clientSocket = new Socket();
 			try {
 				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("0.0.0.0", 5432), 2000);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 5432), 2000);
 				didConn = true;
 				clientSocket.close();
 				break;
@@ -95,6 +95,27 @@ public class UtilPostgres {
 			}
 		}
 		return didConn;
+	}
+	static boolean checkDockerLogs(String cmd) {
+		for(int i = 0; i < 10; i++){
+			try{
+				Thread.sleep(1222);
+				ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
+				builder.redirectErrorStream(true);
+				Process process = builder.start();
+				InputStream is = process.getInputStream();
+				BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+				if (reader.readLine() != null){
+					return true;
+				}
+			}
+			catch (IOException ex){
+				ex.printStackTrace();
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		return false;
 	}
 	static void startPostgresContainer() throws IOException, InterruptedException {
 		if(checkPostgresIsUp()) return;
@@ -111,10 +132,10 @@ public class UtilPostgres {
 						"-e POSTGRES_PASSWORD=1-testPgDb " +
 						"-d postgres").waitFor();
 
-		// best is to check this in postgres logs: "ready for start up"
-		// via : grep -i "database system is ready to accept connections" <(docker logs postgres 2>&1)
-		// putting a long sleep is a work around
-		Thread.sleep(15000);
+		String cmd = "grep -i \"ready for start up\" <(docker logs postgres55 2>&1)";
+		if (!checkDockerLogs(cmd)){
+			throw new RuntimeException("postgres docker didn't start");
+		}
 
 		if (!checkPostgresIsUp()) {
 			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
@@ -122,6 +143,15 @@ public class UtilPostgres {
 			throw new RuntimeException("postgres docker did not come up");
 		}
 	}
+
+	public static void stopPostgresContainer() throws IOException, InterruptedException {
+		if(checkPostgresIsUp()){
+			String dockerName = "postgres55";
+			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
+		}
+	}
+
 	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
 		startPostgresContainer();
 		if (cfg == null) {

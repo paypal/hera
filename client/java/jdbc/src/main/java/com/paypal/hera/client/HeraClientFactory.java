@@ -6,12 +6,12 @@ import com.paypal.hera.conn.HeraClientConnectionFactory;
 import com.paypal.hera.ex.HeraExceptionBase;
 
 public class HeraClientFactory {
-	public static HeraClient createClient(HeraClientConfigHolder config, String host, String port) throws HeraExceptionBase {	 
-		
-		
+	public static HeraClient createClient(HeraClientConfigHolder config, String host, String port) throws HeraExceptionBase {
+
+
 		HeraClientConnectionFactory factory = config.getConnectionFactory();
 		HeraClientConnection conn = factory.createClientConnection(config.getProperties(), host, port);
-		
-		return new HeraClientImpl(conn, config.getResponseTimeoutMs(), config.getSupportColumnNames(), config.getSupportColumnInfo());
+
+		return new HeraClientImpl(conn, config, config.getResponseTimeoutMs(), config.getSupportColumnNames(), config.getSupportColumnInfo());
 	}
 }
