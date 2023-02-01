@@ -35,6 +35,4 @@ jobs:
       run: |
         export GOPATH=`go env GOPATH`
         cd mock/mockClient/java
-        mvn clean install -DskipTests 
-        cd ../../../client/java/jdbc
         mvn test -Dtest=com.paypal.hera.jdbc.AllTestSuite
