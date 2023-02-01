@@ -342,7 +342,7 @@ public class MicrometerTest {
                 double max = timeInfoMap.get("max");
 
                 execTotalTime += totalTime;
-                Assert.assertTrue(max >= 3);
+                Assert.assertTrue("Max: " + max, max >= 3);
                 Assert.assertEquals("unknown", info.getHost());
                 Assert.assertEquals("0", info.getSqlHash());
             }
