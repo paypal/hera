@@ -1,6 +1,5 @@
 package com.paypal.hera.parser.vistors;
 
-import com.paypal.dal.parser.sqlmetadata.*;
 import com.paypal.hera.parser.sqlmetadata.*;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.select.AllColumns;

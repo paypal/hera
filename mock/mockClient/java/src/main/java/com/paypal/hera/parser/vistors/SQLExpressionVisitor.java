@@ -1,6 +1,5 @@
 package com.paypal.hera.parser.vistors;
 
-import com.paypal.dal.parser.sqlmetadata.*;
 import com.paypal.hera.parser.sqlmetadata.*;
 import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.expression.operators.arithmetic.*;
