@@ -160,7 +160,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>com.paypal.dal.parser.QueryParser</mainClass>
+                            <mainClass>com.paypal.hera.parser.QueryParser</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
