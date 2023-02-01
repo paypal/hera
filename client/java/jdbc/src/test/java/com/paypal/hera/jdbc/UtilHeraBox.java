@@ -25,7 +25,7 @@ public class UtilHeraBox {
     static boolean checkImageBuilt(String imageName, String version){
         for(int i = 0; i < 50; i++){
             try{
-                Thread.sleep(500);
+                Thread.sleep(1222);
                 String cmd = "docker image inspect " + imageName + ":" + version;
                 ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
                 builder.redirectErrorStream(true);
