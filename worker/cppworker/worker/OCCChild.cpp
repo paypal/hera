@@ -279,7 +279,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	}
 	
 	// initialize markdown system
-	host_name = getenv("TWO_TASK");
+	if (tns_name)
+		host_name = tns_name;
 	const char* envval = getenv("MARK_HOST_NAME");
 	if (envval)
 		mark_host_name = envval;
@@ -1564,6 +1565,7 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	}
 
 	char envStr[12] = "password";
+	rc = -1; // reset the response code. This will be useful if the password environment is not available. 
 	for(int i=0; i < RETRIES; i++) {
 		if( i > 0) {
 			sprintf(envStr, "password%d", i+1);
@@ -1572,7 +1574,11 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 			err << "m_err=Login failed, Attempting with next available credentials,Attempt="<<i;
 			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
 		}
-		std::string db_pswd = getenv(envStr);
+		std::string db_pswd;
+		const char *envval = getenv(envStr);
+		if (envval) {
+			db_pswd = envval;
+		}
 		if(!db_pswd.empty()) {
 			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
 				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
