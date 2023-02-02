@@ -39,7 +39,7 @@
 		<dependency>
 			<groupId>com.paypal.hera</groupId>
 			<artifactId>hera-jdbc</artifactId>
-			<version>0.0.27</version>
+			<version>0.0.28</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jmockit</groupId>

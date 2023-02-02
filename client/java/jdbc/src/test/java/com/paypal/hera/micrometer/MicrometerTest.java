@@ -1,13 +1,13 @@
 package com.paypal.hera.micrometer;
 
-import com.paypal.dal.heramockclient.mockannotation.JDBCMockConst;
+import com.paypal.hera.heramockclient.*;
+import com.paypal.hera.heramockclient.mockannotation.JDBCMockConst;
 import com.paypal.hera.client.HeraClientImpl;
 import com.paypal.hera.conf.HeraClientConfigHolder;
 import com.paypal.hera.jdbc.UtilHeraBox;
 import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.paypal.dal.heramockclient.*;
 
 
 import java.io.IOException;
@@ -342,7 +342,7 @@ public class MicrometerTest {
                 double max = timeInfoMap.get("max");
 
                 execTotalTime += totalTime;
-                Assert.assertTrue(max >= 3);
+                Assert.assertTrue("Max: " + max, max >= 3);
                 Assert.assertEquals("unknown", info.getHost());
                 Assert.assertEquals("0", info.getSqlHash());
             }
