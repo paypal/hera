@@ -21,7 +21,7 @@ obj = $(csrc:.c=.o) $(cppsrc:.cpp=.o)
 dep = $(obj:.o=.d)
 
 DEBUGFLAGS=-g -O2
-ORACLE_HOME=/opt/instantclient_19_3/
+ORACLE_HOME=/opt/instantclient_19_17/
 CPPFLAGS=-std=c++11 -I../ -I$(ORACLE_HOME)/sdk/include $(DEBUGFLAGS)
 CFLAGS=$(DEBUGFLAGS)
 
