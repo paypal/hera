@@ -1,5 +1,8 @@
 [![Build Status](https://travis-ci.org/paypal/hera.svg?branch=master)](https://travis-ci.org/paypal/hera)
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
+
+<img src="docs/hera.png" height="240" width="340">
+
 # Hera - High Efficiency Reliable Access to data stores
 
 Hera multiplexes connections for MySQL, Oracle and
