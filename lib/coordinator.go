@@ -643,7 +643,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	xShardRead := false
 
 	// check bind throttle
+	GetBindEvict().lock.Lock()
 	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
+	GetBindEvict().lock.Unlock()
 	if ok {
 		wType := wtypeRW
 		cfg := GetNumWorkers(crd.shard.shardID)

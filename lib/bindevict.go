@@ -20,6 +20,7 @@ package lib
 import (
 	"fmt"
 	"regexp"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -41,6 +42,7 @@ type BindEvict struct {
 	// evicted binds get throttled to have overall steady state during bad bind queries
 	// nested map uses sqlhash "bindName|bindValue"
 	BindThrottle map[uint32]map[string]*BindThrottle
+	lock sync.Mutex
 }
 
 func GetBindEvict() *BindEvict {
@@ -83,7 +85,8 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 		return
 	}
 	entry.AllowEveryX = 0
-
+	GetBindEvict().lock.Lock()
+	defer GetBindEvict().lock.Unlock()
 	// delete entry
 	if len(GetBindEvict().BindThrottle[entry.Sqlhash]) == 1 {
 		updateCopy := GetBindEvict().Copy()
@@ -114,7 +117,9 @@ func (entry *BindThrottle) incrAllowEveryX() {
 }
 
 func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
+	GetBindEvict().lock.Lock()
 	sqlBinds := GetBindEvict().BindThrottle[sqlhash]
+	GetBindEvict().lock.Unlock()
 	for k0, v := range bindKV /*parseBinds(request)*/ {
 		k := NormalizeBindName(k0)
 		concatKey := fmt.Sprintf("%s|%s", k, v)
