@@ -1040,39 +1040,44 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			{
 				if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
 					bool skip = false;
-					unsigned long long int corrid = strtoull(m_corr_id.c_str(), NULL , 16);	
-					if (errno == ERANGE) {
-						std::ostringstream msg;
-						msg << "m_err=error on strtoull(), errno=" << errno;
-						WRITE_LOG_ENTRY(logfile, LOG_WARNING, "%s", msg.str().c_str());
-						errno = 0;
-						skip = true;
-						CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_ERROR);
-						e_name.AddData(msg.str());
-						e_name.AddData("corr_id_", m_corr_id);
-						e_name.Completed();
+					if (m_corr_id.length() > 16) { // Max hex value that can be stored in ULLONG_MAX (FFFFFFFFFFFFFFFF)
+						skip = true; // Reduce the logging noise.
 					}
-					if (!skip && (bit_mask == (corrid & bit_mask))) { // Allow
-						if (bind_array->size() > 0) {
-							// Skip SQL with large number of binds
-							if (bind_array->size() > 5 || bind_array->at(0).get()->array_row_num > 1) {
-								CalEvent e_name("BIND_HASH_LOGGING", "SKIPPED", CAL::TRANS_ERROR);
-								std::ostringstream msg;
-								msg << "bind array size=" << bind_array->size();
-								msg << "&array row num=" << bind_array->at(0).get()->array_row_num;
-								e_name.AddData(msg.str());
-								e_name.AddData("corr_id_", m_corr_id);
-								e_name.Completed();
-							} else {
-								CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_OK);
-								e_name.AddData("corr_id_", m_corr_id);
-								e_name.Completed();
-								std::string bind_hash_str_val;
-								for (unsigned int i = 0; i < bind_array->size(); i++) {
-									unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
-									StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
-									c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
-									bind_hash_str_val.clear();
+					if (!skip) {
+						unsigned long long int corrid = strtoull(m_corr_id.c_str(), NULL , 16);
+						if (errno == ERANGE) {
+							std::ostringstream msg;
+							msg << "m_err=error on strtoull(), errno=" << errno;
+							WRITE_LOG_ENTRY(logfile, LOG_WARNING, "%s", msg.str().c_str());
+							errno = 0;
+							skip = true;
+							CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_ERROR);
+							e_name.AddData(msg.str());
+							e_name.AddData("corr_id_", m_corr_id);
+							e_name.Completed();
+						}
+						if (!skip && (bit_mask == (corrid & bit_mask))) { // Allow
+							if (bind_array->size() > 0) {
+								// Skip SQL with large number of binds
+								if (bind_array->size() > 5 || bind_array->at(0).get()->array_row_num > 1) {
+									CalEvent e_name("BIND_HASH_LOGGING", "SKIPPED", CAL::TRANS_ERROR);
+									std::ostringstream msg;
+									msg << "bind array size=" << bind_array->size();
+									msg << "&array row num=" << bind_array->at(0).get()->array_row_num;
+									e_name.AddData(msg.str());
+									e_name.AddData("corr_id_", m_corr_id);
+									e_name.Completed();
+								} else {
+									CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_OK);
+									e_name.AddData("corr_id_", m_corr_id);
+									e_name.Completed();
+									std::string bind_hash_str_val;
+									for (unsigned int i = 0; i < bind_array->size(); i++) {
+										unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
+										StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
+										c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
+										bind_hash_str_val.clear();
+									}
 								}
 							}
 						}
