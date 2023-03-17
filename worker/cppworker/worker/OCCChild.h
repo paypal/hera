@@ -274,6 +274,7 @@ private:
 	SQLRewriter m_rewriter;
 	bool m_sql_rewritten;
 	bool m_enable_sql_rewrite;
+	bool m_shard_key_value_type_string;
 	std::string m_orig_query_hash;
 	int bits_to_match; // Sampled Bind Hash logging. Sampling ratio (1:pow(2,bits_to_match)). Default 1 (Sampling ratio 1:2)
 	unsigned long long int bit_mask; // Compute based on bits_to_match
@@ -515,7 +516,8 @@ private:
 	int trans_forget(void);
 	// check with oracle if we're in transaction
 	virtual bool is_in_transaction();
-    virtual uint compute_scuttle_id(unsigned long long _shardkey_val);
+	virtual uint compute_scuttle_id(unsigned long long _shardkey_val);
+	virtual uint compute_scuttle_id(std::string _shardkey_str_val);
 
 	// handle OCI_SUCCESS_WITH_INFO
 	void check_OCI_SUCCESS_WITH_INFO(int& _rc, const char* _message, LogLevelEnum _log_level);
