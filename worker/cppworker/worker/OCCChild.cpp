@@ -462,6 +462,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
+		m_shard_key_value_type_string = config->get_bool("shard_key_value_type_is_string", false);
 		std::string algo = config->get_string("sharding_algo", DEFAULT_SHARDING_ALGO);
 		StringUtil::to_lower_case(algo);
 		if (algo.compare(MOD_ONLY_SHARDING_ALGO) == 0)
@@ -798,9 +799,16 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			uint32_t scuttle_id_val = 0;
 			if (values.size() && strcasecmp(name.c_str(), m_shard_key_name.c_str()) == 0)
 			{
-				// cast to long long
-				unsigned long long shard_val = StringUtil::to_ullong(values[0]);
-				scuttle_id_val = compute_scuttle_id(shard_val);
+				if (m_shard_key_value_type_string) {
+					if (logfile->get_log_level() >= LOG_VERBOSE)
+						WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true");
+					scuttle_id_val = compute_scuttle_id(values[0]);
+				}
+				else {
+					// cast to long long
+					unsigned long long shard_val = StringUtil::to_ullong(values[0]);
+					scuttle_id_val = compute_scuttle_id(shard_val);
+				}
 				StringUtil::fmt_ulong(m_scuttle_id, scuttle_id_val);
 				if (logfile->get_log_level() >= LOG_DEBUG)
 				{
@@ -930,7 +938,13 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id null in sql rewrite to mirror null shard key value");
 					} else {
 						std::string scuttle_id_str_val;
-						StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
+						if (m_shard_key_value_type_string) {
+							if (logfile->get_log_level() >= LOG_VERBOSE)
+								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true in sql rewrite");
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(bind_values));
+						}
+						else
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
 						bind_value_max_size = scuttle_id_str_val.length();
 
 						if (m_scuttle_id.empty()){
@@ -5697,6 +5711,23 @@ uint OCCChild::compute_scuttle_id(unsigned long long _shardkey_val)
 			break;
 		case HASH_MOD:
 			scuttle_id = HashUtil::MurmurHash3(_shardkey_val) % m_max_scuttle_buckets;
+			break;
+		default:
+			break;
+	}
+	return scuttle_id;
+}
+
+uint OCCChild::compute_scuttle_id(std::string _shardkey_str_val)
+{
+	uint scuttle_id = 0;
+	// similar to the implementation in mux for string shard keys - coordinatorsharding.go func getShardRec
+	// https://github.com/paypal/hera/blob/master/lib/coordinatorsharding.go#L66
+	switch(m_sharding_algo)
+	{
+		case MOD_ONLY:
+		case HASH_MOD:
+			scuttle_id = HashUtil::MurmurHash3(_shardkey_str_val) % m_max_scuttle_buckets;
 			break;
 		default:
 			break;
