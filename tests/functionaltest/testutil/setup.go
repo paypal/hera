@@ -392,6 +392,7 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_3", "tcp(127.0.0.1:2121)/heratestdb")
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
+			logger.GetLogger().Log(logger.Info, "Creating MySQL DB instance using docker.")
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
@@ -409,6 +410,7 @@ func (m *mux) StartServer() error {
 			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
 		}
 	} else if m.wType == PostgresWorker {
+		logger.GetLogger().Log(logger.Info, "Creating Postgers DB instance using docker.")
 		xPostgres, ok := m.appcfg["x-postgres"]
 		if !ok {
 			xPostgres = "auto"

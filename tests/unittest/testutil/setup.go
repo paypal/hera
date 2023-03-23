@@ -17,7 +17,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -43,18 +42,19 @@ type DBType int
 const (
 	Oracle DBType = iota
 	MySQL
-	PostgreSQL 
+	PostgreSQL
 )
 
 type mux struct {
-	origDir string
-	wDir    string
-	appcfg  map[string]string
-	opscfg  map[string]string
-	wType   WorkerType
-	wg      sync.WaitGroup
-	dbServ  *exec.Cmd
-	dbStop  context.CancelFunc
+	origDir     string
+	wDir        string
+	appcfg      map[string]string
+	opscfg      map[string]string
+	wType       WorkerType
+	wg          sync.WaitGroup
+	dbServ      *exec.Cmd
+	dbStop      context.CancelFunc
+	watchdogCmd *exec.Cmd
 	// dbIp    string
 }
 
@@ -94,7 +94,7 @@ func (m *mux) setupWorkdir() {
 
 func (m *mux) setupConfig() error {
 	// opscfg
-	for k,v := range m.opscfg {
+	for k, v := range m.opscfg {
 		m.appcfg[k] = v
 	}
 	if m.wType == MySQLWorker {
@@ -134,6 +134,8 @@ func (m *mux) setupConfig() error {
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
 
 	// if not already setup by testall.sh for Github Actions
+	doBuildAndSymlink("watchdog")
+	doBuildAndSymlink("mux")
 	doBuildAndSymlink("mysqlworker")
 	doBuildAndSymlink("postgresworker")
 
@@ -145,15 +147,16 @@ func (m *mux) setupConfig() error {
 
 	return nil
 }
+
 func doBuildAndSymlink(binname string) {
 	var err error
 	_, err = os.Stat(binname)
 	if err != nil {
-		binpath := os.Getenv("GOPATH")+"/bin/"+binname
+		binpath := os.Getenv("GOPATH") + "/bin/" + binname
 		_, err = os.Stat(binpath)
 		if err != nil {
 			srcname := binname
-			if srcname != "mux" {
+			if srcname != "mux" && srcname != "watchdog" {
 				srcname = "worker/" + srcname
 			}
 			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
@@ -199,18 +202,17 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("password", "1-testDb")
 		waitLoop := 1
 		for {
-			err := DBDirect("select 1", "127.0.0.1", dbName/*"heratestdb"*/, MySQL)
+			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-				fmt.Printf("waiting for db to come up %d %s\n",waitLoop, err.Error())
+				fmt.Printf("waiting for db to come up %d %s\n", waitLoop, err.Error())
 				waitLoop++
 				continue
 			} else {
 				break
 			}
 		}
-
 
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
@@ -266,7 +268,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("postgresql_ip", ipBuf.String())
 
 		return ipBuf.String()
-	} 
+	}
 	return ""
 }
 
@@ -333,6 +335,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 
 func (m *mux) StartServer() error {
 	// setup working dir
+	logger.GetLogger().Log(logger.Info, "Starting MUX server")
 	m.setupWorkdir()
 	err := m.setupConfig()
 	if err != nil {
@@ -361,6 +364,7 @@ func (m *mux) StartServer() error {
 			os.Setenv("password", "Hera-User-Test-9")
 			os.Setenv("TWO_TASK", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
+			logger.GetLogger().Log(logger.Info, "Creating MySQL DB instance using docker.")
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
@@ -376,6 +380,7 @@ func (m *mux) StartServer() error {
 			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
 		}
 	} else if m.wType == PostgresWorker {
+		logger.GetLogger().Log(logger.Info, "Creating Postgers DB instance using docker.")
 		xPostgres, ok := m.appcfg["x-postgres"]
 		if !ok {
 			xPostgres = "auto"
@@ -384,18 +389,27 @@ func (m *mux) StartServer() error {
 			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
 			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 			twoTask := os.Getenv("TWO_TASK")
-			os.Setenv ("TWO_TASK_0", twoTask)
-			os.Setenv ("TWO_TASK_1", twoTask)
+			os.Setenv("TWO_TASK_0", twoTask)
+			os.Setenv("TWO_TASK_1", twoTask)
 			twoTask1 := os.Getenv("TWO_TASK")
-			fmt.Println ("TWO_TASK_1: ", twoTask1)
+			fmt.Println("TWO_TASK_1: ", twoTask1)
 		}
 	}
 
 	m.wg.Add(1)
 	go func() {
 		// run the multiplexer
-		os.Args = append(os.Args, "--name", "hera-test")
-		lib.Run()
+		//os.Args = append(os.Args, "--name", "hera-test")
+		//lib.Run()
+		mydir, err1 := os.Getwd()
+		if err1 != nil {
+			logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
+		}
+		m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
+		m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
+		if err := m.watchdogCmd.Run(); err != nil {
+			logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+		}
 		m.wg.Done()
 	}()
 
@@ -426,6 +440,7 @@ func (m *mux) StartServer() error {
 }
 
 func (m *mux) StopServer() {
+	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
 		m.dbStop()
