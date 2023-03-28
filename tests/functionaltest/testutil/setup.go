@@ -6,11 +6,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -473,7 +475,10 @@ func (m *mux) StartServer() error {
 }
 
 func (m *mux) StopServer() {
+	logger.GetLogger().Log(logger.Info, "Stopping Server...")
 	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	// If MUX process still exist KILL process by loading from file
+	m.KillMuxProcess()
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
 		m.dbStop()
@@ -500,4 +505,22 @@ func (m *mux) StopServer() {
 	m.cleanupConfig()
 	os.Chdir(m.origDir)
 	logger.GetLogger().Log(logger.Info, "Exit StopServer time=", time.Now().Unix())
+}
+
+func (m *mux) KillMuxProcess() {
+	logger.GetLogger().Log(logger.Info, "Killing Mux Process...")
+	current_dir, err1 := os.Getwd()
+
+	if err1 != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed fetch current working directory", err1)
+		return
+	}
+	muxpidFile := filepath.Join(current_dir, "mux.pid")
+	logger.GetLogger().Log(logger.Info, "Trying to kill mux process using pid file: ", muxpidFile)
+	if piddata, err := ioutil.ReadFile(muxpidFile); err == nil {
+		// Convert the file contents to an integer.
+		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+			syscall.Kill(-pid, syscall.SIGKILL)
+		}
+	}
 }
