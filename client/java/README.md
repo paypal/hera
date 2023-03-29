@@ -24,6 +24,10 @@ Add this to your pom:
   <version>${hera-jdbc-version}</version>
 </dependency>
 ```
+In case you want to run the Hera JDBC tests, build the mockClient before running the tests:
+```sh
+mvn install -f mock/mockClient/java/pom.xml -Dmaven.test.skip=true
+```
 ### Usage
 
 ```java
