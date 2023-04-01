@@ -6,17 +6,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -143,7 +147,10 @@ func (m *mux) setupConfig() error {
 	os.Remove("occ.log")
 	os.Remove("cal.log")
 	os.Remove("state.log")
+	os.Remove("mux.pid")
+	os.Remove("occ.pid")
 	_, err = os.Create("state.log")
+	_, err = os.Create("cal.log")
 
 	return nil
 }
@@ -152,7 +159,7 @@ func doBuildAndSymlink(binname string) {
 	var err error
 	_, err = os.Stat(binname)
 	if err != nil {
-		binpath := os.Getenv("GOPATH") + "/bin/" + binname
+		binpath := filepath.Join(os.Getenv("GOPATH"), "bin", binname)
 		_, err = os.Stat(binpath)
 		if err != nil {
 			srcname := binname
@@ -161,6 +168,10 @@ func doBuildAndSymlink(binname string) {
 			}
 			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
 			cmd.Run()
+		}
+		time.Sleep(2 * time.Second)
+		if _, err2 := os.Stat(binpath); err2 != nil {
+			logger.GetLogger().Log(logger.Alert, "Compiled binary doesn't exist in target location to create synbolic link for: ", binpath)
 		}
 		os.Symlink(binpath, binname)
 	}
@@ -185,6 +196,8 @@ func (m *mux) cleanupConfig() error {
 	os.Remove("oracleworker")
 	os.Remove("mysqlworker")
 	os.Remove("postgresworker")
+	os.Remove("watchdog")
+	os.Remove("mux")
 	return nil
 }
 
@@ -203,6 +216,10 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		waitLoop := 1
 		for {
 			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
+			if err != nil && waitLoop == 60 {
+				logger.GetLogger().Log(logger.Info, "Mysql server didn't comes up "+ipBuf.String()+" "+dockerName)
+				break
+			}
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
@@ -398,17 +415,32 @@ func (m *mux) StartServer() error {
 
 	m.wg.Add(1)
 	go func() {
-		// run the multiplexer
-		//os.Args = append(os.Args, "--name", "hera-test")
-		//lib.Run()
-		mydir, err1 := os.Getwd()
-		if err1 != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
-		}
-		m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
-		m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
-		if err := m.watchdogCmd.Run(); err != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+		// run the multiplexer either in debug mode or using watchdog and mux binaries
+		val, ok := m.appcfg["debug_mux"]
+		if ok && val == "true" {
+			logger.GetLogger().Log(logger.Info, "Using MUX lib to start mux process.")
+			os.Args = append(os.Args, "--name", "hera-test")
+			lib.Run()
+		} else {
+			logger.GetLogger().Log(logger.Info, "Using watchdog & mux binaries to start mux process.")
+			mydir, err1 := os.Getwd()
+			if err1 != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
+			}
+			watchdogPath := filepath.Join(mydir, "watchdog")
+			if _, err2 := os.Stat(watchdogPath); err2 != nil {
+				logger.GetLogger().Log(logger.Info, fmt.Sprintf("Watchdog file path: %s doesn't exist, so copying binaries from GOPATH", watchdogPath))
+				os.Remove("watchdog")
+				os.Remove("mux")
+				doBuildAndSymlink("watchdog")
+				doBuildAndSymlink("mux")
+			}
+
+			m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
+			m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
+			if err := m.watchdogCmd.Run(); err != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+			}
 		}
 		m.wg.Done()
 	}()
@@ -440,7 +472,13 @@ func (m *mux) StartServer() error {
 }
 
 func (m *mux) StopServer() {
-	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	logger.GetLogger().Log(logger.Info, "Stopping Server...")
+	if m.watchdogCmd != nil {
+		syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	}
+	// If MUX process still exist KILL process by loading from file
+	time.Sleep(time.Second * 5)
+	m.KillMuxProcess()
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
 		m.dbStop()
@@ -466,4 +504,25 @@ func (m *mux) StopServer() {
 	m.cleanupConfig()
 	os.Chdir(m.origDir)
 	logger.GetLogger().Log(logger.Info, "Exit StopServer time=", time.Now().Unix())
+}
+
+func (m *mux) KillMuxProcess() {
+	logger.GetLogger().Log(logger.Info, "Killing Mux Process...")
+	currentDir, err1 := os.Getwd()
+
+	if err1 != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed fetch current working directory", err1)
+		return
+	}
+	muxpidFile := filepath.Join(currentDir, "mux.pid")
+	logger.GetLogger().Log(logger.Info, "Trying to kill mux process using pid file: ", muxpidFile)
+	if piddata, err := ioutil.ReadFile(muxpidFile); err == nil {
+		// Convert the file contents to an integer.
+		pidstr := string(piddata)
+		pidstr = strings.TrimSpace(pidstr)
+		pid, err := strconv.Atoi(pidstr)
+		if err == nil {
+			syscall.Kill(-pid, syscall.SIGKILL)
+		}
+	}
 }

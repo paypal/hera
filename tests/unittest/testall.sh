@@ -1,9 +1,10 @@
 overall=0
 for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
 do 
+    echo "Gopath is: $GOPATH"
     echo ==== $d
     pushd tests/unittest/$d 
-    cp /$GOPATH/bin/mysqlworker .
+    # cp $GOPATH/bin/mysqlworker .
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
     ./$d.test -test.v

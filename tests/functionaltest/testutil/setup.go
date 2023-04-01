@@ -13,12 +13,14 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -341,7 +343,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 			dbs[ip+dbName] = db0
 		}
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 	conn0, err := db0.Conn(ctx)
 	if err != nil {
 		return err
@@ -435,17 +437,23 @@ func (m *mux) StartServer() error {
 
 	m.wg.Add(1)
 	go func() {
-		// run the multiplexer
-		//os.Args = append(os.Args, "--name", "hera-test")
-		//lib.Run()
-		mydir, err1 := os.Getwd()
-		if err1 != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
-		}
-		m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
-		m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
-		if err := m.watchdogCmd.Run(); err != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+		// run the multiplexer either in debug mode or using watchdog and mux binaries
+		val, ok := m.appcfg["debug_mux"]
+		if ok && val == "true" {
+			logger.GetLogger().Log(logger.Info, "Using MUX lib to start mux process.")
+			os.Args = append(os.Args, "--name", "hera-test")
+			lib.Run()
+		} else {
+			logger.GetLogger().Log(logger.Info, "Using watchdog & mux binaries to start mux process.")
+			mydir, err1 := os.Getwd()
+			if err1 != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
+			}
+			m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
+			m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
+			if err := m.watchdogCmd.Run(); err != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+			}
 		}
 		m.wg.Done()
 	}()
@@ -478,8 +486,11 @@ func (m *mux) StartServer() error {
 
 func (m *mux) StopServer() {
 	logger.GetLogger().Log(logger.Info, "Stopping Server...")
-	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	if m.watchdogCmd != nil {
+		syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	}
 	// If MUX process still exist KILL process by loading from file
+	time.Sleep(time.Second * 5)
 	m.KillMuxProcess()
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
@@ -521,7 +532,10 @@ func (m *mux) KillMuxProcess() {
 	logger.GetLogger().Log(logger.Info, "Trying to kill mux process using pid file: ", muxpidFile)
 	if piddata, err := ioutil.ReadFile(muxpidFile); err == nil {
 		// Convert the file contents to an integer.
-		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+		pidstr := string(piddata)
+		pidstr = strings.TrimSpace(pidstr)
+		pid, err := strconv.Atoi(pidstr)
+		if err == nil {
 			syscall.Kill(-pid, syscall.SIGKILL)
 		}
 	}

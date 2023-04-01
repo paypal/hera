@@ -60,6 +60,7 @@ func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 	runFolder, _ = os.Getwd()
 	if err != nil {
 		fmt.Println("Error setup:", err)
+		teardown()
 		saveLogs()
 		return -1
 	}
@@ -68,6 +69,7 @@ func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 		err = before()
 		if err != nil {
 			fmt.Println("Error before():", err)
+			teardown()
 			saveLogs()
 			return -1
 		}
