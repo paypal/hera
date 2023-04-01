@@ -11,12 +11,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.15
+        go-version: 1.18.2
 
     - name: Build
       run: go build -v ./...
@@ -33,12 +33,19 @@ jobs:
         ports:
           - 3306:3306
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.15
+        go-version: 1.18.2
+    - name: Debug Environment Variables
+      run: |
+        pwd
+        echo ${HOME}
+        echo ${GITHUB_WORKSPACE}
+        echo ${GOPATH}
+        echo ${GOROOT}
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
