@@ -26,7 +26,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "2"
 	appcfg["db_heartbeat_interval"] = "3"
 	appcfg["max_desire_healthy_worker_pct"] = "90"
-	appcfg["debug_mux"] = "true"
+	//appcfg["debug_mux"] = "true"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "100"

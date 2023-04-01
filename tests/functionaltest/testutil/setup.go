@@ -434,7 +434,6 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_STANDBY0", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 		}
 	}
-
 	m.wg.Add(1)
 	go func() {
 		// run the multiplexer either in debug mode or using watchdog and mux binaries
@@ -458,6 +457,8 @@ func (m *mux) StartServer() error {
 		m.wg.Done()
 	}()
 
+	//Register Heraloop driver
+	lib.RegisterLoopDriver(lib.HandleConnection)
 	// wait 10 seconds for mux to come up
 	toWait := 10
 	for {

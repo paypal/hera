@@ -358,6 +358,7 @@ func (m *mux) StartServer() error {
 	if err != nil {
 		return err
 	}
+
 	if m.wType == MySQLWorker {
 		xMysql, ok := m.appcfg["x-mysql"]
 		if !ok {
@@ -445,6 +446,8 @@ func (m *mux) StartServer() error {
 		m.wg.Done()
 	}()
 
+	//Register Heraloop driver
+	lib.RegisterLoopDriver(lib.HandleConnection)
 	// wait 10 seconds for mux to come up
 	toWait := 20
 	for {
