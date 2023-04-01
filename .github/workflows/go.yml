@@ -39,13 +39,10 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: 1.18.2
-    - name: Debug Environment Variables
+    - name: Install GO Modules
       run: |
-        pwd
-        echo ${HOME}
-        echo ${GITHUB_WORKSPACE}
-        echo ${GOPATH}
-        echo ${GOROOT}
+           go mod tidy
+           go mod download github.com/godror/godror
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
