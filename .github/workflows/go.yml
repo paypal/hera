@@ -46,4 +46,7 @@ jobs:
     - name: Build worker
       run: go install github.com/paypal/hera/worker/mysqlworker
     - name: System Test
-      run: tests/unittest/testall.sh
+      run: |
+           export GOPATH="/home/runner/go"
+           echo $GOPATH
+           tests/unittest/testall.sh
