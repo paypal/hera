@@ -20,6 +20,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -136,7 +137,10 @@ func (m *mux) setupConfig() error {
 		}
 	}
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
-
+	os.Remove("watchdog")
+	os.Remove("mux")
+	os.Remove("mysqlworker")
+	os.Remove("postgresworker")
 	// if not already setup by testall.sh for Github Actions
 	doBuildAndSymlink("watchdog")
 	doBuildAndSymlink("mux")
@@ -158,8 +162,10 @@ func (m *mux) setupConfig() error {
 func doBuildAndSymlink(binname string) {
 	var err error
 	_, err = os.Stat(binname)
+	currentDir, _ := os.Getwd()
+	binpath := filepath.Join(os.Getenv("GOPATH"), "bin", binname)
+	targetPath := filepath.Join(currentDir, binname)
 	if err != nil {
-		binpath := filepath.Join(os.Getenv("GOPATH"), "bin", binname)
 		_, err = os.Stat(binpath)
 		if err != nil {
 			srcname := binname
@@ -169,11 +175,13 @@ func doBuildAndSymlink(binname string) {
 			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
 			cmd.Run()
 		}
-		time.Sleep(2 * time.Second)
 		if _, err2 := os.Stat(binpath); err2 != nil {
 			logger.GetLogger().Log(logger.Alert, "Compiled binary doesn't exist in target location to create synbolic link for: ", binpath)
 		}
-		os.Symlink(binpath, binname)
+	}
+	err = copyFile(binpath, targetPath)
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to copy file, error: ", err)
 	}
 }
 
@@ -355,6 +363,19 @@ func (m *mux) StartServer() error {
 	logger.GetLogger().Log(logger.Info, "Starting MUX server")
 	m.setupWorkdir()
 	err := m.setupConfig()
+
+	//Register Heraloop driver
+	//Initialize config, so internaly it Initializes logger pointing to hera.log or filename configured in confgiurations.
+	_, configerr := initializeConfig()
+	if configerr != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed Initialize configuration from hera.txt", configerr)
+	}
+	stateLogErr := initializeStateLog()
+	if stateLogErr != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to initialize state-log file ", stateLogErr.Error())
+	}
+	lib.RegisterLoopDriver(lib.HandleConnection)
+	time.Sleep(2 * time.Second)
 	if err != nil {
 		return err
 	}
@@ -446,8 +467,6 @@ func (m *mux) StartServer() error {
 		m.wg.Done()
 	}()
 
-	//Register Heraloop driver
-	lib.RegisterLoopDriver(lib.HandleConnection)
 	// wait 10 seconds for mux to come up
 	toWait := 20
 	for {
@@ -528,4 +547,27 @@ func (m *mux) KillMuxProcess() {
 			syscall.Kill(-pid, syscall.SIGKILL)
 		}
 	}
+}
+
+//Load configfile if it fails to load then return error
+func initializeConfig() (config.Config, error) {
+	currentDir, _ := os.Getwd()
+
+	filename := filepath.Join(currentDir, "hera.txt")
+	cdb, err := config.NewTxtConfig(filename)
+	if err != nil {
+		return nil, err
+	}
+	return cdb, nil
+}
+
+//Initializes state-log
+func initializeStateLog() error {
+	currentDir, _ := os.Getwd()
+	filename := filepath.Join(currentDir, "state.log")
+	_, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	return nil
 }

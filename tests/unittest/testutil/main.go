@@ -31,7 +31,7 @@ func teardown() {
 func copyFile(src, dest string) error {
 	content, err := ioutil.ReadFile(src)
 	if err == nil {
-		err = ioutil.WriteFile(dest, content, 0644)
+		err = ioutil.WriteFile(dest, content, 0755)
 	}
 	return err
 }
