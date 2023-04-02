@@ -82,5 +82,9 @@ jobs:
            go mod download github.com/godror/godror
     - name: Functional Tests
       run: |
+           export GOPATH=/home/runner/work/hera/hera
+           export GOROOT=/opt/hostedtoolcache/go/1.18.2/x64
+           export PATH=$PATH:$GOROOT/bin
+           echo $GOPATH
            cd $GOPATH/src/github.com/paypal/hera/tests/functionaltest
            ./runall.sh
