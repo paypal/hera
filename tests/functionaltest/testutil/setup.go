@@ -13,12 +13,14 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -140,16 +142,17 @@ func (m *mux) setupConfig() error {
 	os.Remove("postgresworker")
 	os.Remove("mux")
 	os.Remove("watchdog")
+
 	if m.wType == OracleWorker {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/oracleworker", "oracleworker")
+		doBuildAndCopy("oracleworker")
 	} else if m.wType == MySQLWorker {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/mysqlworker", "mysqlworker")
+		doBuildAndCopy("mysqlworker")
 	} else {
-		os.Symlink(os.Getenv("GOPATH")+"/bin/postgresworker", "postgresworker")
+		doBuildAndCopy("postgresworker")
 	}
 
-	doBuildAndSymlink("watchdog")
-	doBuildAndSymlink("mux")
+	doBuildAndCopy("watchdog")
+	doBuildAndCopy("mux")
 
 	os.Remove("hera.log")
 	os.Remove("cal.log")
@@ -159,18 +162,29 @@ func (m *mux) setupConfig() error {
 	return nil
 }
 
-func doBuildAndSymlink(binname string) {
+func doBuildAndCopy(binname string) {
 	var err error
 	_, err = os.Stat(binname)
+	currentDir, _ := os.Getwd()
+	binpath := filepath.Join(os.Getenv("GOPATH"), "bin", binname)
+	targetPath := filepath.Join(currentDir, binname)
 	if err != nil {
-		binpath := os.Getenv("GOPATH") + "/bin/" + binname
 		_, err = os.Stat(binpath)
 		if err != nil {
 			srcname := binname
+			if srcname != "mux" && srcname != "watchdog" {
+				srcname = "worker/" + srcname
+			}
 			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
 			cmd.Run()
 		}
-		os.Symlink(binpath, binname)
+		if _, err2 := os.Stat(binpath); err2 != nil {
+			logger.GetLogger().Log(logger.Alert, "Compiled binary doesn't exist in target location to create synbolic link for: ", binpath)
+		}
+	}
+	err = copyFile(binpath, targetPath)
+	if err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to copy file, error: ", err)
 	}
 }
 
@@ -341,7 +355,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 			dbs[ip+dbName] = db0
 		}
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 60*time.Second)
 	conn0, err := db0.Conn(ctx)
 	if err != nil {
 		return err
@@ -394,6 +408,7 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_3", "tcp(127.0.0.1:2121)/heratestdb")
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
+			logger.GetLogger().Log(logger.Info, "Creating MySQL DB instance using docker.")
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
@@ -411,6 +426,7 @@ func (m *mux) StartServer() error {
 			DBDirect(tableString, os.Getenv("MYSQL_IP"), "heratestdb", MySQL)
 		}
 	} else if m.wType == PostgresWorker {
+		logger.GetLogger().Log(logger.Info, "Creating Postgers DB instance using docker.")
 		xPostgres, ok := m.appcfg["x-postgres"]
 		if !ok {
 			xPostgres = "auto"
@@ -430,24 +446,31 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_STANDBY0", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 		}
 	}
-
 	m.wg.Add(1)
 	go func() {
-		// run the multiplexer
-		//os.Args = append(os.Args, "--name", "hera-test")
-		//lib.Run()
-		mydir, err1 := os.Getwd()
-		if err1 != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
-		}
-		m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
-		m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
-		if err := m.watchdogCmd.Run(); err != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+		// run the multiplexer either in debug mode or using watchdog and mux binaries
+		val, ok := m.appcfg["debug_mux"]
+		if ok && val == "true" {
+			logger.GetLogger().Log(logger.Info, "Using MUX lib to start mux process.")
+			os.Args = append(os.Args, "--name", "hera-test")
+			lib.Run()
+		} else {
+			logger.GetLogger().Log(logger.Info, "Using watchdog & mux binaries to start mux process.")
+			mydir, err1 := os.Getwd()
+			if err1 != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
+			}
+			m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
+			m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
+			if err := m.watchdogCmd.Run(); err != nil {
+				logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
+			}
 		}
 		m.wg.Done()
 	}()
 
+	//Register Heraloop driver
+	lib.RegisterLoopDriver(lib.HandleConnection)
 	// wait 10 seconds for mux to come up
 	toWait := 10
 	for {
@@ -476,8 +499,11 @@ func (m *mux) StartServer() error {
 
 func (m *mux) StopServer() {
 	logger.GetLogger().Log(logger.Info, "Stopping Server...")
-	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	if m.watchdogCmd != nil && m.watchdogCmd.Process != nil {
+		syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	}
 	// If MUX process still exist KILL process by loading from file
+	time.Sleep(time.Second * 5)
 	m.KillMuxProcess()
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
@@ -509,17 +535,20 @@ func (m *mux) StopServer() {
 
 func (m *mux) KillMuxProcess() {
 	logger.GetLogger().Log(logger.Info, "Killing Mux Process...")
-	current_dir, err1 := os.Getwd()
+	currentDir, err1 := os.Getwd()
 
 	if err1 != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed fetch current working directory", err1)
 		return
 	}
-	muxpidFile := filepath.Join(current_dir, "mux.pid")
+	muxpidFile := filepath.Join(currentDir, "mux.pid")
 	logger.GetLogger().Log(logger.Info, "Trying to kill mux process using pid file: ", muxpidFile)
 	if piddata, err := ioutil.ReadFile(muxpidFile); err == nil {
 		// Convert the file contents to an integer.
-		if pid, err := strconv.Atoi(string(piddata)); err == nil {
+		pidstr := string(piddata)
+		pidstr = strings.TrimSpace(pidstr)
+		pid, err := strconv.Atoi(pidstr)
+		if err == nil {
 			syscall.Kill(-pid, syscall.SIGKILL)
 		}
 	}
