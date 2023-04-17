@@ -244,7 +244,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_last_exec_rc(OCIR_OK),
 	m_restart_window(DEFAULT_WINDOW),
 	m_sql_rewritten(false),
-	m_enable_sql_rewrite(false)
+	m_enable_sql_rewrite(false),
+	bits_to_match(1),
+	bit_mask(0)
 {
 
 	std::string cval;
@@ -277,7 +279,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	}
 	
 	// initialize markdown system
-	host_name = getenv("TWO_TASK");
+	if (tns_name)
+		host_name = tns_name;
 	const char* envval = getenv("MARK_HOST_NAME");
 	if (envval)
 		mark_host_name = envval;
@@ -300,6 +303,14 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		max_fetch_block_size = DEFAULT_MAX_FETCH_BLOCK_SIZE;
 	max_rows = max_fetch_block_size;
 
+	if (config->get_value("bits_to_match", cval)) {
+		bits_to_match = StringUtil::to_int(cval);
+	}
+
+	bit_mask = (1<<bits_to_match) - 1;
+	if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "bind hash logging is enabled...bits_to_match: %d, bit_mask: %llu", bits_to_match, bit_mask);
+	}
 	// use non-blocking calls?
 	use_nonblock = config->is_switch_enabled("use_nonblocking", FALSE);
 
@@ -451,6 +462,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
+		m_shard_key_value_type_string = config->get_bool("shard_key_value_type_is_string", false);
 		std::string algo = config->get_string("sharding_algo", DEFAULT_SHARDING_ALGO);
 		StringUtil::to_lower_case(algo);
 		if (algo.compare(MOD_ONLY_SHARDING_ALGO) == 0)
@@ -787,9 +799,16 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			uint32_t scuttle_id_val = 0;
 			if (values.size() && strcasecmp(name.c_str(), m_shard_key_name.c_str()) == 0)
 			{
-				// cast to long long
-				unsigned long long shard_val = StringUtil::to_ullong(values[0]);
-				scuttle_id_val = compute_scuttle_id(shard_val);
+				if (m_shard_key_value_type_string) {
+					if (logfile->get_log_level() >= LOG_VERBOSE)
+						WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true");
+					scuttle_id_val = compute_scuttle_id(values[0]);
+				}
+				else {
+					// cast to long long
+					unsigned long long shard_val = StringUtil::to_ullong(values[0]);
+					scuttle_id_val = compute_scuttle_id(shard_val);
+				}
 				StringUtil::fmt_ulong(m_scuttle_id, scuttle_id_val);
 				if (logfile->get_log_level() >= LOG_DEBUG)
 				{
@@ -919,7 +938,13 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "m_scuttle_id null in sql rewrite to mirror null shard key value");
 					} else {
 						std::string scuttle_id_str_val;
-						StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
+						if (m_shard_key_value_type_string) {
+							if (logfile->get_log_level() >= LOG_VERBOSE)
+								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true in sql rewrite");
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(bind_values));
+						}
+						else
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
 						bind_value_max_size = scuttle_id_str_val.length();
 
 						if (m_scuttle_id.empty()){
@@ -1028,12 +1053,48 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (c)
 			{
 				if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
-					std::string bind_hash_str_val;
-					for (unsigned int i = 0; i < bind_array->size(); i++) {
-						unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
-						StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
-						c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
-						bind_hash_str_val.clear();
+					bool skip = false;
+					if (m_corr_id.length() > 16) { // Max hex value that can be stored in ULLONG_MAX (FFFFFFFFFFFFFFFF)
+						skip = true; // Reduce the logging noise.
+					}
+					if (!skip) {
+						unsigned long long int corrid = strtoull(m_corr_id.c_str(), NULL , 16);
+						if (errno == ERANGE) {
+							std::ostringstream msg;
+							msg << "m_err=error on strtoull(), errno=" << errno;
+							WRITE_LOG_ENTRY(logfile, LOG_WARNING, "%s", msg.str().c_str());
+							errno = 0;
+							skip = true;
+							CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_ERROR);
+							e_name.AddData(msg.str());
+							e_name.AddData("corr_id_", m_corr_id);
+							e_name.Completed();
+						}
+						if (!skip && (bit_mask == (corrid & bit_mask))) { // Allow
+							if (bind_array->size() > 0) {
+								// Skip SQL with large number of binds
+								if (bind_array->size() > 5 || bind_array->at(0).get()->array_row_num > 1) {
+									CalEvent e_name("BIND_HASH_LOGGING", "SKIPPED", CAL::TRANS_ERROR);
+									std::ostringstream msg;
+									msg << "bind array size=" << bind_array->size();
+									msg << "&array row num=" << bind_array->at(0).get()->array_row_num;
+									e_name.AddData(msg.str());
+									e_name.AddData("corr_id_", m_corr_id);
+									e_name.Completed();
+								} else {
+									CalEvent e_name("BIND_HASH_LOGGING", m_query_hash, CAL::TRANS_OK);
+									e_name.AddData("corr_id_", m_corr_id);
+									e_name.Completed();
+									std::string bind_hash_str_val;
+									for (unsigned int i = 0; i < bind_array->size(); i++) {
+										unsigned long long hash_val = fnv_64a_str(StringUtil::hex_escape(bind_array->at(i).get()->value).c_str(), FNV1_64A_INIT);
+										StringUtil::fmt_ullong(bind_hash_str_val, hash_val);
+										c->AddData(bind_array->at(i).get()->name, bind_hash_str_val);
+										bind_hash_str_val.clear();
+									}
+								}
+							}
+						}
 					}
                 		}
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
@@ -1523,6 +1584,7 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	}
 
 	char envStr[12] = "password";
+	rc = -1; // reset the response code. This will be useful if the password environment is not available. 
 	for(int i=0; i < RETRIES; i++) {
 		if( i > 0) {
 			sprintf(envStr, "password%d", i+1);
@@ -1531,7 +1593,11 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 			err << "m_err=Login failed, Attempting with next available credentials,Attempt="<<i;
 			CalEvent e(CAL::EVENT_TYPE_ERROR, "DB_CONN_RETRY", CAL::TRANS_OK, err.str());
 		}
-		std::string db_pswd = getenv(envStr);
+		std::string db_pswd;
+		const char *envval = getenv(envStr);
+		if (envval) {
+			db_pswd = envval;
+		}
 		if(!db_pswd.empty()) {
 			rc = OCIAttrSet((dvoid *) authp, (ub4) OCI_HTYPE_SESSION,
 				(dvoid *) const_cast<char*>(db_pswd.c_str()), (ub4) strlen(db_pswd.c_str()),
@@ -5645,6 +5711,23 @@ uint OCCChild::compute_scuttle_id(unsigned long long _shardkey_val)
 			break;
 		case HASH_MOD:
 			scuttle_id = HashUtil::MurmurHash3(_shardkey_val) % m_max_scuttle_buckets;
+			break;
+		default:
+			break;
+	}
+	return scuttle_id;
+}
+
+uint OCCChild::compute_scuttle_id(std::string _shardkey_str_val)
+{
+	uint scuttle_id = 0;
+	// similar to the implementation in mux for string shard keys - coordinatorsharding.go func getShardRec
+	// https://github.com/paypal/hera/blob/master/lib/coordinatorsharding.go#L66
+	switch(m_sharding_algo)
+	{
+		case MOD_ONLY:
+		case HASH_MOD:
+			scuttle_id = HashUtil::MurmurHash3(_shardkey_str_val) % m_max_scuttle_buckets;
 			break;
 		default:
 			break;

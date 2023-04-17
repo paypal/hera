@@ -1,5 +1,6 @@
 // On 2020-07, https://github.com/aappleby/smhasher notes that MurmurHash is public domain
 #include "HashUtil.h"
+#include <string>
 
 // just in this file
 static uint32_t MurmurHash3(const char * key, int len);
@@ -11,6 +12,11 @@ uint32_t HashUtil::MurmurHash3Sharding(const long long key)
 uint32_t HashUtil::MurmurHash3(const long long key)
 {
 	return ::MurmurHash3((const char*)&key, sizeof(long long));
+}
+uint32_t HashUtil::MurmurHash3(std::string key)
+{
+	const char *shardkey_bytes = const_cast<char*>(key.c_str());
+	return ::MurmurHash3(shardkey_bytes, key.size());
 }
 
 //https://code.google.com/p/smhasher/wiki/MurmurHash3

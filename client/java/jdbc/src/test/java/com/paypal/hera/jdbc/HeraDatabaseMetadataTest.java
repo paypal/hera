@@ -4,6 +4,7 @@ import com.paypal.hera.conf.HeraClientConfigHolder;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
@@ -14,8 +15,8 @@ public class HeraDatabaseMetadataTest {
     private static String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
     private static String table = System.getProperty("TABLE_NAME", "jdbc_hera_test");
     @Test
-    public void test_oracle_sqlEscaping() throws SQLException, ClassNotFoundException, IllegalAccessException, InstantiationException {
-
+    public void test_oracle_sqlEscaping() throws SQLException, ClassNotFoundException, IllegalAccessException, InstantiationException, IOException, InterruptedException {
+        Util.makeAndStartHeraMuxInternal(null);
         Properties props = new Properties();
         props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
         props.setProperty(HeraClientConfigHolder.SUPPORT_RS_METADATA_PROPERTY, "true");
@@ -27,6 +28,7 @@ public class HeraDatabaseMetadataTest {
         testOracleDBMetadata(props);
 
         testUnknownDBMetadata(props);
+        Util.stopMySqlContainer();
 
     }
 

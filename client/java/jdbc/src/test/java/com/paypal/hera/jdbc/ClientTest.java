@@ -194,8 +194,9 @@ public class ClientTest {
 	}
 	
 	@AfterClass
-	public static void cleanUpAll() throws SQLException {
+	public static void cleanUpAll() throws SQLException, IOException, InterruptedException {
 		dbConn.close();
+		Util.stopMySqlContainer();
 		LOGGER.info("Done");
 	}
 	

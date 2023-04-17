@@ -1,5 +1,5 @@
-import com.paypal.dal.heramockclient.HERAMockAction;
-import com.paypal.dal.heramockclient.HERAMockHelper;
+import com.paypal.hera.heramockclient.HERAMockAction;
+import com.paypal.hera.heramockclient.HERAMockHelper;
 import org.junit.Assert;
 import org.junit.Test;
 

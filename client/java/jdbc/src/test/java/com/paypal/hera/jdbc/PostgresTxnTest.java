@@ -4,6 +4,8 @@ import com.paypal.hera.client.HeraClientImpl;
 import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 import java.sql.*;
 
 /**
@@ -65,9 +67,10 @@ public class PostgresTxnTest {
 	}
 
 	@AfterClass
-	public static void cleanUpAll() throws SQLException {
+	public static void cleanUpAll() throws SQLException, IOException, InterruptedException {
 		dbConn.close();
 		dbConn2.close();
+		UtilPostgres.stopPostgresContainer();
 		LOGGER.info("Done");
 	}
 

@@ -562,7 +562,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 			logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:=", pool.desiredSize)
 		}
 		calMsg := fmt.Sprintf("Recycle(worker_pid)=%d, module_name=%s,shard_id=%d", worker.pid, worker.moduleName, worker.shardID)
-		evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+		evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER","ReturnWorker", cal.TransOK, calMsg)
 		evt.Completed()
 	}
 
@@ -772,8 +772,8 @@ func (pool *WorkerPool) checkWorkerLifespan() {
 					if logger.GetLogger().V(logger.Alert) {
 						logger.GetLogger().Log(logger.Alert, "Non Healthy Worker found in pool, module_name=",pool.moduleName,"shard_id=",pool.ShardID, "HEALTHY worker Count=",pool.GetHealthyWorkersCount(),"TotalWorkers:", pool.desiredSize)
 					}
-					calMsg := fmt.Sprintf("checkworkerlifespan()  module_name=%s,shard_id=%d", pool.moduleName, pool.ShardID)
-					evt := cal.NewCalEvent("ERROR","RECYCLE_WORKER", cal.TransOK, calMsg)
+					calMsg := fmt.Sprintf("module_name=%s,shard_id=%d", pool.moduleName, pool.ShardID)
+					evt := cal.NewCalEvent("SKIP_RECYCLE_WORKER","checkWorkerLifespan", cal.TransOK, calMsg)
 					evt.Completed()
 					break
 				}

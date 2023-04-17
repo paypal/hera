@@ -30,12 +30,12 @@ import com.paypal.hera.util.HeraJdbcUtil;
 
 /** Helper functions for testing. */
 public class Util {
-	
+
 	/** Returns a new HeraConnection.  Connects to server in 
-	System.getProperty("SERVER_URL") and defaults to localhost:11111 */
+	 System.getProperty("SERVER_URL") and defaults to localhost:11111 */
 	public static HeraConnection makeDbConn() {
 		try {
-			String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111"); 
+			String host = System.getProperty("SERVER_URL", "1:127.0.0.1:11111");
 			HeraClientConfigHolder.clear();
 			Properties props = new Properties();
 			props.setProperty(HeraClientConfigHolder.RESPONSE_TIMEOUT_MS_PROPERTY, "3000");
@@ -52,18 +52,18 @@ public class Util {
 
 	public static void runDml(Connection dbConn, String sql) {
 		try {
-	                PreparedStatement pst = dbConn.prepareStatement(sql);
-        	        pst.executeUpdate();
-                	dbConn.commit();
+			PreparedStatement pst = dbConn.prepareStatement(sql);
+			pst.executeUpdate();
+			dbConn.commit();
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	/** Compiles and starts Hera server and a docker Mysql. Cleans up
-	old Hera and Mysql before it remakes new ones. Uses GOROOT to find 
-	go compiler and GOPATH to find the binaries and make a directory
-	with config and logs for the test hera server. */
+	 old Hera and Mysql before it remakes new ones. Uses GOROOT to find
+	 go compiler and GOPATH to find the binaries and make a directory
+	 with config and logs for the test hera server. */
 	public static void makeAndStartHeraMux(HashMap<String,String> cfg) {
 		try {
 			makeAndStartHeraMuxInternal(cfg);
@@ -80,7 +80,7 @@ public class Util {
 			Socket clientSocket = new Socket();
 			try {
 				Thread.sleep(1222);
-				clientSocket.connect(new InetSocketAddress("0.0.0.0", 3306), 2000);
+				clientSocket.connect(new InetSocketAddress("127.0.0.1", 3306), 2000);
 				didConn = true;
 				clientSocket.close();
 				break;
@@ -95,6 +95,27 @@ public class Util {
 			}
 		}
 		return didConn;
+	}
+	static boolean checkDockerLogs(String cmd) {
+		for(int i = 0; i < 10; i++){
+			try{
+				Thread.sleep(1222);
+				ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
+				builder.redirectErrorStream(true);
+				Process process = builder.start();
+				InputStream is = process.getInputStream();
+				BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+				if (reader.readLine() != null){
+					return true;
+				}
+			}
+			catch (IOException ex){
+				ex.printStackTrace();
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		return false;
 	}
 	static void startMySqlContainer() throws IOException, InterruptedException {
 		if(checkMySqlIsUp()) return;
@@ -112,10 +133,10 @@ public class Util {
 						"-e MYSQL_DATABASE=heratestdb " +
 						"-d mysql:8.0.31").waitFor();
 
-		// best is to check this in mysql logs: "ready for start up"
-		// via : grep -i "ready for start up" <(docker logs mysql 2>&1)
- 		// putting a long sleep is a work around
-		Thread.sleep(15000);
+		String cmd = "grep -i \"ready for start up\" <(docker logs mysql55 2>&1)";
+		if (!checkDockerLogs(cmd)){
+			throw new RuntimeException("mysql docker didn't start");
+		}
 
 		if (!checkMySqlIsUp()) {
 			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
@@ -123,6 +144,15 @@ public class Util {
 			throw new RuntimeException("mysql docker did not come up");
 		}
 	}
+
+	public static void stopMySqlContainer() throws IOException, InterruptedException {
+		if(checkMySqlIsUp()){
+			String dockerName = "mysql55";
+			Runtime.getRuntime().exec("docker stop "+dockerName).waitFor();
+			Runtime.getRuntime().exec("docker rm "+dockerName).waitFor();
+		}
+	}
+
 	static void makeAndStartHeraMuxInternal(HashMap<String,String> cfg) throws IOException, InterruptedException {
 		startMySqlContainer();
 		if (cfg == null) {
@@ -142,14 +172,14 @@ public class Util {
 		symLinkTarget = new File(basedir+"mux");
 		if (!symLinkTarget.exists()) {
 			Files.createSymbolicLink(
-				symLinkTarget.toPath(),
-				(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
 		}
 		symLinkTarget = new File(basedir+"mysqlworker");
 		if (!symLinkTarget.exists()) {
 			Files.createSymbolicLink(
-				symLinkTarget.toPath(),
-				(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
 		}
 
 		BufferedWriter writer;
@@ -161,7 +191,7 @@ public class Util {
 		writer.write("cal_pool_stack_enable=true\n");
 		writer.close();
 
-		cfg.putIfAbsent("bind_ip", "0.0.0.0");
+		cfg.putIfAbsent("bind_ip", "127.0.0.1");
 		cfg.putIfAbsent("bind_port", "11111");
 		cfg.putIfAbsent("random_start_ms", "1");
 		cfg.putIfAbsent("opscfg.hera.server.max_connections","4");
@@ -207,5 +237,5 @@ public class Util {
 		}
 	}
 	static Process s_hera;
-	
+
 }

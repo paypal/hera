@@ -13,9 +13,10 @@ import com.paypal.hera.ex.HeraProtocolException;
 import com.paypal.hera.ex.HeraSQLException;
 import com.paypal.hera.ex.HeraTimeoutException;
 import com.paypal.hera.util.HeraColumnMeta;
+import com.paypal.hera.util.HeraStatementsCache;
 
 public interface HeraClient {
-	public void prepare(String _sql) throws HeraIOException;
+	public void prepare(HeraStatementsCache.StatementCacheEntry statementCacheEntry) throws HeraIOException;
 	public boolean execute(int _num_rows, boolean _add_commit) throws HeraIOException, HeraTimeoutException, HeraClientException, HeraProtocolException;
 	public ArrayList<HeraColumnMeta> iterateColumns() throws HeraTimeoutException, HeraIOException, HeraClientException;
 	public ArrayList<HeraColumnMeta> execQuery(int _num_rows, boolean _column_meta) throws HeraIOException, HeraTimeoutException, HeraClientException;

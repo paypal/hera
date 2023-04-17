@@ -17,7 +17,7 @@ public class SQLEscapeSeqTest {
 	static final Logger LOGGER = LoggerFactory.getLogger(HeraClientImpl.class);
 	
 	public String preprocessEscapeCall(String input, E_DATASOURCE_TYPE type) {
-		HeraStatementsCache heraStmt = new HeraStatementsCache(0);
+		HeraStatementsCache heraStmt = new HeraStatementsCache(0, "");
 		StatementCacheEntry stmtEntry = heraStmt.new StatementCacheEntry(input, true,
 				false, false, type, HeraDriver.getQueryProperties());
 		String output = null;

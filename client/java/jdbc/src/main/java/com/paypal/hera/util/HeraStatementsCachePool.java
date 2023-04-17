@@ -11,14 +11,14 @@ public class HeraStatementsCachePool {
 	public static HeraStatementsCache getStatementsCache(String url) {
 		if (s_caches.containsKey(url)){
 			return s_caches.get(url);
-		} 
-		return new HeraStatementsCache(STMT_CACHE_SIZE); 
+		}
+		return new HeraStatementsCache(STMT_CACHE_SIZE, url);
 	}
 
 	public static void releaseStatementsCache(String url, HeraStatementsCache stCache) {
 		if (!s_caches.containsKey(url)){
 			s_caches.put(url, stCache);
-		} 
+		}
 	}
 
 }

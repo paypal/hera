@@ -191,7 +191,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		if os.Getenv("GITHUB_JOB") == "" {
 			CleanDB(dockerName)
 
-			cmd := exec.Command("docker", "run", "-p3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:5.7")
+			cmd := exec.Command("docker", "run", "-p3306:3306", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:8.0")
 			cmd.Run()
 		}
 

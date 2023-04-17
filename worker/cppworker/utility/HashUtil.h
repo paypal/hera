@@ -18,6 +18,7 @@
 #define HASH_UTIL_H
 
 #include <stdint.h>
+#include <string>
 
 class HashUtil {
 public:
@@ -26,6 +27,9 @@ public:
 
 	/** Deprecated, only for sharding. */
 	static uint32_t MurmurHash3(const long long key);
+
+	/** Deprecated, only for sharding. */
+	static uint32_t MurmurHash3(std::string key);
 };
 
 #endif // HASH_UTIL_H

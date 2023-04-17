@@ -138,9 +138,11 @@ func bindEvictNameOk(bindName string) (bool) {
 bind name and values */
 func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 	throttleCount := 0
+	GetBindEvict().lock.Lock()
 	for _,keyValues := range GetBindEvict().BindThrottle {
 		throttleCount += len(keyValues)
 	}
+	GetBindEvict().lock.Unlock()
 	if throttleCount > GetConfig().BindEvictionMaxThrottle {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "already too many bind throttles, skipping bind eviction and throttle")
@@ -157,7 +159,9 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		}
 		usqlhash := uint32(worker.sqlHash)
 		sqlhash := atomic.LoadUint32(&(usqlhash))
+		GetBindEvict().lock.Lock()
 		_, ok := GetBindEvict().BindThrottle[sqlhash]
+		GetBindEvict().lock.Unlock()
 		if ok {
 			continue // don't repeatedly bind evict something already evicted
 		}
@@ -257,11 +261,13 @@ func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 		}
 
 		// setup allow-every-x
+		GetBindEvict().lock.Lock()
 		sqlBind, ok := GetBindEvict().BindThrottle[sqlhash]
 		if !ok {
 			sqlBind = make(map[string]*BindThrottle)
 			GetBindEvict().BindThrottle[sqlhash] = sqlBind
 		}
+		GetBindEvict().lock.Unlock()
 		concatKey := fmt.Sprintf("%s|%s", bindName, bindValue)
 		throttle, ok := sqlBind[concatKey]
 		if ok {
