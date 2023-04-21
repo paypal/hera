@@ -43,7 +43,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
 	opscfg["opscfg.default.server.log_level"] = "5"
-	opscfg["opscfg.default.server.max_lifespan_per_child"]="5"
+	opscfg["opscfg.default.server.max_lifespan_per_child"] = "5"
 
 	appcfg["child.executable"] = "mysqlworker"
 
@@ -71,26 +71,27 @@ func TestMain(m *testing.M) {
 func TestCalTransInitDB(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCalTransInitDB begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	_, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	_, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
 	}
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+"test"+"?timeout=11s")
-	time.Sleep(20*time.Second)
+	time.Sleep(20 * time.Second)
 	if testutil.RegexCountFile("[A|T].*INITDB.*1.*m_err", "cal.log") < 1 {
 		t.Fatalf("Error: should have INITDB as error ")
 	}
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=11s")
-	os.Setenv("username","")
-	time.Sleep(10*time.Second)
+	os.Setenv("username", "")
+	time.Sleep(10 * time.Second)
 	if testutil.RegexCountFile("[A|T].*INITDB.*1.*m_err.*USERNAME_NOT_FOUND.*", "cal.log") < 1 {
 		t.Fatalf("Error: should have INITDB as error ")
 	}
-	os.Setenv("username","root")
-	os.Setenv("password","")
-	time.Sleep(10*time.Second)
+	os.Setenv("username", "root")
+	os.Setenv("password", "")
+	time.Sleep(10 * time.Second)
 	if testutil.RegexCountFile("[A|T].*INITDB.*1.*m_err.*PASSWORD_NOT_FOUND.*", "cal.log") < 1 {
 		t.Fatalf("Error: should have INITDB as error ")
 	}

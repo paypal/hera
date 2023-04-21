@@ -84,7 +84,7 @@ func BackupAndClear(logbasename, grpName string) {
 			break
 		}
 	}
-	logname := logbasename+".log"
+	logname := logbasename + ".log"
 	/* nowStr := time.Now().Format("15:04:05.000000")
 	f, err := os.OpenFile(logname, os.O_APPEND, 0666)
 	if err == nil {
@@ -105,16 +105,18 @@ func BackupAndClear(logbasename, grpName string) {
 }
 
 func RunMysql(sql string) (string, error) {
-        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
-        cmd.Stdin = strings.NewReader(sql)
-        var cmdOutBuf bytes.Buffer
-        cmd.Stdout = &cmdOutBuf
-        cmd.Run()
+	cmd := exec.Command("mysql", "-h", os.Getenv("mysql_ip"), "-p1-testDb", "-uroot", "heratestdb")
+	cmd.Stdin = strings.NewReader(sql)
+	var cmdOutBuf bytes.Buffer
+	cmd.Stdout = &cmdOutBuf
+	cmd.Run()
 	return cmdOutBuf.String(), nil
 }
 
 func RunDML(dml string) error {
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
+	hostname := GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		return err
 	}
@@ -179,4 +181,13 @@ func RegexCountFile(regex string, filename string) int {
 	}
 	//fmt.Println("DONE searching "+regex)
 	return count
+}
+
+func GetHostname() string {
+	hostname, err := os.Hostname()
+
+	if err != nil {
+		hostname = "127.0.0.1"
+	}
+	return hostname
 }

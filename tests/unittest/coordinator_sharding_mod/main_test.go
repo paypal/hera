@@ -45,36 +45,37 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 }
 
 func setupShardMap(t *testing.T) {
-        twoTask := os.Getenv("TWO_TASK")
-        if !strings.HasPrefix(twoTask, "tcp") {
-                // not mysql
-                return
-        }
-        shard := 0
-        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-        if err != nil {
-                t.Fatal("Error starting Mux:", err)
-                return
-        }
-        db.SetMaxIdleConns(0)
-        defer db.Close()
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        defer cancel()
-        conn, err := db.Conn(ctx)
-        if err != nil {
-                t.Fatalf("Error getting connection %s\n", err.Error())
-        }
-        defer conn.Close()
+	twoTask := os.Getenv("TWO_TASK")
+	if !strings.HasPrefix(twoTask, "tcp") {
+		// not mysql
+		return
+	}
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31003")
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	defer conn.Close()
 
-        testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
 
-        for i := 0; i < 1024; i++ {
+	for i := 0; i < 1024; i++ {
 		shard := 0
 		if i <= 8 {
-			shard = i%3
+			shard = i % 3
 		}
-                testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard ) )
-        }
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard))
+	}
 }
 
 func before() error {
@@ -82,10 +83,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
-        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
-                // mysql
-                testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
-        }
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		// mysql
+		testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+	}
 	return nil
 }
 
@@ -166,7 +167,5 @@ func TestShardingMod(t *testing.T) {
 	cancel()
 	conn.Close()
 
-
 	logger.GetLogger().Log(logger.Debug, "TestShardingMod done  -------------------------------------------------------------")
 }
-

@@ -11,13 +11,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
-        go-version: 1.15
-
+        go-version: 1.18.2
+    - name: Install GO Modules
+      run: |
+           go mod tidy
+           go mod download github.com/godror/godror
     - name: Build
       run: go build -v ./...
     - name: Test
@@ -26,20 +29,34 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql
+        image: mysql:latest
         env:
           MYSQL_ROOT_PASSWORD: 1-testDb
           MYSQL_DATABASE: heratestdb
         ports:
           - 3306:3306
     steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Go
-      uses: actions/setup-go@v2
+    - uses: actions/checkout@v3
       with:
-        go-version: 1.15
-    - name: Build worker
-      run: go install github.com/paypal/hera/worker/mysqlworker
-    - name: System Test
-      run: tests/unittest/testall.sh
+         path: src/github.com/paypal/hera
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.18.2
+    - name: Install GO Modules
+      run: |
+           export GOPATH=/home/runner/work/hera/hera
+           export GOROOT=/opt/hostedtoolcache/go/1.18.2/x64
+           export PATH=$PATH:$GOROOT/bin
+           echo $GOPATH
+           cd $GOPATH/src/github.com/paypal/hera
+           go mod tidy
+           go mod download github.com/godror/godror
+    - name: Unit Tests
+      run: |
+           export GOPATH=/home/runner/work/hera/hera
+           export GOROOT=/opt/hostedtoolcache/go/1.18.2/x64
+           export PATH=$PATH:$GOROOT/bin
+           echo $GOPATH
+           cd $GOPATH/src/github.com/paypal/hera
+           ./tests/unittest/testall.sh 

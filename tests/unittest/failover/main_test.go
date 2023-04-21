@@ -53,22 +53,22 @@ var dbName = "failovertestdb"
 
 func TestMain(m *testing.M) {
 	// startup two mysql DBs
-	ip1 = testutil.MakeDB("mysql33",dbName,testutil.MySQL)
-	ip2 = testutil.MakeDB("mysql44",dbName,testutil.MySQL)
+	ip1 = testutil.MakeDB("mysql33", dbName, testutil.MySQL)
+	ip2 = testutil.MakeDB("mysql44", dbName, testutil.MySQL)
 	os.Setenv("TWO_TASK", "tcp("+ip1+":3306)/"+dbName+"?timeout=11s||tcp("+ip2+":3306)/"+dbName+"?timeout=11s")
 
 	/*
-	for {
-		conn, err := net.Dial("tcp", ip2+":3306")
-		if err != nil {
-			time.Sleep(1 * time.Second)
-			logger.GetLogger().Log(logger.Warning, "waiting for mysql server to come up")
-			continue
-		} else {
-			conn.Close()
-			break
-		}
-	} // */
+		for {
+			conn, err := net.Dial("tcp", ip2+":3306")
+			if err != nil {
+				time.Sleep(1 * time.Second)
+				logger.GetLogger().Log(logger.Warning, "waiting for mysql server to come up")
+				continue
+			} else {
+				conn.Close()
+				break
+			}
+		} // */
 
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
@@ -76,8 +76,9 @@ func TestMain(m *testing.M) {
 func TestFailover(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestFailover begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -95,16 +96,16 @@ func TestFailover(t *testing.T) {
 
 	doCrud(conn, 1, t)
 	/*
-	conn2, err := db.Conn(ctx)
-	if err != nil {
-		logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
-	}
-	doCrud(conn2, 1, t)
-	conn2.Close() //*/
+		conn2, err := db.Conn(ctx)
+		if err != nil {
+			logger.GetLogger().Log(logger.Debug, "reacq conn "+err.Error())
+		}
+		doCrud(conn2, 1, t)
+		conn2.Close() //*/
 
 	logger.GetLogger().Log(logger.Debug, "TestFailover taking out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-        cleanCmd := exec.Command("docker", "stop", "mysql33")
-        cleanCmd.Run()
+	cleanCmd := exec.Command("docker", "stop", "mysql33")
+	cleanCmd.Run()
 	logger.GetLogger().Log(logger.Debug, "TestFailover taken out first db +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	time.Sleep(8 * time.Second)
@@ -134,12 +135,12 @@ func TestFailover(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestFailover done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	// clean up
-        cleanCmd = exec.Command("docker", "start", "mysql33")
-        cleanCmd.Run()
+	cleanCmd = exec.Command("docker", "start", "mysql33")
+	cleanCmd.Run()
 
 }
 
-func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
+func doCrud(conn *sql.Conn, id int, t *testing.T) bool {
 
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
@@ -149,7 +150,7 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 		return false
 	}
 	//noTable := false
-	_,err = stmt.Exec()
+	_, err = stmt.Exec()
 	if err != nil {
 		//noTable = true
 	}
@@ -159,68 +160,66 @@ func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
 	if err != nil {
 		return false
 	}
-	_,err = stmt.Exec()
+	_, err = stmt.Exec()
 	if err != nil {
-		t.Fatalf("create table had issue %s",err.Error())
+		t.Fatalf("create table had issue %s", err.Error())
 	}
 	// ignore errors since table may already exist
 
 	/*
-	// not using txn since mysql
-	stmt, err = conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
-	if err != nil {
-		t.Fatalf("Error preparing test (insert table) %s\n", err.Error())
-	}
-	_, err = stmt.Exec(id, note)
-	if err != nil {
-		t.Fatalf("Error exec test (insert table) %s\n", err.Error())
-	}
+			// not using txn since mysql
+			stmt, err = conn.PrepareContext(ctx, "insert into test_failover ( id , note ) values ( ?, ? )")
+			if err != nil {
+				t.Fatalf("Error preparing test (insert table) %s\n", err.Error())
+			}
+			_, err = stmt.Exec(id, note)
+			if err != nil {
+				t.Fatalf("Error exec test (insert table) %s\n", err.Error())
+			}
 
-	stmt, err = conn.PrepareContext(ctx, "insert into test_failover (id , note ) values ( ?, ? )")
-	if err != nil {
-		t.Fatalf("Error prep test (insert neg-id table) %s\n", err.Error())
-	}
-	_, err = stmt.Exec(-id, note)
-	if err != nil {
-		t.Fatalf("Error exec test (insert neg-id table) %s\n", err.Error())
-	}
+			stmt, err = conn.PrepareContext(ctx, "insert into test_failover (id , note ) values ( ?, ? )")
+			if err != nil {
+				t.Fatalf("Error prep test (insert neg-id table) %s\n", err.Error())
+			}
+			_, err = stmt.Exec(-id, note)
+			if err != nil {
+				t.Fatalf("Error exec test (insert neg-id table) %s\n", err.Error())
+			}
+
+			/*
+			stmt, err = conn.PrepareContext(ctx, "select note from test_failover where id = ?")
+			if err != nil {
+				t.Fatalf("Error preparing test (sel table) %s\n", err.Error())
+			}
+		        rows, _ := stmt.Query(id)
+		        if !rows.Next() {
+		                t.Fatalf("Expected 1 row")
+		        }
+		        var str_val sql.NullString
+		        err = rows.Scan(&str_val)
+			if err != nil {
+				t.Fatalf("Error preparing test (sel scan table) %s\n", err.Error())
+			}
+			if !str_val.Valid {
+				t.Fatalf("null str")
+			}
+			if str_val.String != note {
+				t.Fatalf("data corrupt "+note+" dbHas:"+ str_val.String)
+			}
+
+		        rows.Close()
+		        stmt.Close()
+			// */
 
 	/*
-	stmt, err = conn.PrepareContext(ctx, "select note from test_failover where id = ?")
-	if err != nil {
-		t.Fatalf("Error preparing test (sel table) %s\n", err.Error())
-	}
-        rows, _ := stmt.Query(id)
-        if !rows.Next() {
-                t.Fatalf("Expected 1 row")
-        }
-        var str_val sql.NullString
-        err = rows.Scan(&str_val)
-	if err != nil {
-		t.Fatalf("Error preparing test (sel scan table) %s\n", err.Error())
-	}
-	if !str_val.Valid {
-		t.Fatalf("null str")
-	}
-	if str_val.String != note {
-		t.Fatalf("data corrupt "+note+" dbHas:"+ str_val.String)
-	}
-
-        rows.Close()
-        stmt.Close()
-	// */
-
-
-	/*
-	stmt, err := conn.PrepareContext(ctx, "delete from test_failover where id = ?")
-	if err != nil {
-		t.Fatalf("Error preparing test (del table) %s\n", err.Error())
-	}
-	_, err = stmt.Exec(id)
-	if err != nil {
-		t.Fatalf("Error exec test (del table) %s\n", err.Error())
-	}
-	// */
+		stmt, err := conn.PrepareContext(ctx, "delete from test_failover where id = ?")
+		if err != nil {
+			t.Fatalf("Error preparing test (del table) %s\n", err.Error())
+		}
+		_, err = stmt.Exec(id)
+		if err != nil {
+			t.Fatalf("Error exec test (del table) %s\n", err.Error())
+		}
+		// */
 	return true
 }
-

@@ -52,10 +52,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
-        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
 		// with testutil.RunDML, extra log line throws off test
 		testutil.DBDirect("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
-        }
+	}
 	return nil
 }
 
@@ -66,8 +66,9 @@ func TestMain(m *testing.M) {
 func TestCoordinatorRqId(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return

@@ -1,16 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
-	"regexp"
-	"strings"
-	"strconv"
-	"bufio"
 
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -69,8 +69,9 @@ func TestMain(m *testing.M) {
 func TestCalClientSessionDur(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionDur begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -102,7 +103,7 @@ func TestCalClientSessionDur(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionDur done  -------------------------------------------------------------")
 }
 
-func clientSessionDurLogScan(t *testing.T){
+func clientSessionDurLogScan(t *testing.T) {
 	file, err := os.Open("cal.log")
 	defer file.Close()
 	if err != nil {
@@ -113,9 +114,9 @@ func clientSessionDurLogScan(t *testing.T){
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if(cliSession_re.MatchString(line)){
-			_, err := strconv.ParseFloat(strings.TrimSpace(re.FindAllString(line, -1)[0]),32)
-			if(err != nil){
+		if cliSession_re.MatchString(line) {
+			_, err := strconv.ParseFloat(strings.TrimSpace(re.FindAllString(line, -1)[0]), 32)
+			if err != nil {
 				t.Fatalf("Num error for CLIENT_SESSION duration")
 			}
 		}

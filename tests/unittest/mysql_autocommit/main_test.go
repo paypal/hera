@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/paypal/hera/tests/unittest/testutil"
-	"github.com/paypal/hera/utility/logger"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -48,8 +49,9 @@ func TestMain(m *testing.M) {
 func TestMysqlAutocommit(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMysqlAutocommit begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -107,7 +109,7 @@ func TestMysqlAutocommit(t *testing.T) {
 
 	// in txn, other conn sees after commit
 	tx, _ = conn.BeginTx(ctx, nil)
-	_/*result*/, err = tx.ExecContext(ctx, "start transaction")
+	_ /*result*/, err = tx.ExecContext(ctx, "start transaction")
 	if err != nil {
 		t.Fatalf("begin/start txn statement issue %s", err.Error())
 	}
@@ -133,7 +135,7 @@ func TestMysqlAutocommit(t *testing.T) {
 
 	logger.GetLogger().Log(logger.Debug, "TestMysqlAutocommit done  -------------------------------------------------------------")
 }
-func getRows(id int, conn *sql.Conn) (int) {
+func getRows(id int, conn *sql.Conn) int {
 	out := 0
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
@@ -145,5 +147,5 @@ func getRows(id int, conn *sql.Conn) (int) {
 
 	rows.Close()
 	stmt.Close()
-	return out;
+	return out
 }

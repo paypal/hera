@@ -56,8 +56,9 @@ func TestMain(m *testing.M) {
 func TestMysqlRecycle(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestMysqlRecycle begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return

@@ -14,10 +14,11 @@ import (
 )
 
 var mx testutil.Mux
+
 //var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
-	fmt.Println ("setup() begin")
+	fmt.Println("setup() begin")
 	appcfg := make(map[string]string)
 	// best to chose an "unique" port in case golang runs tests in paralel
 	appcfg["bind_port"] = "31002"
@@ -38,7 +39,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	if os.Getenv("WORKER") == "postgres" {
 		return appcfg, opscfg, testutil.PostgresWorker
-	} 
+	}
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
@@ -75,12 +76,12 @@ drop procedure populate_shard_map;
 DELIMITER $$
 create procedure populate_shard_map ( )
 BEGIN
-DECLARE counter  INT;              
-SET     counter  = 0;              
-1_to_5_counter: WHILE counter < 1024 DO                          
+DECLARE counter  INT;
+SET     counter  = 0;
+1_to_5_counter: WHILE counter < 1024 DO
     insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( counter, 0, 'Y', 'Y', 'Y' );
-    SET counter = counter + 1;               
-END WHILE 1_to_5_counter;              
+    SET counter = counter + 1;
+END WHILE 1_to_5_counter;
 END
 $$
 DELIMITER ;
@@ -113,7 +114,7 @@ func setupShardMap(t *testing.T) {
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
 	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id smallint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
 	for i := 0; i < 1024; i++ {
-		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 0, 'Y', 'Y', 'Y' )", i) )
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, 0, 'Y', 'Y', 'Y' )", i))
 	}
 }
 
@@ -122,11 +123,9 @@ func TestShardingStr(t *testing.T) {
 	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-
-	hostname,_ := os.Hostname()
-    fmt.Println ("Hostname: ", hostname);
-	
-	db, err := sql.Open("hera", hostname + ":31002")
+	hostname := testutil.GetHostname()
+	fmt.Println("Hostname: ", hostname)
+	db, err := sql.Open("hera", hostname+":31002")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
 		return
@@ -173,7 +172,7 @@ func TestShardingStr(t *testing.T) {
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr done  -------------------------------------------------------------")
 }
-func getRows(id int, conn *sql.Conn) (int) {
+func getRows(id int, conn *sql.Conn) int {
 	out := 0
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
@@ -185,5 +184,5 @@ func getRows(id int, conn *sql.Conn) (int) {
 
 	rows.Close()
 	stmt.Close()
-	return out;
+	return out
 }

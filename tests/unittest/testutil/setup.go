@@ -43,7 +43,7 @@ type DBType int
 const (
 	Oracle DBType = iota
 	MySQL
-	PostgreSQL 
+	PostgreSQL
 )
 
 type mux struct {
@@ -94,7 +94,7 @@ func (m *mux) setupWorkdir() {
 
 func (m *mux) setupConfig() error {
 	// opscfg
-	for k,v := range m.opscfg {
+	for k, v := range m.opscfg {
 		m.appcfg[k] = v
 	}
 	if m.wType == MySQLWorker {
@@ -132,6 +132,19 @@ func (m *mux) setupConfig() error {
 		}
 	}
 	// mysql (mock or normal) gets username, password, TWO_TASK setup during server start
+	os.Remove("oracleworker")
+	os.Remove("mysqlworker")
+	os.Remove("postgresworker")
+	os.Remove("mux")
+	os.Remove("watchdog")
+
+	if m.wType == OracleWorker {
+		doBuildAndSymlink("oracleworker")
+	} else if m.wType == MySQLWorker {
+		doBuildAndSymlink("mysqlworker")
+	} else {
+		doBuildAndSymlink("postgresworker")
+	}
 
 	// if not already setup by testall.sh for Github Actions
 	doBuildAndSymlink("mysqlworker")
@@ -149,17 +162,28 @@ func doBuildAndSymlink(binname string) {
 	var err error
 	_, err = os.Stat(binname)
 	if err != nil {
-		binpath := os.Getenv("GOPATH")+"/bin/"+binname
-		_, err = os.Stat(binpath)
+		currentDir, _ := os.Getwd()
+		binpath := os.Getenv("GOPATH") + "/bin/" + binname
+		targetPath := filepath.Join(currentDir, binname)
 		if err != nil {
-			srcname := binname
-			if srcname != "mux" {
-				srcname = "worker/" + srcname
+			_, err = os.Stat(binpath)
+			if err != nil {
+				srcname := binname
+				if srcname != "mux" && srcname != "watchdog" {
+					srcname = "worker/" + srcname
+				}
+				cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
+				cmd.Run()
 			}
-			cmd := exec.Command(os.Getenv("GOROOT")+"/bin/go", "install", "github.com/paypal/hera/"+srcname)
-			cmd.Run()
+			if _, err2 := os.Stat(binpath); err2 != nil {
+				logger.GetLogger().Log(logger.Alert, "Compiled binary doesn't exist in target location to create synbolic link for: ", binpath)
+			}
 		}
-		os.Symlink(binpath, binname)
+		err = copyFile(binpath, targetPath)
+		logger.GetLogger().Log(logger.Info, "Copied file to target location: ", targetPath)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "Failed to copy file, error: ", err)
+		}
 	}
 }
 
@@ -199,18 +223,17 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("password", "1-testDb")
 		waitLoop := 1
 		for {
-			err := DBDirect("select 1", "127.0.0.1", dbName/*"heratestdb"*/, MySQL)
+			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
-				fmt.Printf("waiting for db to come up %d %s\n",waitLoop, err.Error())
+				fmt.Printf("waiting for db to come up %d %s\n", waitLoop, err.Error())
 				waitLoop++
 				continue
 			} else {
 				break
 			}
 		}
-
 
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
@@ -266,7 +289,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		os.Setenv("postgresql_ip", ipBuf.String())
 
 		return ipBuf.String()
-	} 
+	}
 	return ""
 }
 
@@ -384,10 +407,10 @@ func (m *mux) StartServer() error {
 			ip := MakeDB("postgres22", "heratestdb", PostgreSQL)
 			os.Setenv("TWO_TASK", ip+"/heratestdb?connect_timeout=60&sslmode=disable")
 			twoTask := os.Getenv("TWO_TASK")
-			os.Setenv ("TWO_TASK_0", twoTask)
-			os.Setenv ("TWO_TASK_1", twoTask)
+			os.Setenv("TWO_TASK_0", twoTask)
+			os.Setenv("TWO_TASK_1", twoTask)
 			twoTask1 := os.Getenv("TWO_TASK")
-			fmt.Println ("TWO_TASK_1: ", twoTask1)
+			fmt.Println("TWO_TASK_1: ", twoTask1)
 		}
 	}
 
