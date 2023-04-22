@@ -190,7 +190,21 @@ func (w *Watchdog) Start() {
 			select {
 			case <-w.ReqStopWatchdog:
 				logger.GetLogger().Log(logger.Info, "request to stop watchdog noted, exiting watchdog.start() loop")
-				w.Done <- true
+				w.mut.Lock()
+				defer w.mut.Unlock()
+				if w.processData != nil {
+					if w.processData.cmd != nil {
+						logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog releasing child process by killing it: %d", w.processData.currPid))
+						syscall.Kill(-w.processData.currPid, syscall.SIGTERM)
+						var ws2 syscall.WaitStatus
+						_, err := syscall.Wait4(-w.processData.currPid, &ws2, syscall.WNOHANG, nil)
+						w.processData.currPid = 0
+						w.processData.cmd = nil
+						if err != nil {
+							logger.GetLogger().Log(logger.Alert, fmt.Sprintf("watchdog failed to release child process : %d", w.processData.currPid))
+						}
+					}
+				}
 				return
 			case <-signalChild:
 				logger.GetLogger().Log(logger.Debug, "got signal <-signalChild")
