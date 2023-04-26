@@ -578,6 +578,7 @@ void Worker::cleanup_connection()
  */
 int Worker::handle_command(const int _cmd, std::string &_buffer)
 {
+	WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Inside handle_command() in Worker");
 	int rc = 0;
 
 	switch (_cmd)

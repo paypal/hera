@@ -693,6 +693,7 @@ void OCCChild::dump_session_cache()
  */
 int OCCChild::handle_command(const int _cmd, std::string &_line)
 {
+	WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Inside handle_command() in OCCChild");
 	unsigned int type = 0;
 	int rc = 0;
 	int markedDown = 0; // if this turns non-zero, it means we are marked down, and should NOT execute
@@ -1096,7 +1097,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							}
 						}
 					}
-                		}
+                }
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
@@ -1296,8 +1297,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			std::string server_info = CalTransaction::GetCurrentPoolInfo();
 			m_writer->write(SERVER_INT_INFO, server_info);
 
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", _line.c_str());
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Server Info: %s", server_info.c_str());
 			//m_writer->write(OCC_OK); // Make client to proceed.
 
 
@@ -1328,32 +1327,24 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				m_writer->write(OCC_MARKDOWN);
 				break;
 			}
-			//send server Info
-			std::string server_info = CalTransaction::GetCurrentPoolInfo();
+			std::string buffer = _line;
+			std::string client_info;
+			std::string poolStack;
 
-			m_writer->add(OCC_OK, server_info);
-			eor(is_in_transaction() ? EORMessage::IN_TRANSACTION : EORMessage::FREE);
-			m_writer->write();
-
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", _line.c_str());
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Server Info: %s", server_info.c_str());
-			//m_writer->write(OCC_OK); // Make client to proceed.
-
-
-			// Set the client info only if it's not already set
-			if(client_info.empty())
+			StringUtil::tokenize(buffer, client_info, '&');
+			if (client_info.length() == 0)
 			{
-				client_info = _line;
-				process_pool_info(client_info);
-
-				unsigned int last_idx = client_info.rfind(CLIENT_NAME_PREFIX);
-				if (last_idx != std::string::npos)
-				{
-					m_client_name.clear(); // Clear previous data if-any, little paranoia.
-					m_client_name = client_info.substr(last_idx + CLIENT_NAME_PREFIX.length());
-					StringUtil::trim(m_client_name); // Remove any white-spaces
-				}
+				client_info = _line; // we didn't get '&' format client_info_str
 			}
+			if(true)
+			{
+				poolStack = buffer;
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack = %s", poolStack.c_str());
+			}
+
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", client_info.c_str());
+			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
+			// e.AddData() - To-DO
 
 			if (cur_stmt != NULL)
 				CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CLIENT_INFO_IN_TXN", "0");			
