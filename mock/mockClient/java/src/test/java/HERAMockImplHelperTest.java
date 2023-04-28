@@ -1,8 +1,9 @@
-import com.paypal.hera.heramockclient.HERAMockAction;
-import com.paypal.hera.heramockclient.HERAMockHelper;
+import com.paypal.hera.heramockclient.*;
+import com.paypal.hera.parser.QueryParser;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.List;
 import java.util.Map;
 
 public class HERAMockImplHelperTest {
@@ -89,5 +90,34 @@ public class HERAMockImplHelperTest {
         Assert.assertTrue("Failed to remove mock", HERAMockHelper.removeMock(key));
 
         Assert.assertNotEquals("key=value&payload=make", HERAMockHelper.getMock(key));
+    }
+
+    @Test
+    public void testSeqMock() throws HERAMockException {
+//        14:0 3:3 1,3:3 0,,
+//        44:0 3:3 1,9:3 NEXTVAL,3:3 2,3:3 0,3:3 0,3:3 0,,
+//        12:3 4295221574,
+//        1,6
+        NextValMock seq = new NextValMock();
+        seq.setNextval(4295221574L);
+        String out = HERAMockHelper.getObjectMock(seq, false, 0);
+        System.out.println(out);
+        String sql = "select /* ABCQuery */ ABC.nextval from dual";
+        String resp = QueryParser.getMockMetaForQuery(sql, out);
+        System.out.println(resp);
+    }
+
+    @Test
+    public void testMockLog() {
+        List<MockLog> mockLogList = HERAMockHelper.mockLogs();
+        for(MockLog log : mockLogList)
+            System.out.println(log.toString());
+    }
+
+    @Test
+    public void testMockLogFilter() {
+        List<MockLog> mockLogList = HERAMockHelper.mockLogs("EMailMap._PrimaryKeyLookup.-2");
+        for(MockLog log : mockLogList)
+            System.out.println(log.toString());
     }
 }

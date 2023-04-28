@@ -43,12 +43,14 @@ end
 local redis = require "resty.redis"
 local red = redis:new()
 red:set_timeouts(1000, 1000, 1000)
+package.path = '/usr/local/openresty/nginx/lua_files/?.lua;' .. package.path
 local ok, err = red:connect("127.0.0.1", 6379)
 if not ok then
-    log_to_file(ngx.DEBUG, "failed to connect to redis: " .. sock_id + " " + err)
+    local file_utils = require("file_utils")
+    file_utils.log_to_file(ngx.DEBUG, "failed to connect to redis:  " .. err)
 end
 local data = load()
 
-red:set(tostring(ngx.var.msec)..":NA:NA:Command", data)
+red:set(tostring(ngx.var.msec)..":NA:NA:NA:Command", "HeraMock is up and Running")
 ngx.say('ok')
 ngx.eof()

@@ -94,7 +94,7 @@ local function log_request_to_redis(log_id, data)
 			local sql_hash = get_sql_hash(log_id, q)
 
 			local t = tostring(ngx.var.msec)
-			key =   t .. ":" .. corr_id .. ":" .. sql_hash .. ":" .. q
+			key =   t .. ":" .. corr_id .. ":" .. sql_hash .. ":" .. tostring(ngx.var.server_port) .. ":" .. q
 
 			local req_data = data .. " START_RESPONSE "
 			local _, error, _ = ngx.shared.redis_response:set(key, req_data, 600)
@@ -104,7 +104,7 @@ local function log_request_to_redis(log_id, data)
 		elseif string.find(data, "%d,$") then
 			local req_data = data .. " START_RESPONSE "
 			local t = tostring(ngx.var.msec)
-			key =   t .. ":NA:NA:Command"
+			key =   t .. ":NA:NA:\" .. tostring(ngx.var.server_port) .. \":Command"
 			local _, error, _ = ngx.shared.redis_response:set(key, req_data, 600)
 			if (error ~= nil ) then
                 log_to_file(ngx.ERR, log_id .. " failed to set shared memory " .. error)
@@ -306,7 +306,7 @@ local function check_for_commands(client_data, m_data, log_id, sock_id)
 			-- if command matches
 			if string.find(client_data, a.get_command(cm)) == 1 or
 					-- if delay on fetch and client_data sent has fetch alone
-					starts_with(client_data, "7 ") then
+					(string.find(client_data, "7 ") and cm == "DELAY_ON_FETCH") then
 				m_data = a.get_response(cm)
 				if m_data == "DELAY_ON_COMMIT" or m_data == "DELAY_ON_FETCH" then
 					m_data = delay .. " MOCK_DELAYED_RESPONSE NOMOCK"
@@ -688,7 +688,7 @@ local function get_object_mock_meta(mock_data, data, key, log_id, forever_mock)
     end
 	log_to_file(ngx.DEBUG, log_id .. " parsing query and getting mock response ")
 	local j_cmd = "/usr/bin/java -jar /opt/heramockclient-jar-with-dependencies.jar"
-	local params = "\"QUERY_META\" \"" .. query .. "\" \"" ..  mock_data .. "\""
+	local params = "\"QUERY_META\" \"" .. query .. "\" \"" ..  mock_data:gsub('"', '\\"') .. "\""
 	local cmd = "echo `" .. j_cmd .. " " .. params .. "` | tr -d '\n'"
 	log_to_file(ngx.DEBUG, log_id ..  cmd)
 	local handler = assert(io.popen(cmd))
@@ -867,8 +867,15 @@ local function get_mock_data(client_data, log_id, sock, r_sock)
 				end
 
                 if(string.find(client_data, ":25 ") and
-                        (string.find(client_data, " " .. v .. " ", 1, true) or
-                                string.find(client_data, " " .. v .. ".cq ", 1, true))) then
+						(string.find(client_data, " " .. v .. " ", 1, true) or
+								string.find(client_data, " " .. v .. "*/", 1, true) or
+								string.find(client_data, "/*" .. v .. " ", 1, true) or
+								string.find(client_data, "/*" .. v .. "*/", 1, true) or
+								string.find(client_data, " " .. v .. ".cq ", 1, true) or
+								string.find(client_data, " " .. v .. ".cq*/", 1, true) or
+								string.find(client_data, "/*" .. v .. ".cq ", 1, true) or
+								string.find(client_data, "/*" .. v .. ".cq*/", 1, true)
+						)) then
                     if combined_key == true then
                         v = value
                     end
@@ -1040,6 +1047,40 @@ local function check_and_simulate_timeout(mock_data, log_id, sock, red)
 	return mock_data, timeout
 end
 
+local function worker_state(data, sock, up_sock, key, log_id, red)
+	local sock_id = get_id(sock)
+	local up_sock_id = get_id(up_sock)
+
+	if key == "REQUEST" and (ngx.shared.busy_worker_count[sock_id] == nil or
+			ngx.shared.busy_worker_count[sock_id] == false) then
+		if data == "8," or data == "9," or
+				(string.find(data, ":25 ") and string.find(data, ",1:4,")) then
+			local incr_resp, err = ngx.shared.busy_worker_count:incr(ngx.var.server_port, 1)
+			if not incr_resp and err == "not found" then
+				ngx.shared.busy_worker_count:add(ngx.var.server_port, 1)
+			end
+			ngx.shared.busy_worker_count[sock_id] = true
+			--red:eval("return redis.call('TS.ADD', 'busy_worker_count', '*', " ..
+			--		ngx.shared.busy_worker_count:get(ngx.var.server_port) .. " , 'ON_DUPLICATE', 'MAX')", 0);
+			log_to_file(ngx.INFO, log_id .. " >busy_worker_count "	 .. ngx.shared.busy_worker_count:get(ngx.var.server_port))
+			red:eval("return redis.call('TS.ADD', 'busy_worker_count:" .. ngx.var.server_port ..
+					"', '*', " .. ngx.shared.busy_worker_count:get(ngx.var.server_port) .. ")", 0);
+		end
+	elseif key == "RESPONSE" and ngx.shared.busy_worker_count[up_sock_id] == true then
+		if data == "6," or data == "5," or data == "2," or data == "1," or
+				string.find(data, "NEXT_NEWSTRING 6,") or
+				string.find(data, "NEXT_NEWSTRING 2,") or
+				string.find(data, "NEXT_NEWSTRING 1,") or
+				string.find(data, "NEXT_NEWSTRING 5,") then
+			ngx.shared.busy_worker_count:incr(ngx.var.server_port, -1)
+			ngx.shared.busy_worker_count[up_sock_id] = false
+			red:eval("return redis.call('TS.ADD', 'busy_worker_count:" .. ngx.var.server_port ..
+					"', '*', " .. ngx.shared.busy_worker_count:get(ngx.var.server_port) .. ")", 0);
+			log_to_file(ngx.INFO, log_id .. " <busy_worker_count " .. ngx.shared.busy_worker_count:get(ngx.var.server_port))
+		end
+
+	end
+end
 
 local function read_and_forward(sender_socket, sender_name, recp_socket, recipient_name, msg, mock_data, log_id, red)
 	local client_data_size, client_data
@@ -1065,6 +1106,14 @@ local function read_and_forward(sender_socket, sender_name, recp_socket, recipie
 		-- check if the data read from the client has to be mocked or not. if the response has m_data some value
 		-- which means we have to mock the response
 		m_data, corr_id = get_mock_data(client_data, log_id, sender_socket, get_id(recp_socket))
+	end
+
+	if client_data then
+		local key = "RESPONSE"
+		if string.find(msg, "_forward") then
+			key = "REQUEST"
+		end
+		worker_state(client_data, sender_socket, recp_socket, key, log_id, red)
 	end
 
 	-- in case mock keyword is timeout, sleep on this thread and then remove the mock and go as normal.
@@ -1152,11 +1201,11 @@ local function cal_data(mock_data, data, data_size, log_id)
 	local do_app_log = true
 	if string.find(data, "2004 ") then
 		name = "CLIENT_CHALLENGE_RESPONSE"
-		payload = "id=" .. log_id
+		payload = "CLIENT_CHALLENGE_RESPONSE id=" .. log_id
 		do_app_log = false
 	elseif string.find(data, "1001 ") then
 		name = "SERVER_CHALLENGE"
-		payload = "id=" .. log_id
+		payload = "SERVER_CHALLENGE id=" .. log_id
 		do_app_log = false
 	elseif data == "1002," then
 		name = "SERVER_CONNECTION_ACCEPTED"
@@ -1219,10 +1268,12 @@ local function read_loop(sock, up_sock, from_stream, to_stream, key, log_id, red
 					capture_redis(red, up_sock)
 				end
 				local k = log_request_to_redis(log_id, data)
-				local _, error,_ = ngx.shared.redis_req_res:set(up_sock, k, 600)
-				if (error ~= nil ) then
-                    log_to_file(ngx.ERR, log_id .. " failed to set shared memory " .. error)
-                end
+				if k ~= nil then
+					local _, error,_ = ngx.shared.redis_req_res:set(up_sock, k, 600)
+					if (error ~= nil ) then
+						log_to_file(ngx.ERR, log_id .. " failed to set shared memory " .. error)
+					end
+				end
 				if timeout ~= "" then
 					collect_response_for_redis(log_id, up_sock ,red, "HERAMOCK: " .. timeout)
 				end
@@ -1257,6 +1308,10 @@ local function read_loop(sock, up_sock, from_stream, to_stream, key, log_id, red
 		    ngx.shared.mock_connection:get(get_id(sock))
 			log_to_file(ngx.DEBUG, log_id .. " CLOSING SOCKETS FOR " .. key .. ", id: " .. get_id(sock))
 			return
+		end
+
+		if string.len(mock_data) > 0 then
+			worker_state(mock_data, up_sock, sock, "RESPONSE", log_id, red)
 		end
     end
 end
@@ -1532,16 +1587,16 @@ log_to_file(ngx.DEBUG, "active_conn_count incr: " .. ngx.shared.active_conn_coun
 
 check_for_load_based_mock(sock_id)
 
-local ip = ngx.var.remote_addr
-
 local redis = require "resty.redis"
 local red = redis:new()
 if (ngx.shared.mock_response:get("DISABLE_LOG") == nil) then
 	red:set_timeouts(1000, 1000, 1000)
-	local ok, err = red:connect("127.0.0.1", 6379)
+	local ok, e = red:connect("127.0.0.1", 6379)
 	if not ok then
-		log_to_file(ngx.DEBUG, "failed to connect to redis: " .. sock_id .. " " .. err)
+		log_to_file(ngx.DEBUG, "failed to connect to redis: " .. sock_id .. " " .. e)
 	end
+	red:eval("return redis.call('TS.CREATE', 'busy_worker_count:" .. ngx.var.server_port ..
+			"', '" .. 60*60*24*1000 .. "', 1, 'ON_DUPLICATE', 'MAX', 'LABELS','type', 'busy_worker_count', 'PORT','" .. ngx.var.server_port .. "')", 0);
 end
 
 -- if we dont have any reference to this sock_id in our mock_connection_corr data structure - then it should be
@@ -1551,7 +1606,7 @@ if ngx.shared.mock_connection_corr:get(sock_id) == nil then
 end
 
 -- find out which hera server should connect
-local up_sock, upstream_ip = get_upstream_socket()
+local up_sock, _ = get_upstream_socket()
 if up_sock ~= nil and (ngx.shared.load_based_mock:get("fail_connect") == nil or ngx.shared.load_based_mock:get("fail_connect") == 0) then
 	-- get a hash value of socket object for logging purpose
 	local up_sock_id = get_id(up_sock)

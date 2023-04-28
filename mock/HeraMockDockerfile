@@ -21,7 +21,16 @@ FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 # prepare the image with required software
 RUN apt update
-RUN apt install redis-server -y
+
+sudo wget --no-check-certificate "https://github.com/redis/redis/archive/7.0.5.tar.gz"
+sudo tar -xzvf 7.0.5.tar.gz
+sudo apt-get install -y pkg-config
+cd redis-7.0.5/
+sudo make
+sudo make install
+
+COPY ./redis-lib/redistimeseries.so /opt/
+
 RUN apt install python3 -y
 RUN apt install curl -y
 RUN curl --insecure "https://bootstrap.pypa.io/get-pip.py" -o get-pip.py
@@ -40,12 +49,14 @@ RUN apt install iputils-ping -y
 
 # prepare the directory structure as required
 RUN mkdir -p /opt
-RUN mkdir -p /usr/local/openresty/nginx/lua_files
+RUN mkdir -p /usr/local/openresty/nginx/lua_files/tests
 RUN mkdir -p /usr/local/local_server
 RUN mkdir -p /tmp/certs
 
+
 # copy all the files needed
 COPY ./lua_files/ /usr/local/openresty/nginx/lua_files
+COPY ./lua_files/tests /usr/local/openresty/nginx/lua_files/tests
 COPY ./nginx_config/ecv.conf /etc/nginx/conf.d/
 COPY ./nginx_config/hera_mock.conf /etc/nginx/conf.d/
 COPY ./nginx_config/nginx.conf /usr/local/openresty/nginx/conf/nginx.conf

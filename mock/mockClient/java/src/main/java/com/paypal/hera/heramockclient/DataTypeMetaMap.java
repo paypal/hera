@@ -2,7 +2,9 @@ package com.paypal.hera.heramockclient;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -12,6 +14,8 @@ public class DataTypeMetaMap {
     private static String STRING = "3:3 1,3:3 8,3:3 0,3:3 0,";
     private static String INTEGER = "3:3 3,3:3 0,3:3 0,3:3 0,";
     private static String TIME = "5:3 185,3:3 0,3:3 0,3:3 0,";
+    private static String DATE = "4:3 12,3:3 0,3:3 0,3:3 0,";
+    private static String CHAR = "4:3 96,3:3 1,3:3 0,3:3 0,";
 
     static private Map<String, String> metaMap = new HashMap<>();
     static private DataTypeMetaMap dataTypeMetaMap = new DataTypeMetaMap();
@@ -25,25 +29,42 @@ public class DataTypeMetaMap {
         metaMap.put(String.class.getSimpleName(), STRING);
         metaMap.put(long.class.getSimpleName(), NUMBER);
         metaMap.put(Long.class.getSimpleName(), NUMBER);
+        metaMap.put(Instant.class.getSimpleName(), NUMBER);
         metaMap.put(double.class.getSimpleName(), NUMBER);
         metaMap.put(Double.class.getSimpleName(), NUMBER);
         metaMap.put(Double.class.getSimpleName(), NUMBER);
         metaMap.put(Integer.class.getSimpleName(), INTEGER);
         metaMap.put(Timestamp.class.getSimpleName(), TIME);
+        metaMap.put(boolean.class.getSimpleName(), NUMBER);
+        metaMap.put(Date.class.getSimpleName(), DATE);
+        metaMap.put(java.util.Date.class.getSimpleName(), DATE);
+        metaMap.put(char.class.getSimpleName(), CHAR);
     }
 
     public DataTypeMetaMap getDataTypeMetaMap(){
         return dataTypeMetaMap;
     }
 
-    public static String variableCaseToBufferCase(String input){
+    public static String variableCaseToBufferCase(String input, Map<String, String> columnMap){
         if (input.startsWith("m_"))
             input = input.substring(2);
         StringBuilder output = new StringBuilder();
+        if (columnMap.containsKey(input))
+            return columnMap.get(input);
+        boolean digitStart = false;
+        int len = input.length();
         for(char ch : input.toCharArray()) {
-            if (Character.isUpperCase(ch) && !input.equals("nextVal"))
-                output.append("_");
-            output.append(ch);
+            len--;
+            if (!digitStart && Character.isDigit(ch) && len != 0) {
+                digitStart = true;
+            } else if (digitStart) {
+                digitStart = false;
+            }
+
+            if ((Character.isUpperCase(ch) || digitStart)
+                    && !input.equals("nextVal")) {
+                output.append(ch);
+            }
         }
         return output.toString().toUpperCase();
     }
@@ -64,8 +85,9 @@ public class DataTypeMetaMap {
         }
         return output.toString();
     }
-    public static String getEquivalent(String name, String dataType) throws HERAMockException {
-        String bufferCase = variableCaseToBufferCase(name);
+    public static String getEquivalent(String name, String dataType,
+                                       Map<String, String> columnMap) throws HERAMockException {
+        String bufferCase = variableCaseToBufferCase(name, columnMap);
         String temp = "3 " + bufferCase;
         String fieldStart = bufferCase + "_START_HERA_MOCK ";
         String fieldEnd = bufferCase + "_END_HERA_MOCK ";
