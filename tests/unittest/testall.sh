@@ -12,6 +12,8 @@ do
     if [ 0 != $rv ]
     then
         #grep ^ *.log
+        echo $rv 
+        echo $d
         popd
         #exit $rv
         overall=1
