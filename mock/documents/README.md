@@ -11,7 +11,7 @@
 [HERA](https://github.com/paypal/hera#readme) (High Efficiency Reliable Access to data stores, Open sourced as HERA by PayPal) is a key enabler for scaling and
 improving availability of relational (Oracle/MySQL/Postgres) databases at PayPal.
 
-*heramock* (otherwise called**heramock**) is an altus custom docker app which helps to mock all the database
+*heramock* (otherwise called**heramock**) is an custom docker app which helps to mock all the database
 operation handled via HERA.
 
 ### Target Audience
@@ -23,7 +23,7 @@ operation handled via HERA.
 
 ### What are we mocking here
 
-1. All database operations done via OCC.
+1. All database operations done via HERA.
 
 2. What are the database operations my application does?
 
@@ -33,7 +33,7 @@ operation handled via HERA.
 
 ## Basics
 
-1. **heramock** sits between application and OCC.
+1. **heramock** sits between application and HERA.
 2. Ports Exposed
     1. It listens to all the ports that are mocked
         1. Example: 10101
@@ -67,7 +67,7 @@ operation handled via HERA.
 | mock/status     | This api is to validate replay in capture-replay use case. <br/> Returns "success" when replay succeeds and "failure" with more debug logs when it fails                                                                                                                                                                                                                                                                              | `curl "localhost:13916/mock/status?key=corrid"` // returns success or failed:<details about query where it failed"                                                                          | `String getReplayStatus(String key)` // returns success or failed:<details about query where it failed"                                                                                                                |
 | mock/info       | This api gives information about the mock such as whats the backend server, what are all hera it is mocking etc                                                                                                                                                                                                                                                                                                                        | `curl "localhost:13916/mock/info"`                                                                                                                                                          | Not implemented                                                                                                                                                                                                        |
 | mock/reload     | This api restarts mock. This is required certain cases such as simulating connection level mock (as connections are cached in app layer). <br/><br/> Also this is used internally when we change the backend server, calling this api re-triggers all the connections to server again                                                                                                                                                 | `curl "localhost:13916/mock/reload"`                                                                                                                                                        | `boolean reloadMock()`                                                                                                                                                                                                 |
-| mock/traffic    | This api gives traffic graph or raw data based on request, it stores last 10 mins traffic volume.<br/> <br/> This is used to understand how many connections are being used by DAL/OCC/Mock. Mostly used in LnP Testing                                                                                                                                                                                                               | `curl "localhost:13916/mock/traffic?port=1010&readable=false&html=true"` <br/> <br/>// port tells which hera we are looking at, html gives graph version and readable gives pretty formatted | Not implemented                                                                                                                                                                                                        |
+| mock/traffic    | This api gives traffic graph or raw data based on request, it stores last 10 mins traffic volume.<br/> <br/> This is used to understand how many connections are being used by DAL/HERA/Mock. Mostly used in LnP Testing                                                                                                                                                                                                               | `curl "localhost:13916/mock/traffic?port=1010&readable=false&html=true"` <br/> <br/>// port tells which hera we are looking at, html gives graph version and readable gives pretty formatted | Not implemented                                                                                                                                                                                                        |
 | mock/heartbeat  | This api check if the mock is up and running                                                                                                                                                                                                                                                                                                                                                                                          | `curl "localhost:13916/mock/heartbeat"`                                                                                                                                                     | Not implemented                                                                                                                                                                                                        |
 | mock/test       | This api runs all the unit test and verifies if mock build is good.<br/><br/>  In development                                                                                                                                                                                                                                                                                                                                         | `curl "localhost:13916/mock/test"`                                                                                                                                                          | Not implemented                                                                                                                                                                                                        |
 
