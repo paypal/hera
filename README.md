@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/paypal/hera.svg?branch=master)](https://travis-ci.org/paypal/hera)
+[![Build Status](https://github.com/paypal/hera/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/paypal/hera/actions/workflows/go.yml)
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
 
 <img src="docs/hera.png" height="240" width="340">
