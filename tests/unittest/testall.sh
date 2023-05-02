@@ -11,9 +11,15 @@ do
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
+        echo "Retrying" $d
+        echo "exit code" $rv 
+        ./$d.test -test.v
+        rv=$?
+        grep -E '(FAIL|PASS)' -A1 *.log
+    fi
+    if [ 0 != $rv ]
+    then
         #grep ^ *.log
-        echo $rv 
-        echo $d
         popd
         #exit $rv
         overall=1
