@@ -21,13 +21,7 @@ FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 # prepare the image with required software
 RUN apt update
-
-RUN wget --no-check-certificate "https://github.com/redis/redis/archive/7.0.5.tar.gz"
-RUN tar -xzvf 7.0.5.tar.gz
-RUN apt-get install -y pkg-config
-RUN cd redis-7.0.5/
-RUN make
-RUN make install
+RUN apt install -y redis
 
 COPY ./redis-lib/redistimeseries.so /opt/
 
