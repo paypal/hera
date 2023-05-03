@@ -17,14 +17,12 @@
 
 ARG BASE_IMAGE
 
+FROM redislabs/redistimeseries AS redistimeseries
+
 FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 # prepare the image with required software
 RUN apt update
-RUN apt install -y redis
-
-COPY ./redis-lib/redistimeseries.so /opt/
-
 RUN apt install python3 -y
 RUN apt install curl -y
 RUN curl --insecure "https://bootstrap.pypa.io/get-pip.py" -o get-pip.py
@@ -46,7 +44,11 @@ RUN mkdir -p /opt
 RUN mkdir -p /usr/local/openresty/nginx/lua_files/tests
 RUN mkdir -p /usr/local/local_server
 RUN mkdir -p /tmp/certs
+RUN mkdir -p /usr/lib/redis/modules
+RUN mkdir -p /usr/local/bin/
 
+COPY --from=redistimeseries /usr/lib/redis/modules/redistimeseries.so /usr/lib/redis/modules
+COPY --from=redistimeseries /usr/local/bin/redis* /usr/local/bin/
 
 # copy all the files needed
 COPY ./lua_files/ /usr/local/openresty/nginx/lua_files

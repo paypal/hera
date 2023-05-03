@@ -16,6 +16,6 @@ if test -f "$FILE"; then
 fi
 
 /usr/local/openresty/nginx/sbin/heartbeat.sh &
-redis-server --loadmodule /opt/redistimeseries.so &
-python3 /usr/local/local_serve r/local_server.py &
+redis-server --loadmodule /usr/lib/redis/modules/redistimeseries.so &
+python3 /usr/local/local_server/local_server.py &
 /usr/local/openresty/nginx/sbin/nginx -g 'daemon off;'
