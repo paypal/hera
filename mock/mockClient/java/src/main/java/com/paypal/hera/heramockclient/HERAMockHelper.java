@@ -2,12 +2,17 @@ package com.paypal.hera.heramockclient;
 
 import com.paypal.hera.heramockclient.mockannotation.JDBCMockConst;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
-import javax.persistence.Column;
 
+import javax.persistence.Column;
+import javax.persistence.Convert;
 import java.io.*;
-import java.lang.reflect.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
@@ -31,6 +36,13 @@ public class HERAMockHelper {
         return "http://" + mockIP + ":13916/mock/add";
     }
 
+    private static String getFlushLogURL() {
+        return "http://" + mockIP + ":13916/mock/flush_logs";
+    }
+
+    private static String getMockLogsURL() {
+        return "http://" + mockIP + ":13916/mock/logs";
+    }
     private static String getMockListURL() {
         return "http://" + mockIP + ":13916/mock/list";
     }
@@ -79,6 +91,30 @@ public class HERAMockHelper {
         return mockIP;
     }
 
+    private static String decodeSpecialChar(String input) {
+        Map<String, String> map = new HashMap<>();
+        map.put("heraMockEqual", "=");
+        map.put("heraMockUnaryAnd", "&");
+        map.put("heraMockPlus", "+");
+
+        for(String key : map.keySet()) {
+            input = input.replace(key, map.get(key));
+        }
+        return input;
+    }
+
+    private static String encodeSpecialChar(String input) {
+        Map<String, String> map = new HashMap<>();
+        map.put("=", "heraMockEqual");
+        map.put("&", "heraMockUnaryAnd");
+        map.put("+", "heraMockPlus");
+
+        for(String key : map.keySet()) {
+            input = input.replace(key, map.get(key));
+        }
+        return input;
+    }
+
     public static Map<String, String> listMock() {
         Map<String, String> response = new HashMap<String, String>();
         try {
@@ -94,8 +130,8 @@ public class HERAMockHelper {
             while((readline = in.readLine()) != null) {
                 String[] mocks = readline.split("=");
                 if (mocks.length > 1)
-                    response.put(mocks[0].replace("heraMockEqual", "="),
-                            mocks[1].replace("heraMockEqual", "="));
+                    response.put(decodeSpecialChar(mocks[0]),
+                            decodeSpecialChar(mocks[1]));
                 else
                     response.put(mocks[0], "");
             }
@@ -233,6 +269,23 @@ public class HERAMockHelper {
                         failureValue
                 );
 
+    }
+
+    public static boolean flush_logs(String port) {
+        try {
+            URL url = new URL(getFlushLogURL() + "?port=" + port);
+            HttpURLConnection connection = getUrl(url);
+            int respCode = connection.getResponseCode();
+            if (respCode != HttpURLConnection.HTTP_OK) {
+                System.out.println("unable to flush logs " + respCode);
+                return false;
+            }
+
+        }catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Exception while setting up mock " + ex.getMessage());
+        }
+        return true;
     }
 
     public static boolean addMock(String key, String value)    {
@@ -748,7 +801,8 @@ public class HERAMockHelper {
                                             StringBuilder value,
                                             StringBuilder columnMeta,
                                             boolean isFirst,
-                                            boolean noDataFound) throws HERAMockException {
+                                            boolean noDataFound,
+                                            Map<String, String> columnMap) throws HERAMockException {
         try {
             Field[] fields = objectToRespond.getClass().getDeclaredFields();
             for (Field f : fields) {
@@ -760,35 +814,52 @@ public class HERAMockHelper {
                     fieldName = DataTypeMetaMap.bufferCaseToVariableCase(c.name());
                 }
                 if (isFirst)
-                    columnMeta.append(DataTypeMetaMap.getEquivalent(fieldName, f.getType().getSimpleName()));
+                    columnMeta.append(DataTypeMetaMap.getEquivalent(fieldName, f.getType().getSimpleName(), columnMap));
                 f.setAccessible(true);
                 String fieldValue;
                 if (f.get(objectToRespond) != null && !noDataFound) {
-                    String bufferCase = DataTypeMetaMap.variableCaseToBufferCase(fieldName);
+                    String bufferCase = DataTypeMetaMap.variableCaseToBufferCase(fieldName, columnMap);
                     String fieldStart = bufferCase + "_START_HERA_MOCK ";
                     String fieldEnd = " " + bufferCase + "_END_HERA_MOCK ";
                     fieldValue = f.get(objectToRespond).toString();
+                    if (f.getType().getSimpleName().equals(char.class.getSimpleName()) &&
+                            Character.toString('\0').equals(fieldValue)) {
+                        continue;
+                    }
+                    if(f.isAnnotationPresent(Convert.class)) {
+                        Convert c = f.getAnnotation(Convert.class);
+                        Method method =  c.converter().getMethod("convertToDatabaseColumn", f.getType());
+                        Object o = f.get(objectToRespond);
+                        fieldValue = method.invoke(c.converter().getDeclaredConstructor().newInstance(),
+                                o).toString();
+                    }
                     value.append(fieldStart).append(fieldValue).append(fieldEnd);
                 }
             }
-        }catch (IllegalAccessException e) {
+        }catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException | InstantiationException e) {
             throw new HERAMockException(e);
         }
     }
 
-    public static String getObjectMock(Object objectToRespond, boolean noDataFound, int delayMs) throws HERAMockException {
+    public static String getObjectMock(Object objectToRespond, boolean noDataFound, int delayMs)
+            throws HERAMockException {
+        return getObjectMock(objectToRespond, noDataFound, delayMs, new HashMap<String, String>());
+    }
+
+    public static String getObjectMock(Object objectToRespond, boolean noDataFound, int delayMs,
+                                       Map<String, String> columnMap) throws HERAMockException {
         boolean firstObject = true;
         StringBuilder value = new StringBuilder();
         StringBuilder columnMeta = new StringBuilder();
         if(objectToRespond.getClass().getSuperclass().getSimpleName().equals(AbstractList.class.getSimpleName())) {
             List objects = (List)objectToRespond;
             for(Object obj : objects) {
-                getSingleObjectMock(obj, value, columnMeta, firstObject, noDataFound);
+                getSingleObjectMock(obj, value, columnMeta, firstObject, noDataFound, columnMap);
                 firstObject = false;
                 value.append(JDBCMockConst.NEW_LINE);
             }
         } else {
-            getSingleObjectMock(objectToRespond, value, columnMeta, true, noDataFound);
+            getSingleObjectMock(objectToRespond, value, columnMeta, true, noDataFound, columnMap);
             value.append(JDBCMockConst.NEW_LINE);
         }
         String firstLine = "";
@@ -876,8 +947,8 @@ public class HERAMockHelper {
     public static boolean removeMock(String key) {
         boolean response = true;
         try{
-            String params = "key=" + key.replace(" H", "HERA_MOCK_SPACE_H")
-                    .replace("=", "heraMockEqual").replace("&", "heraMockUnaryAnd");
+            key = key.replace(" H", "HERA_MOCK_SPACE_H");
+            String params = "key=" + encodeSpecialChar(key);
             URL url = new URL(getMockRemoveURL() + "?" + params);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("DELETE");
@@ -891,5 +962,121 @@ public class HERAMockHelper {
             response = false;
         }
         return response;
+    }
+
+    private static String getOrDefault(JSONObject obj, String key) {
+        String response;
+
+        try{
+            response = obj.getString(key);
+        } catch (Exception e) {
+            response = null;
+        }
+        return response;
+    }
+
+    public static List<MockLog> mockLogs() {
+        return mockLogs("*");
+    }
+    public static List<MockLog> mockLogs(String filter) {
+        List<MockLog> mockLogs = new ArrayList<>();
+        StringBuilder logs = new StringBuilder();
+        try {
+            if(!filter.equals("*")) {
+                filter = "*" + filter + "*";
+            }
+            URL url = new URL(getMockLogsURL() + "?key=" + filter);
+            HttpURLConnection connection = getUrl(url);
+            int respCode = connection.getResponseCode();
+            if (respCode != HttpURLConnection.HTTP_OK) {
+                System.out.println("unable to set the mock logs as " + respCode);
+                return mockLogs;
+            }
+            BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String readline;
+            while((readline = in.readLine()) != null) {
+                logs.append(readline).append("\n");
+            }
+            in.close();
+        }catch (Exception ex) {
+            ex.printStackTrace();
+            System.out.println("Exception while getting mock logs " + ex.getMessage());
+        }
+        JSONObject jsonObject = new JSONObject(logs.toString());
+        for (Iterator it = jsonObject.keys(); it.hasNext(); ) {
+            String key = (String) it.next();
+            MockLog mockLog = new MockLog();
+            mockLog.setQueryTime(key);
+            JSONArray records = (JSONArray) jsonObject.get(key);
+            for(int i=0; i<records.length(); i++) {
+                Object obj = null;
+                JSONObject record = records.getJSONObject(i);
+                String timeStamp = record.getString("timeStamp");
+                mockLog.setEpocTime(Double.valueOf(timeStamp));
+                mockLog.setPort(getOrDefault(record, "port"));
+                mockLog.setHeraName(getOrDefault(record, "hera_name"));
+                mockLog.setSQL(record.getString("SQL"));
+                mockLog.setCorrId(record.getString("corrId"));
+
+                try {
+                    obj = record.get("response");
+                }catch (JSONException e) {obj = null;}
+
+                if (obj != null) {
+                    if (obj instanceof String) {
+                        List<Map<String, String>> bindOuts = new ArrayList<>();
+                        String response = record.getString("response");
+                        Map<String, String> bindOut = new HashMap<>();
+                        bindOut.put("response", response);
+                        mockLog.setBindOut(bindOuts);
+                    } else {
+                        JSONArray jsonArray = record.getJSONArray("response");
+                        if (jsonArray != null) {
+                            List<Map<String, String>> bindOuts = new ArrayList<>();
+                            for (int j = 0; j < jsonArray.length(); j++) {
+                                Map<String, String> bindOut = new HashMap<>();
+                                if(jsonArray.get(j) instanceof JSONObject) {
+                                    JSONObject jsonObject1 = jsonArray.getJSONObject(j);
+                                    Set<String> keys = jsonObject1.keySet();
+                                    for (String bindOutKey : keys) {
+                                        bindOut.put(bindOutKey, jsonObject1.getString(bindOutKey));
+                                    }
+                                } else if (jsonArray.get(j) instanceof String) {
+                                    bindOut.put("response", jsonArray.getString(j));
+                                } else {
+                                    JSONArray array = jsonArray.getJSONArray(j);
+                                    for (int k = 0; k < array.length(); k++) {
+                                        JSONObject jsonObject1 = jsonArray.getJSONArray(j).getJSONObject(k);
+                                        Set<String> keys = jsonObject1.keySet();
+                                        for (String bindOutKey : keys) {
+                                            bindOut.put(bindOutKey, jsonObject1.getString(bindOutKey));
+                                        }
+                                    }
+                                }
+                                bindOuts.add(bindOut);
+                            }
+                            mockLog.setBindOut(bindOuts);
+                        }
+                    }
+                }
+
+
+                try {
+                    obj = record.get("request");
+                }catch (JSONException e) { obj = null;}
+                if(obj != null) {
+                    JSONObject jsonObject1 = record.getJSONObject("request");
+                    Map<String, String> bindIn = new HashMap<>();
+                    Set<String> keys = jsonObject1.keySet();
+                    for(String bindOutKey : keys) {
+                        bindIn.put(bindOutKey, jsonObject1.getString(bindOutKey));
+                    }
+                    mockLog.setBindIn(bindIn);
+                }
+
+                mockLogs.add(mockLog);
+            }
+        }
+        return mockLogs;
     }
 }

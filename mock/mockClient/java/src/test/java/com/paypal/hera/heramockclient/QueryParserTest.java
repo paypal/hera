@@ -1,7 +1,11 @@
 package com.paypal.hera.heramockclient;
 
 import com.paypal.hera.parser.QueryParser;
+import org.junit.Assert;
 import org.junit.Test;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class QueryParserTest {
     @Test
@@ -38,4 +42,28 @@ public class QueryParserTest {
             System.out.println(r);
     }
 
+    @Test
+    public void specialCharTest() {
+
+        Map<String, String> inp = new HashMap<>();
+
+        inp.put("key", "value");
+        inp.put("key&", "value");
+        inp.put("key1", "val&ue");
+        inp.put("ke=y1", "val&ue");
+        inp.put("+=&", "&=+");
+        inp.put("key2", "c++");
+        inp.put("key2 H", "c++");
+
+
+        for(String k : inp.keySet()) {
+            HERAMockHelper.addMock(k, inp.get(k));
+            String v = HERAMockHelper.getMock(k);
+            System.out.println("Testing with key=" + k + " and value as " + v);
+            Assert.assertEquals("Failed for " + k,
+                    inp.get(k), v);
+            HERAMockHelper.removeMock(k);
+            Assert.assertNull(HERAMockHelper.getMock(k));
+        }
+    }
 }

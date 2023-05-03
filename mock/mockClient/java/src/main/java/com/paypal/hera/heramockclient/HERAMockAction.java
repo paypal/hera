@@ -49,7 +49,9 @@ public class HERAMockAction {
     public final static String OK = " 5,";
     public final static String CLOSE_SOCKET = " CLOSE_SOCKET";
     public final static String INSERT_SUCCESS = "0 3:3 0,3:3 1,,";
+    public static final String NEW_LINE = " NEXT_NEWSTRING ";
     public final static String AUTO_COMMIT_RESP = "5,";
+    public final static String INSERT_AUTO_COMMIT_SUCCESS = INSERT_SUCCESS + NEW_LINE + AUTO_COMMIT_RESP;
     public final static String INSERT_FAILURE = "1 904 ORA-00904: Dummy simulated error,,";
     public final static String TIMEOUT_ON_FETCH = "TIMEOUT_ON_FETCH";
 }

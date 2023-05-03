@@ -29,7 +29,7 @@ if [ "$BUILD_HERA_MOCK" = true ] ; then
   # build the heramock and create the container
   cd ../mock
   cd mockClient/java && mvn clean -DskipTests install ; cd ../../
-  docker build --build-arg BASE_IMAGE=${BASE_IMAGE} -f HeraMockDockerfile -t hera-mock .
+  DOCKER_BUILDKIT=1 docker build --build-arg BASE_IMAGE=${BASE_IMAGE} -f HeraMockDockerfile -t hera-mock .
 fi
 
 if [ "$BUILD_SAMPLE_APP" = true ] ; then
