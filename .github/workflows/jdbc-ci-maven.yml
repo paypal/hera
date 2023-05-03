@@ -31,10 +31,12 @@ jobs:
         java-version: '8'
         distribution: 'adopt'
         cache: maven
-    - name: Build with Maven
+    - name: Build mockClient
       run: |
         export GOPATH=`go env GOPATH`
-        cd mock/mockClient/java
-        mvn clean install -DskipTests 
-        cd ../../../client/java/jdbc
+        mvn install -f mock/mockClient/java/pom.xml -Dmaven.test.skip=true
+    - name: Build client
+      run: |
+        export GOPATH=`go env GOPATH`
+        cd client/java/jdbc
         mvn test -Dtest=com.paypal.hera.jdbc.AllTestSuite
