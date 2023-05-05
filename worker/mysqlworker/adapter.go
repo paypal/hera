@@ -113,6 +113,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 			err = errors.New("cannot use read-only conn " + curDs)
 		}
 		if is_writable {
+			calTrans.SetStatus(cal.TransOK) //Reset the URL status to success
 			break
 		}
 	}
