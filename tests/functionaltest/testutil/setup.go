@@ -469,8 +469,6 @@ func (m *mux) StartServer() error {
 		m.wg.Done()
 	}()
 
-	//Register Heraloop driver
-	lib.RegisterLoopDriver(lib.HandleConnection)
 	// wait 10 seconds for mux to come up
 	toWait := 10
 	for {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
@@ -616,4 +617,12 @@ func GetHostname() string {
 		hostname = "127.0.0.1"
 	}
 	return hostname
+}
+
+/**
+ * Generate Randdom int between range
+ **/
+func RangeInt(min int, max int) int {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Intn(max-min+1) + min
 }
