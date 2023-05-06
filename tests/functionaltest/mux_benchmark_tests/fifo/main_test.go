@@ -22,6 +22,16 @@ No setup needed
 var mx testutil.Mux
 var tableName string
 
+var testCapacities = []struct {
+	testSize int
+}{
+	{testSize: 1000},
+	{testSize: 2000},
+	{testSize: 10000},
+	{testSize: 65536},
+	{testSize: 131072},
+}
+
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 	appcfg := make(map[string]string)
@@ -61,32 +71,36 @@ func TestMain(m *testing.M) {
 /*******************
  ** Validate default lifo configuration, lifo_scheduler_enabled="true"
  *******************/
-func BenchmarkTestFIFO(t *testing.B) {
-	logger.GetLogger().Log(logger.Debug, "TestFIFO begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	capacity := 2000
-	var idsMap map[int]bool = map[int]bool{}
+func BenchmarkTestFIFO(b *testing.B) {
+	logger.GetLogger().Log(logger.Debug, "Benchmark TestFIFO begins +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	for _, capacity := range testCapacities {
+		b.Run(fmt.Sprintf("bench_input_size_%d", capacity.testSize), func(b *testing.B) {
+			var idsMap map[int]bool = map[int]bool{}
 
-	for i := 0; i < capacity; i++ {
-		id := testutil.RangeInt(10000, 99999)
-		status := testutil.RangeInt(50, 100)
-		_, ok := idsMap[id]
+			for i := 0; i < capacity.testSize; i++ {
+				id := testutil.RangeInt(10000, 99999)
+				status := testutil.RangeInt(50, 100)
+				_, ok := idsMap[id]
 
-		for ok {
-			id = testutil.RangeInt(10000, 99999)
-			_, ok = idsMap[id]
-		}
-		idsMap[id] = true
-		name := fmt.Sprintf("%s_%d", "Jack", id)
-		query := fmt.Sprintf("insert into test_simple_table_1 (ID, Name, Status) VALUES (%d, %s, %d)", id, name, status)
-		testutil.RunDML1(query)
+				for ok {
+					id = testutil.RangeInt(10000, 99999)
+					_, ok = idsMap[id]
+				}
+				idsMap[id] = true
+				name := fmt.Sprintf("%s_%d", "Jack", id)
+				query := fmt.Sprintf("insert into test_simple_table_1 (ID, Name, Status) VALUES (%d, %s, %d)", id, name, status)
+				testutil.RunDML1(query)
+			}
+
+			fmt.Println("Load the row in test_simple_table_1 2 times")
+			IdsList := reflect.ValueOf(idsMap).MapKeys()
+
+			for i := 0; i < capacity.testSize; i++ {
+				var queryID int = IdsList[rand.Intn(len(IdsList))].Interface().(int)
+				testutil.Fetch(fmt.Sprintf("Select Name from test_simple_table_1 where ID = %d", queryID))
+			}
+		})
 	}
 
-	fmt.Println("Load the row in test_simple_table_1 2 times")
-	IdsList := reflect.ValueOf(idsMap).MapKeys()
-
-	for i := 0; i < capacity; i++ {
-		var queryID int = IdsList[rand.Intn(len(IdsList))].Interface().(int)
-		testutil.Fetch(fmt.Sprintf("Select Name from test_simple_table_1 where ID = %d", queryID))
-	}
-	logger.GetLogger().Log(logger.Debug, "TestFIFO done  -------------------------------------------------------------")
+	logger.GetLogger().Log(logger.Info, "Benchmark TestFIFO done  -------------------------------------------------------------")
 }
