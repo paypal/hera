@@ -941,7 +941,10 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						if (m_shard_key_value_type_string) {
 							if (logfile->get_log_level() >= LOG_VERBOSE)
 								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true in sql rewrite");
-							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(bind_values));
+							// string shard key should be resized to correct length. No change when bind_num = 1
+							int str_sk_len = bind_values.size() / bind_num;
+							std::string trunc_bind_values = bind_values.substr(0,str_sk_len);
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(trunc_bind_values));
 						}
 						else
 							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));
