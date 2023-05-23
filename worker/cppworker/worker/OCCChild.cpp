@@ -1376,7 +1376,12 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 		OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_corr_id.c_str()), m_corr_id.length(), OCI_ATTR_ACTION, errhp);
 
 		if (cur_stmt != NULL)
-			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");			
+			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");
+
+		// 325:0 18:2006 CorrId=NotSet,22:11 ClientApp&PoolStack,18:2006 CorrId=NotSet,170:25 /*shard=0*/ SELECT inst_id...0
+		// Removing this dedicated flag reset -- If worker receives the above command -- this below flag will reset the dedicated flag when it encounters the second corrId.
+		// This will create additional CLIENT_SESSION for the same request.
+		// This was not a problem earlier because the session will start during the prepare command, whereas, now it begins as part of the CLIENT_INFO command.
 		// else if (!is_in_transaction())
 		// 	set_dedicated(false); // this command has no response, so setting this flag here
 
