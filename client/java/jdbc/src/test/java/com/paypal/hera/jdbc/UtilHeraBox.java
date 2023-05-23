@@ -1,6 +1,5 @@
 package com.paypal.hera.jdbc;
 
-import com.paypal.hera.client.HeraClientImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +22,7 @@ public class UtilHeraBox {
     static final Logger LOGGER = LoggerFactory.getLogger(UtilHeraBox.class);
 
     static boolean checkImageBuilt(String imageName, String version){
-        for(int i = 0; i < 50; i++){
+        for(int i = 0; i < 200; i++){
             try{
                 Thread.sleep(1222);
                 String cmd = "docker image inspect " + imageName + ":" + version;

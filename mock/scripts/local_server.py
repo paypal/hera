@@ -21,6 +21,7 @@ import json
 import collections
 import datetime
 import ssl
+import time
 
 PORT = 8200
 
@@ -130,7 +131,7 @@ class NetString:
 
 class GetHandler(SimpleHTTPRequestHandler):
 
-    def write_json(self, data, reverse=False):
+    def write_json(self, data, reverse=False, readable = False):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -138,6 +139,11 @@ class GetHandler(SimpleHTTPRequestHandler):
             reverse_sorted_data = collections.OrderedDict(sorted(data.items(), reverse=True))
             self.wfile.write(json.dumps(reverse_sorted_data, indent=4, ensure_ascii=False).encode())
             return
+        if readable == "true":
+            resp = dict()
+            for rec in data:
+                resp[datetime.datetime.fromtimestamp(int(rec)/1000).strftime("%H:%M:%S")] = data[rec]
+            data = resp
         self.wfile.write(json.dumps(data, indent=4, sort_keys=True, ensure_ascii=False).encode())
 
     @staticmethod
@@ -170,7 +176,7 @@ class GetHandler(SimpleHTTPRequestHandler):
                 break
             col = bind.index(':')
             length = int(bind[:col])
-            values = bind[col+1:col+1+length].  split()
+            values = bind[col+1:col+1+length].split()
             if key is not None and val is not None:
                 res[key] = val.strip()
                 key = val = None
@@ -181,7 +187,7 @@ class GetHandler(SimpleHTTPRequestHandler):
                 if len(values) == 1:
                     val = ""
                 else:
-                    val = values[1]
+                    val = " ".join(values[1:])
             bind = bind[length+col+2:]
         return res
 
@@ -246,16 +252,76 @@ class GetHandler(SimpleHTTPRequestHandler):
             return str(inp)
 
     @staticmethod
+    def traffic(port, start):
+        resp = dict()
+        html_format = ""
+        status = True
+        try:
+            red = redis.Redis(host='localhost', port=6379, db=0)
+            end_time = int(time.time()*1000)
+            start_time = int(time.time()*1000) - 5 * 60 * 1000
+            if start is not None:
+                start_time = int(start)
+                end_time = start_time + 5 * 60 * 1000
+            range_reply = red.eval("return redis.call('TS.RANGE', 'busy_worker_count:" + str(port) + "', " + str(start_time) + ", " + str(end_time)  + ")", 0)
+            x = "["
+            y = "["
+            data = dict()
+            starting = 0
+            ending = 0
+            counter = 0
+            for rec in range_reply:
+                resp[int(rec[0])] = rec[1]
+                local_x = int(rec[0])/1000
+
+                if starting == 0 or starting > local_x:
+                    starting = local_x
+                if ending < local_x:
+                    ending = local_x
+
+                if data.get(local_x, 0) < int(rec[1]):
+                    data[local_x] = int(rec[1])
+
+            for x_axis in range(starting-2, ending+3):
+                y_axis = data.get(x_axis, 0)
+
+                if x != "[":
+                    x += ", "
+                    y += ", "
+                x += "\"" + datetime.datetime.fromtimestamp(x_axis).strftime("%H:%M:%S") + "\""
+                y += str(int(y_axis))
+                counter += 1
+                if counter >= 5 * 60:
+                    break
+            x += "]"
+            y += "]"
+
+            html_format = "<!DOCTYPE html><html><script src=\"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/" \
+                          "Chart.min.js\"></script><body><canvas id=\"myChart\" style=\"width:100%\"></canvas>" \
+                          "<script>var xValues = " + x + ";var yValues = " + y + ";new Chart(\"myChart\", {type: \"line\"," \
+                                                                                 "data: {labels: xValues,datasets: [{fill: false,pointRadius: 2,borderColor: \"rgba(0,0,255,0.5)\"," \
+                                                                                 "data: yValues}]},options: {legend: {display: false},title: {display: true,text: \"EXEC Count\"," \
+                                                                                 "fontSize: 16}}});</script></body></html>"
+        except Exception as e:
+            print(e)
+            resp['Error'] = str(e)
+            status = False
+        return status, resp, html_format
+
+    @staticmethod
     def get_data(search_string):
         red = redis.Redis(host='localhost', port=6379, db=0)
         response = dict()
         for hash_query in sorted(red.keys(search_string), reverse=True):
             hash_query = GetHandler.decode(hash_query)
             command = False
+            if str(hash_query).startswith("busy_worker_count"):
+                continue
             split_key = hash_query
             tt, split_key = GetHandler.get_next_field(split_key)
             corr_id, split_key = GetHandler.get_next_field(split_key)
-            hash_code, query = GetHandler.get_next_field(split_key)
+            hash_code, split_key = GetHandler.get_next_field(split_key)
+            not_used, query = GetHandler.get_next_field(split_key)
             pl = GetHandler.decode(red.get(hash_query))
             if query == "Command":
                 query = hash_code = NetString.hera_commands(pl.split(" START_RESPONSE ")[0])
@@ -348,6 +414,21 @@ class GetHandler(SimpleHTTPRequestHandler):
             f_content = self.tail(f_served, 10000)
             f_served.close()
             self.wfile.write(f_content)
+            return
+        elif parsed.path in ["/mock/traffic"]:
+            if str(query).find("=") >= 0:
+                query_components = dict(qc.split("=") for qc in query.split("&"))
+            port = str(query_components.get("port", "10101")).lower()
+            html = str(query_components.get("html", "true")).lower()
+            start = query_components.get("start", None)
+            readable = str(query_components.get("readable", "true")).lower()
+            status, resp, html_format = GetHandler.traffic(port, start)
+            if html != "true" or not status :
+                self.write_json(resp, False, readable)
+            else:
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(html_format)
             return
 
 Handler = GetHandler

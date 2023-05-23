@@ -35,6 +35,19 @@ local function split(s, delimiter)
     return result;
 end
 
+local function escape_special_chars(inp)
+    local resp = inp
+    local special_char = {
+        ["heraMockEqual"] = "=",
+        ["heraMockUnaryAnd"] = "&",
+        ["heraMockPlus"] = "+"
+    }
+    for k,v in pairs(special_char)
+    do
+        resp = resp:gsub(k, v)
+    end
+    return resp
+end
 
 local function get_id(o)
     if type(o) == 'table' then
@@ -65,8 +78,7 @@ local div = "heramockdiv"
 if d ~= nil then
     local sp, _ = string.find(d, div);
     local key = string.sub(d, sp+10)
-    key = key:gsub("heraMockEqual", "=")
-    key = key:gsub("heraMockUnaryAnd", "&")
+    key = escape_special_chars(key)
     local tmp_val = ngx.shared.mock_response:get(key)
     if tmp_val == nil then
         tmp_val = 'nil'
