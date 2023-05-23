@@ -431,6 +431,7 @@ void Worker::run()
 			break;
 		}
 //		WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "worker rq_ID = %d", m_reader->get_count());
+
 		if (!dedicated && cmd != CLIENT_CAL_CORRELATION_ID)
 		{
 			m_eor_free_sent = false;

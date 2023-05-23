@@ -1298,6 +1298,8 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			std::string server_info = CalTransaction::GetCurrentPoolInfo();
 			m_writer->write(SERVER_INT_INFO, server_info);
 
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", _line.c_str());
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Server Info: %s", server_info.c_str());
 			//m_writer->write(OCC_OK); // Make client to proceed.
 
 
