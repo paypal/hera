@@ -693,7 +693,6 @@ void OCCChild::dump_session_cache()
  */
 int OCCChild::handle_command(const int _cmd, std::string &_line)
 {
-	WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Inside handle_command() in OCCChild");
 	unsigned int type = 0;
 	int rc = 0;
 	int markedDown = 0; // if this turns non-zero, it means we are marked down, and should NOT execute
@@ -1332,19 +1331,22 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			std::string poolStack;
 
 			StringUtil::tokenize(buffer, client_info, '&');
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "client_info: %s, Buffer: %s", client_info.c_str(), buffer.c_str());
 			if (client_info.length() == 0)
 			{
-				client_info = _line; // we didn't get '&' format client_info_str
+				client_info = "unknown"; // we didn't get '&' format client_info_str
 			}
-			if(true)
-			{
-				poolStack = buffer;
-				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack = %s", poolStack.c_str());
+			if (buffer.length() > 0) {
+					poolStack = buffer;
+					WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
 			}
-
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", client_info.c_str());
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s | poolStack: %s", client_info.c_str(), poolStack.c_str());
 			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
-			// e.AddData() - To-DO
+			if (CalClient::is_poolstack_enabled()) {
+				CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
+			}
+			e.AddPoolStack();
+			// CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK, poolStack);
 
 			if (cur_stmt != NULL)
 				CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CLIENT_INFO_IN_TXN", "0");			
@@ -1371,8 +1373,8 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 
 		if (cur_stmt != NULL)
 			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");			
-		else if (!is_in_transaction())
-			set_dedicated(false); // this command has no response, so setting this flag here
+		// else if (!is_in_transaction())
+		// 	set_dedicated(false); // this command has no response, so setting this flag here
 
 		break;
 

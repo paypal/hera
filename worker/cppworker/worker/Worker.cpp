@@ -431,7 +431,6 @@ void Worker::run()
 			break;
 		}
 //		WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "worker rq_ID = %d", m_reader->get_count());
-
 		if (!dedicated && cmd != CLIENT_CAL_CORRELATION_ID)
 		{
 			m_eor_free_sent = false;
@@ -578,7 +577,6 @@ void Worker::cleanup_connection()
  */
 int Worker::handle_command(const int _cmd, std::string &_buffer)
 {
-	WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Inside handle_command() in Worker");
 	int rc = 0;
 
 	switch (_cmd)

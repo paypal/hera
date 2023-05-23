@@ -380,7 +380,6 @@ func (crd *Coordinator) parseCmd(request *netstring.Netstring) (hasPrepare bool,
 func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 	crd.isRead = false
 	crd.preppendCorrID = (crd.worker == nil)
-	logger.GetLogger().Log(logger.Alert, "crd.preppendCorrID in handleMux", crd.preppendCorrID)
 	if request.IsComposite() {
 		// TODO: avoid full parsing if necessary
 		// if this is a worker command, only a shallow parse might be needed (if sharding is enabled, full parsing still needed anyway)
@@ -421,7 +420,6 @@ func (crd *Coordinator) handleMux(request *netstring.Netstring) (bool, error) {
 			if !handled {
 				if nss[0].Cmd == common.CmdClientCalCorrelationID {
 					crd.preppendCorrID = false
-					logger.GetLogger().Log(logger.Alert, "Setting crd.preppendCorrID to false", crd.preppendCorrID)
 				}
 				return false, err
 			}
@@ -588,6 +586,9 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 			if pserr != nil {
 				logger.GetLogger().Log(logger.Alert, pserr)
 				evt := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, "1", pserr.Error())
+				if GetConfig().EnableCmdClientInfoToWorker {
+					evt.SetType("CLIENT_INFO_MUX")
+				}
 				evt.Completed()
 			}
 			crd.clientPoolStack = parentPoolStack
@@ -611,6 +612,10 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		}
 	}
 	et.AddDataStr("corr_id", corrID)
+	// Rename after Adding PoolStack
+	if GetConfig().EnableCmdClientInfoToWorker {
+		et.SetType("CLIENT_INFO_MUX")
+	}
 	et.Completed()
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "client info:", clientInfo, "| server info:", serverInfo, "| corr_id:", corrID)
@@ -912,33 +917,54 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			}
 		}
 		plusAnyCorrId := request
-		logger.GetLogger().Log(logger.Alert, "crd.preppendCorrID in doRequest", crd.preppendCorrID)
 		if crd.preppendCorrID {
 			corrID := crd.corrID
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
-			clientInfoMessage := fmt.Sprintf("%s&%s", crd.poolName, crd.clientPoolStack)
-			clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
+			
 			var ns []*netstring.Netstring
-			if !request.IsComposite() {
-				logger.GetLogger().Log(logger.Alert, "Netstring is not composite")
-				ns = make([]*netstring.Netstring, 3)
-				ns[0] = corrID
-				ns[1] = clientInfo
-				ns[2] = request
-			} else { // composite
-				logger.GetLogger().Log(logger.Alert, "Netstring is composite")
-				rnss, _ := netstring.SubNetstrings(request)
-				ns = make([]*netstring.Netstring, len(rnss)+2)
-				ns[0] = corrID
-				ns[1] = clientInfo
-				for i := 0; i < len(rnss); i++ {
-					ns[i+2] = rnss[i]
+			if GetConfig().EnableCmdClientInfoToWorker {
+				logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
+				if crd.poolName == "null" {
+					crd.poolName = "unset"
 				}
+				clientInfoMessage := fmt.Sprintf("%s&%s", crd.poolName, crd.clientPoolStack)
+				logger.GetLogger().Log(logger.Verbose, "GetConfig().EnableCmdClientInfoToWorker:", GetConfig().EnableCmdClientInfoToWorker)
+				logger.GetLogger().Log(logger.Verbose, clientInfoMessage)
+				clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 3)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					ns[2] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+2)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					for i := 0; i < len(rnss); i++ {
+						ns[i+2] = rnss[i]
+					}
+				}
+				cnt+= 2
+			} else {
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 2)
+					ns[0] = corrID
+					ns[1] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+1)
+					ns[0] = corrID
+					for i := 0; i < len(rnss); i++ {
+						ns[i+1] = rnss[i]
+					}
+				}
+				cnt++
 			}
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			cnt++
+			
 		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {
