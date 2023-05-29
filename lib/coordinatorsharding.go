@@ -367,7 +367,6 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 					} else {
 						if logger.GetLogger().V(logger.Verbose) {
 							logger.GetLogger().Log(logger.Verbose, crd.id, fmt.Sprintf("Bind value for scuttleID column: %s not present in Query.", GetConfig().ScuttleColName))
-							scuttleColumnPresent = false
 						}
 						evt := cal.NewCalEvent(EvtTypeSharding, EvtNameBadScuttleId, cal.TransOK, fmt.Sprintf("Bind value for scuttleID column: %s not present in Query.", GetConfig().ScuttleColName))
 						evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
