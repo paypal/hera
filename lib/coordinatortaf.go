@@ -257,7 +257,18 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Error trying first pool:", err)
 					}
 					if err != ErrWorkerFail {
-						if err == ErrSaturationKill {
+						if err == ErrReqParseFail {
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, "TAFSession: can't parse the client request", err.Error())
+							}
+							et := cal.NewCalEvent(EvtTypeMux, "TAFSession_primary_request_parse_fail", cal.TransWarning, err.Error())
+							et.Completed()
+							if logger.GetLogger().V(logger.Warning) {
+								logger.GetLogger().Log(logger.Warning, "Returning worker back to primary pool after ErrReqParseFail")
+							}
+							primaryPool.ReturnWorker(worker, ticket)
+							// return err
+						} else if err == ErrSaturationKill {
 							go worker.Recover(primaryPool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 						} else {
 							go worker.Recover(primaryPool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
@@ -345,7 +356,18 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				logger.GetLogger().Log(logger.Debug, crd.id, "Error trying the last pool:", err)
 			}
 			if err != ErrWorkerFail {
-				if err == ErrSaturationKill {
+				if err == ErrReqParseFail {
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, "TAFSession: can't parse the client request", err.Error())
+					}
+					et := cal.NewCalEvent(EvtTypeMux, "TAFSession_fallback_request_parse_fail", cal.TransWarning, err.Error())
+					et.Completed()
+					if logger.GetLogger().V(logger.Warning) {
+						logger.GetLogger().Log(logger.Warning, "Returning worker back to fallback pool after ErrReqParseFail")
+					}
+					fallbackPool.ReturnWorker(worker, fbticket)
+					// return err
+				} else if err == ErrSaturationKill {
 					go worker.Recover(fallbackPool, fbticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 				} else {
 					go worker.Recover(fallbackPool, fbticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
