@@ -216,7 +216,7 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		err = nil
 		t.Fatalf("Request did not run on shard 1. err = %v, len(out) = %d", err, len(out))
 	}
-	if out[7] != '1' {
+	if out[0] != '1' {
 		t.Fatalf("Expected 1 excution on shard 1, instead got %d", int(out[0]-'0'))
 	}
 
@@ -230,13 +230,12 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		err = nil
 		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
 	}
-	if out[7] != '1' {
+	if out[0] != '1' {
 		t.Fatalf("Expected 1 excution on shard 2, instead got %d", int(out[0]-'0'))
 	}
 
+        cancel()
 	conn.Close()
-
-	cancel()
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard done  -------------------------------------------------------------")
 }
