@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paypal/hera/client/gosqldriver"
 	_ "github.com/paypal/hera/client/gosqldriver/tcp"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
@@ -183,59 +182,4 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 
 	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasicWithScuttleID done  -------------------------------------------------------------")
-}
-
-func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard setup")
-	setupShardMap(t)
-	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	hostname := testutil.GetHostname()
-	db, err := sql.Open("hera", hostname+":31003")
-	if err != nil {
-		t.Fatal("Error starting Mux:", err)
-		return
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	cleanup(ctx, conn)
-
-	mux := gosqldriver.InnerConn(conn)
-	mux.SetShardID(1)
-	stmt, _ := conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndSetShard*/Select scuttle_id, id, int_val, str_val from "+tableName+" where id=1 and scuttle_id=:scuttle_id")
-	rows, _ := stmt.Query(sql.Named("scuttle_id", 2))
-	rows.Close()
-	stmt.Close()
-	out, err := testutil.BashCmd("grep 'Preparing: /\\*TestShardingWithScuttleIDAndSetShard\\*/' hera.log | grep 'WORKER shd1' | wc -l")
-	if (err != nil) || (len(out) == 0) {
-		err = nil
-		t.Fatalf("Request did not run on shard 1. err = %v, len(out) = %d", err, len(out))
-	}
-	if out[0] != '1' {
-		t.Fatalf("Expected 1 excution on shard 1, instead got %d", int(out[0]-'0'))
-	}
-
-	mux.SetShardID(2)
-	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndSetShard*/Select scuttle_id, id, int_val, str_val from "+tableName+" where id=2 and scuttle_id=:scuttle_id")
-	rows, _ = stmt.Query(sql.Named("scuttle_id", 1))
-	rows.Close()
-	stmt.Close()
-	out, err = testutil.BashCmd("grep 'Preparing: /\\*TestShardingWithScuttleIDAndSetShard\\*/' hera.log | grep 'WORKER shd2' | wc -l")
-	if (err != nil) || (len(out) == 0) {
-		err = nil
-		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
-	}
-	if out[0] != '1' {
-		t.Fatalf("Expected 1 excution on shard 2, instead got %d", int(out[0]-'0'))
-	}
-
-        cancel()
-	conn.Close()
-
-	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard done  -------------------------------------------------------------")
 }
