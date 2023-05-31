@@ -201,7 +201,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		for {
 			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
 			if err != nil {
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
 				fmt.Printf("waiting for db to come up %d %s\n", waitLoop, err.Error())
 				waitLoop++
@@ -210,7 +210,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 				break
 			}
 		}
-
+                fmt.Printf("DB server started...\n")
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
 		if err != nil {
