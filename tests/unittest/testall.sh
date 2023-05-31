@@ -3,7 +3,7 @@ for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_rec
 do 
     echo ==== $d
     pushd tests/unittest/$d 
-    cp /home/runner/go/bin/mysqlworker .
+
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
     ./$d.test -test.v -test.parallel 1 
@@ -13,7 +13,7 @@ do
     then
         echo "Retrying" $d
         echo "exit code" $rv 
-        ./$d.test -test.v
+        ./$d.test -test.v -test.parallel 1
         rv=$?
         grep -E '(FAIL|PASS)' -A1 *.log
     fi

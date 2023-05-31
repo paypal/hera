@@ -210,7 +210,6 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 				break
 			}
 		}
-                fmt.Printf("DB server started...\n")
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
 		if err != nil {
