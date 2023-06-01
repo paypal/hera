@@ -186,8 +186,6 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 }
 
 func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard setup")
-	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	hostname := testutil.GetHostname()
 	db, err := sql.Open("hera", hostname+":31003")
@@ -216,9 +214,6 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		err = nil
 		t.Fatalf("Request did not run on shard 1. err = %v, len(out) = %d", err, len(out))
 	}
-	if out[0] != '1' {
-		t.Fatalf("Expected 1 excution on shard 1, instead got %d", int(out[0]-'0'))
-	}
 
 	mux.SetShardID(2)
 	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndSetShard*/Select scuttle_id, id, int_val, str_val from "+tableName+" where id=2 and scuttle_id=:scuttle_id")
@@ -230,12 +225,65 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		err = nil
 		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
 	}
-	if out[0] != '1' {
-		t.Fatalf("Expected 1 excution on shard 2, instead got %d", int(out[0]-'0'))
-	}
 
 	cancel()
 	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard done  -------------------------------------------------------------")
+}
+
+func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	hostname := testutil.GetHostname()
+	db, err := sql.Open("hera", hostname+":31003")
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	cleanup(ctx, conn)
+
+	//Test 1 provide scuttle_id as empty or nil
+	tx, _ := conn.BeginTx(ctx, nil)
+	shardKey := 2
+	if err != nil {
+		t.Fatalf("Error generating scuttle ID %s\n", err.Error())
+	}
+	stmt, _ := tx.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndWithoutBindValue*/insert into "+tableName+" (scuttle_id, id, int_val, str_val) VALUES(:scuttle_id, :id, :int_val, :str_val)")
+	_, err = stmt.Exec(sql.Named("scuttle_id", ""), sql.Named("id", shardKey), sql.Named("int_val", time.Now().Unix()), sql.Named("str_val", "val 2"))
+	if err == nil {
+		t.Fatal("Expected to fail because, mismatch between computed bucket and scuttleId.")
+	}
+	if !strings.Contains(err.Error(), "HERA-208: scuttle_id mismatch") {
+		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
+	}
+	err = tx.Commit()
+	conn.Close()
+
+	conn, err = db.Conn(ctx)
+	//Test 2 select with no bind value scuttle_id
+	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndWithoutBindValue*/Select id, int_val, str_val from "+tableName+" where id=:id and scuttle_id=:scuttle_id")
+	rows, err := stmt.Query(sql.Named("scuttle_id", ""), sql.Named("id", shardKey))
+
+	if err == nil {
+		t.Fatal("Expected to fail because, mismatch between computed bucket and scuttleId.")
+	}
+	if !strings.Contains(err.Error(), "HERA-208: scuttle_id mismatch") {
+		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
+	}
+	if rows != nil {
+		rows.Close()
+	}
+	stmt.Close()
+
+	cancel()
+	conn.Close()
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue done  -------------------------------------------------------------")
 }

@@ -1,19 +1,19 @@
 overall=0
-for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover|coordinator_sharding_with_scuttleid)'`
+for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
 do 
     echo ==== $d
     pushd tests/unittest/$d 
 
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
-    ./$d.test -test.v
+    ./$d.test -test.v -test.parallel 1
     rv=$?
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
         echo "Retrying" $d
         echo "exit code" $rv 
-        ./$d.test -test.v
+        ./$d.test -test.v -test.parallel 1
         rv=$?
         grep -E '(FAIL|PASS)' -A1 *.log
     fi

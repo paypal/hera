@@ -292,7 +292,9 @@ func (crd *Coordinator) isShardKey(bind string) bool {
 	return true
 }
 
-//Compare bind-name with scuttle ID column
+//Compare bind-name with scuttle ID column name from configuration. This doesn't consider multiple ScutttleID present
+//via IN CLAUSE as part of request. This implementation provided based on assumption that request will have
+// single bind value for scuttle_id column.
 func (crd *Coordinator) isScuttleID(bindName string) bool {
 	if len(bindName) == 0 {
 		return false
@@ -300,12 +302,9 @@ func (crd *Coordinator) isScuttleID(bindName string) bool {
 	if bindName[0] == ':' {
 		bindName = bindName[1:]
 	}
+	bindName = strings.ToLower(bindName)
+	scuttleIDColumn := strings.ToLower(GetConfig().ScuttleColName)
 
-	scuttleIDColumn := GetConfig().ScuttleColName
-
-	if len(bindName) < len(scuttleIDColumn) {
-		return false
-	}
 	if scuttleIDColumn == bindName {
 		return true
 	}
@@ -336,7 +335,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 	}
 
 	sz := len(requests)
-	var scuttleID int
+	var scuttleID int = -1 //Default value if request has bindname without bind value
 	scuttleColumnPresent := false
 	autodisc := false /* ShardKey can overwrite the autodiscovery */
 	for i := 0; i < sz; i++ {
@@ -357,13 +356,12 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 		if (requests[i].Cmd == common.CmdBindName) && crd.isScuttleID(string(requests[i].Payload)) {
 			//To avoid repeated binds for scuttleId column
 			if !scuttleColumnPresent {
+				scuttleColumnPresent = true
 				if i < (sz - 1) {
 					if requests[i+1].Cmd == common.CmdBindNum && requests[i+2].Cmd == common.CmdBindValueMaxSize {
 						scuttleID, _ = strconv.Atoi(string(requests[i+3].Payload))
-						scuttleColumnPresent = true
 					} else if requests[i+1].Cmd == common.CmdBindValue {
 						scuttleID, _ = strconv.Atoi(string(requests[i+1].Payload))
-						scuttleColumnPresent = true
 					} else {
 						if logger.GetLogger().V(logger.Verbose) {
 							logger.GetLogger().Log(logger.Verbose, crd.id, fmt.Sprintf("Bind value for scuttleID column: %s not present in Query.", GetConfig().ScuttleColName))
@@ -642,14 +640,9 @@ func (crd *Coordinator) verifyXShard(oldShardValues []string, oldShardID int, ol
 	return nil
 }
 
-//This validates the scuttleId provided as part of request command matching with scuttleID computed from shardKey. If both are not matching then it requires
-//throw an error
+//This validates the scuttleId provided as part of request command matching with scuttleID computed from shardKey.
+//If both are not matching then it throws scuttle ID mismatch
 func (crd *Coordinator) verifyScuttleID(scuttleID int) (bool, error) {
-	// Currently verification check not doing for read requests.
-	if crd.isRead {
-		return false, nil
-	}
-
 	if scuttleID != crd.shard.shardRecs[0].bin {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, fmt.Sprintf("ScuttleID comparison failed, scuttleID: %d captured from request didn't match with computed value: %d using shardKey: %s", scuttleID, crd.shard.shardRecs[0].bin, crd.shard.shardValues[0]))
