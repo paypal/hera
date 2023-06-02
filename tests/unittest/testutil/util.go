@@ -7,9 +7,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/lib"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,7 +86,7 @@ func BackupAndClear(logbasename, grpName string) {
 			break
 		}
 	}
-	logname := logbasename+".log"
+	logname := logbasename + ".log"
 	/* nowStr := time.Now().Format("15:04:05.000000")
 	f, err := os.OpenFile(logname, os.O_APPEND, 0666)
 	if err == nil {
@@ -105,11 +107,11 @@ func BackupAndClear(logbasename, grpName string) {
 }
 
 func RunMysql(sql string) (string, error) {
-        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
-        cmd.Stdin = strings.NewReader(sql)
-        var cmdOutBuf bytes.Buffer
-        cmd.Stdout = &cmdOutBuf
-        cmd.Run()
+	cmd := exec.Command("mysql", "-h", os.Getenv("mysql_ip"), "-p1-testDb", "-uroot", "heratestdb")
+	cmd.Stdin = strings.NewReader(sql)
+	var cmdOutBuf bytes.Buffer
+	cmd.Stdout = &cmdOutBuf
+	cmd.Run()
 	return cmdOutBuf.String(), nil
 }
 
@@ -179,4 +181,40 @@ func RegexCountFile(regex string, filename string) int {
 	}
 	//fmt.Println("DONE searching "+regex)
 	return count
+}
+
+func ComputeScuttleId(shardKey interface{}, maxScuttles string) (uint64, error) {
+	maxScuttlesVal, _ := strconv.ParseUint(maxScuttles, 10, 64)
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("ComputeScuttleId: Max scuttles value: %d", maxScuttlesVal))
+	switch keyType := shardKey.(type) {
+	case string:
+		keyStr := shardKey.(string)
+		//keyStr, ok := key0.(string)
+		key := uint64(lib.Murmur3([]byte(keyStr)))
+		return key % maxScuttlesVal, nil
+	case int:
+		bytes := make([]byte, 8)
+		keyNum, _ := shardKey.(int)
+		keyNumValue := uint64(keyNum)
+		for i := 0; i < 8; i++ {
+			bytes[i] = byte(keyNumValue & 0xFF)
+			keyNumValue >>= 8
+		}
+		key := uint64(lib.Murmur3(bytes))
+		return key % maxScuttlesVal, nil
+	case int64:
+		bytes := make([]byte, 8)
+		keyNum := shardKey.(uint64)
+		//keyNum, ok := key0.(uint64)
+		for i := 0; i < 8; i++ {
+			bytes[i] = byte(keyNum & 0xFF)
+			keyNum >>= 8
+		}
+		key := uint64(lib.Murmur3(bytes))
+		return key % maxScuttlesVal, nil
+	default:
+		logger.GetLogger().Log(logger.Info, fmt.Sprintf("Provided incorrect shardkey type: %v for tests for shard-key: %v", keyType, shardKey))
+		return 0, errors.New(fmt.Sprintf("Provided incorrect shardkey type: %v for tests for shard-key: %v", keyType, shardKey))
+	}
+	return 0, errors.New(fmt.Sprintf("Failed to compute scuttle ID for shardKey: %v", shardKey))
 }

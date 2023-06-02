@@ -113,7 +113,7 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasicWithScuttleID setup")
 	setupShardMap(t)
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasicWithScuttleID begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	hostname := testutil.GetHostname()
+	hostname, _ := os.Hostname()
 	appCfg, _, _ := cfg()
 	db, err := sql.Open("hera", hostname+":31003")
 	if err != nil {
@@ -190,7 +190,7 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 
 func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	hostname := testutil.GetHostname()
+	hostname, _ := os.Hostname()
 	db, err := sql.Open("hera", hostname+":31003")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
@@ -237,7 +237,7 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 
 func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	hostname := testutil.GetHostname()
+	hostname, _ := os.Hostname()
 	db, err := sql.Open("hera", hostname+":31003")
 	if err != nil {
 		t.Fatal("Error starting Mux:", err)
@@ -245,7 +245,6 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	}
 	db.SetMaxIdleConns(0)
 	defer db.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
