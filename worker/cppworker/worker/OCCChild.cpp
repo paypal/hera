@@ -941,7 +941,9 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						if (m_shard_key_value_type_string) {
 							if (logfile->get_log_level() >= LOG_VERBOSE)
 								WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "shard_key_value_type_is_string true in sql rewrite");
-							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(bind_values));
+							// get first str shardkey value. needed for bind_num > 1 to get correct length of str shardkey
+							std::string str_sk_value = bind_values.substr(0, bind_values.find('\0'));
+							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(str_sk_value));
 						}
 						else
 							StringUtil::fmt_ulong(scuttle_id_str_val, compute_scuttle_id(StringUtil::to_ullong(bind_values)));

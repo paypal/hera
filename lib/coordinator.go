@@ -806,6 +806,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: stranded conn", err.Error())
 		}
+		if err == ErrReqParseFail {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "dispatchRequest: can't parse the client request", err.Error())
+			}
+			et := cal.NewCalEvent(EvtTypeMux, "request_parse_fail", cal.TransWarning, err.Error())
+			et.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "Returning worker back to pool after ErrReqParseFail")
+			}
+			workerpool.ReturnWorker(worker, ticket)
+			return err
+		}
 		//
 		// donot return a stranded worker. recover inserts a good worker back to pool.
 		//
@@ -895,9 +907,16 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	if request != nil {
 		_ /*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
 		if parseErr != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "doRequest: can't parse the client request", parseErr)
 			}
+			et := cal.NewCalEvent(cal.EventTypeWarning, "request_parse_fail", cal.TransWarning, parseErr.Error())
+			et.Completed()
+			// The request was not sent to the worker and it failed during parsing.
+			// The worker is in ACPT state.
+			// It will not finish recovery because of ACPT. The worker will never get back into the pool.
+			// Just marking the state as FNSH and dispatchRequest will return the worker back to the pool.
+			worker.setState(wsFnsh)
 			return false, ErrReqParseFail
 		}
 		cnt := 1
