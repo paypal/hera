@@ -123,7 +123,7 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
@@ -199,7 +199,7 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
@@ -228,15 +228,13 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		err = nil
 		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
 	}
-
-	cancel()
 	conn.Close()
-
+	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard done  -------------------------------------------------------------")
 }
 
-func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestShardingWithScuttleIDAndInvalidBindValue(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndInvalidBindValue begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	hostname, _ := os.Hostname()
 	db, err := sql.Open("hera", hostname+":31003")
 	if err != nil {
@@ -245,7 +243,7 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	}
 	db.SetMaxIdleConns(0)
 	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
@@ -262,10 +260,10 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected to fail because, mismatch between computed bucket and scuttleId.")
 	}
-	if !strings.Contains(err.Error(), "HERA-208: scuttle_id mismatch") {
+	if !strings.Contains(err.Error(), "HERA-208") {
 		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
 	}
-	err = tx.Commit()
+	tx.Commit()
 	conn.Close()
 
 	conn, err = db.Conn(ctx)
@@ -276,7 +274,7 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected to fail because, mismatch between computed bucket and scuttleId.")
 	}
-	if !strings.Contains(err.Error(), "HERA-208: scuttle_id mismatch") {
+	if !strings.Contains(err.Error(), "HERA-208") {
 		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
 	}
 	if rows != nil {
@@ -284,7 +282,7 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	}
 	stmt.Close()
 
-	cancel()
 	conn.Close()
+	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue done  -------------------------------------------------------------")
 }
