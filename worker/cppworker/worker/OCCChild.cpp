@@ -1098,7 +1098,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							}
 						}
 					}
-                		}
+                }
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
@@ -1330,32 +1330,22 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				m_writer->write(OCC_MARKDOWN);
 				break;
 			}
-			//send server Info
-			std::string server_info = CalTransaction::GetCurrentPoolInfo();
+			std::string poolStack = _line;
+			std::string client_info;
 
-			m_writer->add(OCC_OK, server_info);
-			eor(is_in_transaction() ? EORMessage::IN_TRANSACTION : EORMessage::FREE);
-			m_writer->write();
-
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", _line.c_str());
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Server Info: %s", server_info.c_str());
-			//m_writer->write(OCC_OK); // Make client to proceed.
-
-
-			// Set the client info only if it's not already set
-			if(client_info.empty())
+			StringUtil::tokenize(poolStack, client_info, '|');
+			if (client_info.length() == 0)
 			{
-				client_info = _line;
-				process_pool_info(client_info);
-
-				unsigned int last_idx = client_info.rfind(CLIENT_NAME_PREFIX);
-				if (last_idx != std::string::npos)
-				{
-					m_client_name.clear(); // Clear previous data if-any, little paranoia.
-					m_client_name = client_info.substr(last_idx + CLIENT_NAME_PREFIX.length());
-					StringUtil::trim(m_client_name); // Remove any white-spaces
-				}
+				client_info = "unknown";
 			}
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s | poolStack: %s", client_info.c_str(), poolStack.c_str());
+			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
+			if (CalClient::is_poolstack_enabled()) {
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
+				CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
+			}
+			e.AddPoolStack();
+			// CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK, poolStack);
 
 			if (cur_stmt != NULL)
 				CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CLIENT_INFO_IN_TXN", "0");			
@@ -1381,9 +1371,14 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 		OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_corr_id.c_str()), m_corr_id.length(), OCI_ATTR_ACTION, errhp);
 
 		if (cur_stmt != NULL)
-			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");			
-		else if (!is_in_transaction())
-			set_dedicated(false); // this command has no response, so setting this flag here
+			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");
+
+		// 325:0 18:2006 CorrId=NotSet,22:11 ClientApp&PoolStack,18:2006 CorrId=NotSet,170:25 /*shard=0*/ SELECT inst_id...0
+		// Removing this dedicated flag reset -- If worker receives the above command -- this below flag will reset the dedicated flag when it encounters the second corrId.
+		// This will create additional CLIENT_SESSION for the same request.
+		// This was not a problem earlier because the session will start during the prepare command, whereas, now it begins as part of the CLIENT_INFO command.
+		// else if (!is_in_transaction())
+		// 	set_dedicated(false); // this command has no response, so setting this flag here
 
 		break;
 
