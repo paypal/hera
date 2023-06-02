@@ -1330,24 +1330,21 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				m_writer->write(OCC_MARKDOWN);
 				break;
 			}
-			std::string buffer = _line;
+			std::string poolStack = _line;
 			std::string client_info;
-			std::string poolStack;
 
-			StringUtil::tokenize(buffer, client_info, '&');
-			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "client_info: %s, Buffer: %s", client_info.c_str(), buffer.c_str());
+			StringUtil::tokenize(poolStack, client_info, '|');
 			if (client_info.length() == 0)
 			{
-				client_info = "unknown"; // we didn't get '&' format client_info_str
-			}
-			if (buffer.length() > 0) {
-					poolStack = buffer;
-					WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
+				client_info = "unknown";
 			}
 			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s | poolStack: %s", client_info.c_str(), poolStack.c_str());
 			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
-			if (CalClient::is_poolstack_enabled()) {
-				CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
+			if (poolStack.length() > 0) {
+				if (CalClient::is_poolstack_enabled()) {
+					WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
+					CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
+				}
 			}
 			e.AddPoolStack();
 			// CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK, poolStack);
