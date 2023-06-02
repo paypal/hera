@@ -1340,11 +1340,9 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			}
 			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s | poolStack: %s", client_info.c_str(), poolStack.c_str());
 			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
-			if (poolStack.length() > 0) {
-				if (CalClient::is_poolstack_enabled()) {
-					WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
-					CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
-				}
+			if (CalClient::is_poolstack_enabled()) {
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
+				CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
 			}
 			e.AddPoolStack();
 			// CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK, poolStack);
