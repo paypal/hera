@@ -929,7 +929,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 				if crd.poolName == "null" {
 					crd.poolName = "unset"
 				}
-				clientInfoMessage := fmt.Sprintf("%s&%s", crd.poolName, crd.clientPoolStack)
+				clientInfoMessage := fmt.Sprintf("%s|%s", crd.poolName, crd.clientPoolStack)
 				logger.GetLogger().Log(logger.Verbose, "GetConfig().EnableCmdClientInfoToWorker:", GetConfig().EnableCmdClientInfoToWorker)
 				logger.GetLogger().Log(logger.Verbose, clientInfoMessage)
 				clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
