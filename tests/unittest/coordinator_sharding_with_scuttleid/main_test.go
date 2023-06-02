@@ -86,7 +86,10 @@ func before() error {
 	}
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		// mysql
-		testutil.RunDML("create table jdbc_hera_test ( SCUTTLE_ID smallint not null, ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+		err := testutil.RunDML("create table jdbc_hera_test ( SCUTTLE_ID smallint not null, ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while creating table")
+		}
 	}
 	return nil
 }
@@ -248,7 +251,6 @@ func TestShardingWithScuttleIDAndWithoutBindValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	cleanup(ctx, conn)
 
 	//Test 1 provide scuttle_id as empty or nil
 	tx, _ := conn.BeginTx(ctx, nil)

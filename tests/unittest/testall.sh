@@ -6,14 +6,14 @@ do
 
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
-    ./$d.test -test.v -test.parallel 1
+    ./$d.test -test.v
     rv=$?
     grep -E '(FAIL|PASS)' -A1 *.log
     if [ 0 != $rv ]
     then
         echo "Retrying" $d
         echo "exit code" $rv 
-        ./$d.test -test.v -test.parallel 1
+        ./$d.test -test.v
         rv=$?
         grep -E '(FAIL|PASS)' -A1 *.log
     fi
