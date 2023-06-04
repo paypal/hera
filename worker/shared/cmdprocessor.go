@@ -213,6 +213,28 @@ outloop:
 		if cp.calSessionTxn != nil {
 			cp.calSessionTxn.SetCorrelationID("@todo")
 		}
+	case common.CmdClientInfo:
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "CmdClientInfo:", string(ns.Payload), string(ns.Serialized))
+		}
+		if len(string(ns.Payload)) > 0 {
+			splits := strings.Split(string(ns.Payload), "|")
+			if (len(splits) == 2) {
+				logger.GetLogger().Log(logger.Verbose, "len clientApplication:", len(splits[0]))
+				logger.GetLogger().Log(logger.Verbose, "len poolStack:", len(splits[1]))
+				if len(splits[0]) == 0 {
+					logger.GetLogger().Log(logger.Verbose, "clientApplication: unknown")
+				} else {
+					logger.GetLogger().Log(logger.Verbose, "clientApplication:", splits[0])
+				}
+				logger.GetLogger().Log(logger.Verbose, "poolStack:", splits[1])
+				//
+				// @TODO Add CLIENT_INFO event inside calSessionTxn
+				//
+			} else {
+				logger.GetLogger().Log(logger.Debug, "CmdClientInfo: Payload not in expected Client&PoolStack format:", string(ns.Payload))
+			}
+		}
 	case common.CmdPrepare, common.CmdPrepareV2, common.CmdPrepareSpecial:
 		cp.dedicated = true
 		cp.queryScope = QueryScopeType{}
