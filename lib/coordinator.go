@@ -53,6 +53,7 @@ type Coordinator struct {
 	clientHostPrefix string
 	clientHostName   string
 	poolName         string
+	clientPoolStack  string
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
@@ -585,8 +586,12 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 			if pserr != nil {
 				logger.GetLogger().Log(logger.Alert, pserr)
 				evt := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, "1", pserr.Error())
+				if GetConfig().EnableCmdClientInfoToWorker {
+					evt.SetType("CLIENT_INFO_MUX")
+				}
 				evt.Completed()
 			}
+			crd.clientPoolStack = parentPoolStack
 		}
 	}
 	et.AddPoolStack()
@@ -607,6 +612,10 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		}
 	}
 	et.AddDataStr("corr_id", corrID)
+	// Rename after Adding PoolStack
+	if GetConfig().EnableCmdClientInfoToWorker {
+		et.SetType("CLIENT_INFO_MUX")
+	}
 	et.Completed()
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "client info:", clientInfo, "| server info:", serverInfo, "| corr_id:", corrID)
@@ -806,6 +815,18 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, crd.id, "coordinator dispatchrequest: stranded conn", err.Error())
 		}
+		if err == ErrReqParseFail {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "dispatchRequest: can't parse the client request", err.Error())
+			}
+			et := cal.NewCalEvent(EvtTypeMux, "request_parse_fail", cal.TransWarning, err.Error())
+			et.Completed()
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "Returning worker back to pool after ErrReqParseFail")
+			}
+			workerpool.ReturnWorker(worker, ticket)
+			return err
+		}
 		//
 		// donot return a stranded worker. recover inserts a good worker back to pool.
 		//
@@ -874,7 +895,7 @@ func parseBinds(request *netstring.Netstring) map[string]string {
  */
 func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, request *netstring.Netstring, clientWriter io.Writer, rqTimer *time.Timer) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequeset: starting")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: starting")
 	}
 	defer func() {
 		//
@@ -895,9 +916,16 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 	if request != nil {
 		_ /*isPrepare*/, isCommit, isRollback, parseErr := crd.parseCmd(request)
 		if parseErr != nil {
-			if logger.GetLogger().V(logger.Debug) {
-				logger.GetLogger().Log(logger.Debug, "doRequest: can't parse the client request", parseErr)
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "doRequest: can't parse the client request", parseErr)
 			}
+			et := cal.NewCalEvent(cal.EventTypeWarning, "request_parse_fail", cal.TransWarning, parseErr.Error())
+			et.Completed()
+			// The request was not sent to the worker and it failed during parsing.
+			// The worker is in ACPT state.
+			// It will not finish recovery because of ACPT. The worker will never get back into the pool.
+			// Just marking the state as FNSH and dispatchRequest will return the worker back to the pool.
+			worker.setState(wsFnsh)
 			return false, ErrReqParseFail
 		}
 		cnt := 1
@@ -913,21 +941,49 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
+			
 			var ns []*netstring.Netstring
-			if !request.IsComposite() {
-				ns = make([]*netstring.Netstring, 2)
-				ns[0] = corrID
-				ns[1] = request
-			} else { // composite
-				rnss, _ := netstring.SubNetstrings(request)
-				ns = make([]*netstring.Netstring, len(rnss)+1)
-				ns[0] = corrID
-				for i := 0; i < len(rnss); i++ {
-					ns[i+1] = rnss[i]
+			if GetConfig().EnableCmdClientInfoToWorker {
+				logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
+				if crd.poolName == "null" {
+					crd.poolName = "unset"
 				}
+				clientInfoMessage := fmt.Sprintf("%s|%s", crd.poolName, crd.clientPoolStack)
+				logger.GetLogger().Log(logger.Verbose, "GetConfig().EnableCmdClientInfoToWorker:", GetConfig().EnableCmdClientInfoToWorker)
+				logger.GetLogger().Log(logger.Verbose, clientInfoMessage)
+				clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 3)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					ns[2] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+2)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					for i := 0; i < len(rnss); i++ {
+						ns[i+2] = rnss[i]
+					}
+				}
+				cnt+= 2
+			} else {
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 2)
+					ns[0] = corrID
+					ns[1] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+1)
+					ns[0] = corrID
+					for i := 0; i < len(rnss); i++ {
+						ns[i+1] = rnss[i]
+					}
+				}
+				cnt++
 			}
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			cnt++
+			
 		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {
