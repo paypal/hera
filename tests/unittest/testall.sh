@@ -21,7 +21,7 @@ do
     then
         #grep ^ *.log
         echo "Retry failed, exit code" $rv
-        ls -al
+        echo "======================================== $d Tests Failed. Start of logs ======================================="
         log_file="hera.log"
         if [ -f "$log_file" ]; then
             cat "$log_file"
@@ -34,6 +34,7 @@ do
         else
             echo "Log file: ${log_file} does not exist."
         fi
+        echo "======================================== End of logs for $d test===================================================="
         popd
         overall=1
         continue
