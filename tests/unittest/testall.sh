@@ -2,7 +2,7 @@ overall=0
 for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
 do 
     echo ==== $d
-    pushd tests/unittest/$d 
+    pushd tests/unittest/$d
     cp /home/runner/go/bin/mysqlworker .
     rm -f *.log 
     $GOROOT/bin/go test -c github.com/paypal/hera/tests/unittest/$d 
@@ -20,8 +20,21 @@ do
     if [ 0 != $rv ]
     then
         #grep ^ *.log
+        echo "Retry failed, exit code" $rv
+        ls -al
+        log_file="hera.log"
+        if [ -f "$log_file" ]; then
+            cat "$log_file"
+        else
+            echo "Log file: ${log_file} does not exist."
+        fi
+        log_file="occ.log"
+        if [ -f "$log_file" ]; then
+            cat "$log_file"
+        else
+            echo "Log file: ${log_file} does not exist."
+        fi
         popd
-        #exit $rv
         overall=1
         continue
     fi
