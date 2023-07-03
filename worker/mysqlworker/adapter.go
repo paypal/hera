@@ -78,11 +78,12 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		user := os.Getenv("username")
 		pass := os.Getenv("password")
 		attempt := 1
+		readonly := 1
 		is_writable := false
 		for attempt <= 3 {
 			db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@%s", user, pass, curDs))
 			if err == nil {
-				is_writable = adapter.Heartbeat(db)
+				is_writable, readonly = adapter.Heartbeat(db)
 				if is_writable {
 					if logger.GetLogger().V(logger.Warning) {
 						logger.GetLogger().Log(logger.Warning, user+" connect success "+curDs+fmt.Sprintf(" %d", idx))
@@ -92,6 +93,13 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 				}
 				db.Close()
 			}
+
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log()
+				}
+			}
+
 			attempt = attempt + 1
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
@@ -108,6 +116,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 		if attempt > 3 {
 			calTrans.AddDataStr("m_err", "READONLY_CONN")
 			calTrans.AddDataStr("m_errtype", "CONNECT")
+			calTrans.AddDataStr("m_readonlystatus", strconv.Itoa(readonly))
 			calTrans.AddDataStr("m_datasource", curDs+fmt.Sprintf(" %d", idx))
 			calTrans.SetStatus(cal.TransFatal)
 			err = errors.New("cannot use read-only conn " + curDs)
@@ -118,7 +127,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	}
 	calTrans.Completed()
 	if err != nil {
-		spread := 11 * time.Second + time.Duration(rand.Intn(11000999888)/*ns*/)
+		spread := 11*time.Second + time.Duration(rand.Intn(11000999888) /*ns*/)
 		logger.GetLogger().Log(logger.Warning, "onErr sleeping "+spread.String())
 		time.Sleep(spread)
 	}
@@ -126,15 +135,16 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 }
 
 // Checking master status
-func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
+func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool, int) {
 	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	writable := false
+	var readOnly int
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
 		}
-		return writable
+		return writable, 1
 	}
 	defer conn.Close()
 
@@ -145,7 +155,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
 			}
-			return false
+			return false, 1
 		}
 		defer stmt.Close()
 
@@ -154,13 +164,12 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
 			}
-			return false
+			return false, 1
 		}
 		defer rows.Close()
 		countRows := 0
 		if rows.Next() {
 			countRows++
-			var readOnly int
 			/*var nom string
 			rows.Scan(&nom, &readOnly) // */
 			rows.Scan(&readOnly)
@@ -174,7 +183,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
 			logger.GetLogger().Log(logger.Debug, "writable:", writable)
 		}
 	}
-	return writable
+	return writable, readOnly
 }
 
 // UseBindNames return false because the SQL string uses ? for bind parameters
