@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,23 +94,22 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 				}
 				db.Close()
 			}
-
+			// Adding additional logging for error scenario
 			if err != nil {
 				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log()
+					logger.GetLogger().Log(logger.Warning, fmt.Sprintf("Failed to connect datasource=%s, retry-attempt=%d and error=%v", curDs, attempt, err.Error()))
 				}
 			}
-
-			attempt = attempt + 1
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt-1))
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt))
 			}
 
-			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt-1))
+			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt))
 			evt.SetStatus(cal.TransError)
 			evt.Completed()
 
+			attempt = attempt + 1
 			pwdStr := fmt.Sprintf("password%d", attempt)
 			pass = os.Getenv(pwdStr)
 		}
@@ -138,13 +138,13 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool, int) {
 	ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
 	writable := false
-	var readOnly int
+	readOnly := 1
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
 			logger.GetLogger().Log(logger.Warning, "could not get connection "+err.Error())
 		}
-		return writable, 1
+		return writable, readOnly
 	}
 	defer conn.Close()
 
@@ -155,7 +155,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool, int) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "query ro check err ", err.Error())
 			}
-			return false, 1
+			return false, readOnly
 		}
 		defer stmt.Close()
 
@@ -164,7 +164,7 @@ func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) (bool, int) {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "ro check err ", err.Error())
 			}
-			return false, 1
+			return false, readOnly
 		}
 		defer rows.Close()
 		countRows := 0
