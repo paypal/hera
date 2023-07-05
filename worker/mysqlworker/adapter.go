@@ -92,16 +92,22 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 				}
 				db.Close()
 			}
-			attempt = attempt + 1
+			// Adding additional logging for error scenario
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, fmt.Sprintf("Failed to connect datasource=%s, retry-attempt=%d and error=%v", curDs, attempt, err.Error()))
+				}
+			}
 			// read only connection
 			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt-1))
+				logger.GetLogger().Log(logger.Warning, "recycling, got read-only conn " /*+curDs*/ +fmt.Sprintf("retry-attempt=%d", attempt))
 			}
 
-			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt-1))
+			evt := cal.NewCalEvent("INITDB", "RECYCLE_ON_READ_ONLY", cal.TransWarning, fmt.Sprintf("retry-attempt=%d", attempt))
 			evt.SetStatus(cal.TransError)
 			evt.Completed()
 
+			attempt = attempt + 1
 			pwdStr := fmt.Sprintf("password%d", attempt)
 			pass = os.Getenv(pwdStr)
 		}
@@ -119,7 +125,7 @@ func (adapter *mysqlAdapter) InitDB() (*sql.DB, error) {
 	}
 	calTrans.Completed()
 	if err != nil {
-		spread := 11 * time.Second + time.Duration(rand.Intn(11000999888)/*ns*/)
+		spread := 11*time.Second + time.Duration(rand.Intn(11000999888) /*ns*/)
 		logger.GetLogger().Log(logger.Warning, "onErr sleeping "+spread.String())
 		time.Sleep(spread)
 	}
