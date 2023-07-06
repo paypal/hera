@@ -270,6 +270,7 @@ outloop:
 			cp.calSessionTxn = cal.NewCalTransaction(cal.TransTypeAPI, cp.calSessionTxnName, cal.TransOK, "", cal.DefaultTGName)
 			cp.calSessionTxn.AddDataStr("corrid", cp.m_corr_id)
 		}
+		cp.m_corr_id = "unset" // Reset after logging
 		cp.calSessionTxn.SendSQLData(string(ns.Payload))
 		cp.sqlHash = utility.GetSQLHash(string(ns.Payload))
 		cp.queryScope.SqlHash = fmt.Sprintf("%d", cp.sqlHash)
