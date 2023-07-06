@@ -156,6 +156,8 @@ type CmdProcessor struct {
 	lastErr error
 	// the FNV hash of the SQL, for logging
 	sqlHash uint32
+	// corr_id for logging
+	m_corr_id string
 	// the name of the cal TXN
 	calSessionTxnName string
 	heartbeat         bool
@@ -207,11 +209,18 @@ func (cp *CmdProcessor) ProcessCmd(ns *netstring.Netstring) error {
 outloop:
 	switch ns.Cmd {
 	case common.CmdClientCalCorrelationID:
-		//
-		// @TODO parse out correlationid.
-		//
-		if cp.calSessionTxn != nil {
-			cp.calSessionTxn.SetCorrelationID("@todo")
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID:", string(ns.Payload), string(ns.Serialized))
+		}
+		cp.m_corr_id = "unset"
+		if len(string(ns.Payload)) > 0 {
+			splits := strings.Split(string(ns.Payload), "=")
+			if (len(splits) == 2) && (len(splits[1]) > 0) {
+				logger.GetLogger().Log(logger.Verbose, "splits:", len(splits), splits[0], splits[1])
+				cp.m_corr_id = splits[1]
+			} else {
+				logger.GetLogger().Log(logger.Warning, "CmdClientCalCorrelationID: Payload not in expected K=V format:", string(ns.Payload))
+			}
 		}
 	case common.CmdClientInfo:
 		if logger.GetLogger().V(logger.Verbose) {
@@ -259,7 +268,9 @@ outloop:
 		cp.hasResult, startTrans = cp.sqlParser.Parse(sqlQuery)
 		if cp.calSessionTxn == nil {
 			cp.calSessionTxn = cal.NewCalTransaction(cal.TransTypeAPI, cp.calSessionTxnName, cal.TransOK, "", cal.DefaultTGName)
+			cp.calSessionTxn.AddDataStr("corrid", cp.m_corr_id)
 		}
+		cp.m_corr_id = "unset" // Reset after logging
 		cp.calSessionTxn.SendSQLData(string(ns.Payload))
 		cp.sqlHash = utility.GetSQLHash(string(ns.Payload))
 		cp.queryScope.SqlHash = fmt.Sprintf("%d", cp.sqlHash)
