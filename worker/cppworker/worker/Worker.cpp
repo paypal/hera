@@ -443,6 +443,8 @@ void Worker::run()
 				client_session.start_session("API", m_cal_client_session_name);
 				client_session.get_session_transaction()->AddData("worker_pid", getpid());
 				client_session.get_session_transaction()->AddData("sid", m_sid);
+				client_session.get_session_transaction()->AddData("rac_id", m_connected_id);
+				client_session.get_session_transaction()->AddData("db_uname", m_db_uname);
 				client_session.set_status(CAL::TRANS_OK); // internal queries' error overwrite status so reset it.
 			}
 			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Session started");
