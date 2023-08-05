@@ -101,7 +101,7 @@ func MkErr(prefix string) {
 	ErrBindThrottle = errors.New(prefix + "-105: bind throttle")
 	ErrBindEviction = errors.New(prefix + "-106: bind eviction")
 	ErrNoScuttleIdPredicate = errors.New(prefix + "-372: no scuttle_id predicate, please remove scuttle_id in sql")
-	ErrNoShardKey = errors.New(prefix + "-373: no shard key or more than one or bad logical db")
+	ErrNoShardKey = errors.New(prefix + "-373: no shard key '%s' or more than one or bad logical db")
 	ErrAutodiscoverWhileSetShardID = errors.New(prefix + "-374: autodiscover while set shard id")
 	ErrNoShardValue = errors.New(prefix + "-375: no shard value or wrong sharKey array binding")
 	ErrCrossKeysDML = errors.New(prefix + "-206: cross key dml")
