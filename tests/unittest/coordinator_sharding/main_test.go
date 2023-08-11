@@ -44,7 +44,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-func setupShardMap(t *testing.T) {
+func setupShardMap() {
         twoTask := os.Getenv("TWO_TASK")
         if !strings.HasPrefix(twoTask, "tcp") {
                 // not mysql
@@ -106,7 +106,7 @@ func cleanup(ctx context.Context, conn *sql.Conn) error {
 
 func TestShardingBasic(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasic setup")
-	setupShardMap(t)
+	setupShardMap()
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname, _ := os.Hostname()
