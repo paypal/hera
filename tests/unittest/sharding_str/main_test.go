@@ -107,7 +107,7 @@ BEGIN
 END;
 /
 */
-func setupShardMap(t *testing.T) {
+func setupShardMap() {
 	testutil.RunDML("DROP TABLE IF EXISTS test_str_sk")
 	testutil.RunDML("create table test_str_sk (email_addr varchar(64), note varchar(64))")
 	testutil.RunDML("DROP TABLE IF EXISTS hera_shard_map")
@@ -119,7 +119,7 @@ func setupShardMap(t *testing.T) {
 
 func TestShardingStr(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr function, creating tables and setting up shard map")
-	setupShardMap(t)
+	setupShardMap()
 	logger.GetLogger().Log(logger.Debug, "TestShardingStr begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 

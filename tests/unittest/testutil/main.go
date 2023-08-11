@@ -73,10 +73,13 @@ func UtilMain(m *testing.M, cfg cfgFunc, before beforeFunc) int {
 		}
 	}
 
-	code := m.Run()
-	teardown()
-	if testing.Verbose() {
-		saveLogs()
+	if m != nil {
+		code := m.Run()
+		teardown()
+		if testing.Verbose() {
+			saveLogs()
+		}
+		return code
 	}
-	return code
+	return 0
 }

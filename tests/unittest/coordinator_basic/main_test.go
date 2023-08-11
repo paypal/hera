@@ -83,10 +83,11 @@ func TestCoordinatorBasic(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*cmd*/delete from "+tableName)
+	sqlTxt := "/*cmd*/delete from "+tableName
+	stmt, _ := tx.PrepareContext(ctx, sqlTxt)
 	_, err = stmt.Exec()
 	if err != nil {
-		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
+		t.Fatalf("Error preparing test (delete table) %s with %s ==== sql\n", err.Error(), sqlTxt)
 	}
 	stmt, _ = tx.PrepareContext(ctx, "/*cmd*/insert into "+tableName+" (id, int_val, str_val) VALUES(?, ?, ?)")
 	_, err = stmt.Exec(1, time.Now().Unix(), "val 1")
