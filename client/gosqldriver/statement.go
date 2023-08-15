@@ -252,7 +252,7 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 	return res, nil
 }
 
-// Implements driver.Stmt.
+// Query Implements driver.Stmt.
 // Query executes a query that may return rows, such as a SELECT.
 func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	sk := 0
@@ -264,7 +264,7 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
+	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /*CmdColsInfo*/ +1 /* CmdFetch */)
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -298,6 +298,8 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
+	idx++
+	nss[idx] = netstring.NewNetstringFrom(common.CmdColsInfo, nil)
 	idx++
 	nss[idx] = netstring.NewNetstringFrom(common.CmdFetch, st.fetchChunkSize)
 	cmd := netstring.NewNetstringEmbedded(nss)
@@ -354,7 +356,7 @@ Loop:
 	return newRows(st.hera, cols, st.fetchChunkSize)
 }
 
-// Implements driver.StmtQueryContextx
+// QueryContext Implements driver.StmtQueryContextx
 // QueryContext executes a query that may return rows, such as a SELECT
 func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	// TODO: refactor Query/QueryContext to reuse code
@@ -368,7 +370,7 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
+	nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /*CmdColsInfo*/ +1 /* Fetch */)
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -406,6 +408,8 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
+	idx++
+	nss[idx] = netstring.NewNetstringFrom(common.CmdColsInfo, nil)
 	idx++
 	nss[idx] = netstring.NewNetstringFrom(common.CmdFetch, st.fetchChunkSize)
 	cmd := netstring.NewNetstringEmbedded(nss)
