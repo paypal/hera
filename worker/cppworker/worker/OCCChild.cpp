@@ -670,7 +670,7 @@ void OCCChild::dump_session_cache()
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "dumping ALL=%d statements from session cache", cache_size);
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			do_oci_stmt_release(stmt_cache[i]->stmthp, LOG_WARNING);
 			delete stmt_cache[i];
 			stmt_cache[i] = NULL;
 		}
@@ -1043,7 +1043,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			
 			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
 						   m_scuttle_id.length(), OCI_ATTR_CLIENT_INFO, errhp);
-			sql_id_str = "";
+			sql_id_str = ""; // Reset sql_id_str before execute
 			execute(rc);
 			if (cur_stmt)
 			{
@@ -1099,12 +1099,8 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							}
 						}
 					}
-<<<<<<< HEAD
-                }
-=======
                 		}
 				c->AddData("sql_id", sql_id_str);
->>>>>>> 81924fc... sql_id changes
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
@@ -1710,7 +1706,7 @@ int OCCChild::disconnect()
 	{
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			do_oci_stmt_release(stmt_cache[i]->stmthp, LOG_WARNING);
 			delete stmt_cache[i];
 		}
 		delete[] stmt_cache;
@@ -1722,7 +1718,7 @@ int OCCChild::disconnect()
 	// clean up session variables statemend handle
 	if( m_session_var_stmthp != NULL )
 	{
-		if (!(rc = DO_OCI_HANDLE_FREE( m_session_var_stmthp, OCI_HTYPE_STMT, LOG_ALERT)))
+		if (!(rc = do_oci_stmt_release(m_session_var_stmthp, LOG_ALERT)))
 		{
 			log_oracle_error(rc, "Failed to free statement handle.");
 			return -1;
@@ -2367,22 +2363,15 @@ int OCCChild::execute_query(const std::string& query)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc(
-			(dvoid *) envhp, (dvoid **) &stmthp,
-			OCI_HTYPE_STMT, (size_t) 0, (dvoid **) 0);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
 
-	rc = OCIStmtPrepare(
-			stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
+	rc = OCIStmtPrepare2(
+			svchp, &stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
 			(ub4) query.length(),
+			(text *) NULL, (ub4) 0,
 			(ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
 	}
@@ -2390,12 +2379,12 @@ int OCCChild::execute_query(const std::string& query)
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
-	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT) == false)
+	
+	if (do_oci_stmt_release(stmthp, LOG_ALERT) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
@@ -2838,16 +2827,8 @@ void OCCChild::free_stmt(StmtCacheEntry *_entry)
 	if (_entry == NULL)
 		return;
 
-	if (_entry->stmthp == NULL) {
-		return;
-	}
 	// zap the stmthp
-	// DO_OCI_HANDLE_FREE(_entry->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
-	int rc = OCIStmtRelease(_entry->stmthp, errhp, (text *) NULL, (ub4) 0, OCI_DEFAULT);
-	if (rc != OCI_SUCCESS) {
-		log_oracle_error(rc, "Failed to free statement handle.");
-		// return -1;
-	}
+	do_oci_stmt_release(_entry->stmthp, LOG_ALERT);
 
 	// zap the defines
 	delete[] _entry->defines;
@@ -3122,14 +3103,6 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 		entry->version = _version;
 
-		// // create a statement handle
-		// rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
-		// if (rc != OCI_SUCCESS)
-		// {
-		// 	sql_error(rc, NULL);
-		// 	return -1;
-		// }
-
 		// save the query text
 		entry->text = statement;
 
@@ -3138,14 +3111,9 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		cache_misses++;
 
 		// prepare the new statement
-		// rc = OCIStmtPrepare(
-		// 		entry->stmthp,
-		// 		errhp,
-		// 		(text *) const_cast<char *> (statement.c_str()),
-		// 		(ub4) statement.length(),
-		// 		(ub4) OCI_NTV_SYNTAX,
-		// 		(ub4) OCI_DEFAULT);
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "Preparing with OCIStmtPrepare2...");
+		// A call to OCIStmtPrepare2() allocates the statement handle...It is not required to call OCIHandleAlloc() for the stmt handle...
+		// https://docs.oracle.com/en/database/oracle/oracle-database/19/lnoci/performance-topics.html#GUID-49C78457-8F76-48E1-A2CD-7EB22175042F
 		rc = OCIStmtPrepare2(
 				svchp, 
 				&entry->stmthp, 
@@ -4773,10 +4741,24 @@ int OCCChild::clear_indicators()
 	return 0;
 }
 
-bool OCCChild::real_oci_stmt_release(OCIStmt* stmthp, LogLevelEnum level)
+bool OCCChild::do_oci_stmt_release(OCIStmt *&stmthp, LogLevelEnum level)
 {
 	int rc;
 
+	if (stmthp == NULL)
+		return true;
+
+	rc = OCIStmtRelease((OCIStmt*) stmthp, errhp, (text *) NULL, (ub4) 0, OCI_DEFAULT);
+	stmthp = NULL;
+	if (rc != OCI_SUCCESS) {
+		WRITE_LOG_ENTRY(logfile, level, "Error during cleanup in do_oci_stmt_release()");
+		std::ostringstream os;
+		os << "Failed to release statement handle - OCIStmtRelease() error";
+		log_oracle_error(rc, os.str().c_str(), level);
+		return false;
+	}
+
+	return true;
 	
 }
 
@@ -5427,11 +5409,13 @@ int OCCChild::get_db_charset(std::string& _charset)
 						sys_context('USERENV', 'DB_UNIQUE_NAME') AS db_uname, \
 						sys_context('USERENV', 'SID') AS sid \
 						FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'";
-	
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "Preparing with OCIStmtPrepare2...");
+	// A call to OCIStmtPrepare2() allocates the statement handle...It is not required to call OCIHandleAlloc() for the stmt handle...
+	// https://docs.oracle.com/en/database/oracle/oracle-database/19/lnoci/performance-topics.html#GUID-49C78457-8F76-48E1-A2CD-7EB22175042F
 	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *) const_cast<char*>(sql), (ub4) strlen(sql), (text *) NULL, (ub4) 0, (ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
 	}
@@ -5445,7 +5429,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to define output parameter [value].");
 		return -1;
 	}
@@ -5458,7 +5442,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to define output parameter [local_id].");
 		return -1;
 	}
@@ -5470,7 +5454,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to define output parameter [db_uname].");
 		return -1;
 	}
@@ -5483,7 +5467,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to define output parameter [sid].");
 		return -1;
 	}
@@ -5492,7 +5476,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
@@ -5506,20 +5490,13 @@ int OCCChild::get_db_charset(std::string& _charset)
 					m_connected_id, m_db_uname.c_str(), m_sid);
 
 
-
-	rc = OCIStmtRelease(stmthp, errhp, (text *) NULL, (ub4) 0, OCI_DEFAULT);
-	if (rc != OCI_SUCCESS) {
+	// clean up
+	if (!do_oci_stmt_release(stmthp, LOG_ALERT))
+	{
 		WRITE_LOG_ENTRY(logfile, LOG_INFO, "Error during cleanup in get_db_charset()");
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
 	}
-	// // clean up
-	// if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT))
-	// {
-	// 	WRITE_LOG_ENTRY(logfile, LOG_INFO, "Error during cleanup in get_db_charset()");
-	// 	log_oracle_error(rc, "Failed to free statement handle.");
-	// 	return -1;
-	// }
 
 	
 	cal_trans.Completed(CAL::TRANS_OK);
@@ -5541,17 +5518,10 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 	// do prepare
 	if( m_session_var_stmthp == NULL )
 	{
-		rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &m_session_var_stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+		rc = OCIStmtPrepare2(svchp, &m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), (text *) NULL, (ub4) 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{
-			log_oracle_error(rc,"Failed to prepare a statement handle.");
-			return -1;
-		}
-
-		rc = OCIStmtPrepare(m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
-		if (rc != OCI_SUCCESS)
-		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			do_oci_stmt_release(m_session_var_stmthp, LOG_WARNING);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
@@ -5584,7 +5554,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 
 		if (rc != OCI_SUCCESS)
 		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			do_oci_stmt_release(m_session_var_stmthp, LOG_WARNING);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
@@ -5596,7 +5566,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 	rc = OCIStmtExecute(svchp, m_session_var_stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		do_oci_stmt_release(m_session_var_stmthp, LOG_WARNING);
 		log_oracle_error(rc, "Failed to execute statement.");
 		m_session_var_stmthp = NULL;
 		return -1;

@@ -427,6 +427,7 @@ private:
 	// stores into buffer (overwrites)
 	int get_oracle_error(int rc, std::string& buffer);
 
+	bool do_oci_stmt_release(OCIStmt *&stmthp, LogLevelEnum level);
 	// use the #define DO_OCI_HANDLE_FREE()
 	// it'll only be in the .cpp since this is private
 	// frees oci resources and logs messages
