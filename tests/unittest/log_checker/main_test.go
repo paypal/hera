@@ -104,7 +104,7 @@ func TestCalClientSessionDur(t *testing.T) {
 	conn.Close()
 	err = clientSessionDurLogScan()
 	if err != nil {
-		t.Fatalf("clientSessionDurLogScan %v")
+		t.Fatalf("clientSessionDurLogScan %v", err)
 	}
 	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionDur done  -------------------------------------------------------------")
 }
