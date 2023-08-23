@@ -2363,7 +2363,8 @@ int OCCChild::execute_query(const std::string& query)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-
+	// A call to OCIStmtPrepare2() allocates the statement handle...It is not required to call OCIHandleAlloc() for the stmt handle...
+	// https://docs.oracle.com/en/database/oracle/oracle-database/19/lnoci/performance-topics.html#GUID-49C78457-8F76-48E1-A2CD-7EB22175042F
 	rc = OCIStmtPrepare2(
 			svchp, &stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
 			(ub4) query.length(),
@@ -2828,7 +2829,7 @@ void OCCChild::free_stmt(StmtCacheEntry *_entry)
 		return;
 
 	// zap the stmthp
-	do_oci_stmt_release(_entry->stmthp, LOG_ALERT);
+	do_oci_stmt_release(_entry->stmthp, LOG_WARNING);
 
 	// zap the defines
 	delete[] _entry->defines;
@@ -3972,7 +3973,7 @@ int OCCChild::execute(int& _cmd_rc)
 		sql_error(rc2, stmt);
 	}
 	sql_id_str.assign(sql_id, sql_id_size);
-	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc2:%d, sql_id is :%s", rc2, sql_id_str.c_str());
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc2:%d,sql_id_len:%d, sql_id is :%s", rc2,sql_id_str.length(), sql_id_str.c_str());
 
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
@@ -4741,6 +4742,7 @@ int OCCChild::clear_indicators()
 	return 0;
 }
 
+// Use this only for stmt handle. Use the DO_OCI_HANDLE_FREE to free up other handles
 bool OCCChild::do_oci_stmt_release(OCIStmt *&stmthp, LogLevelEnum level)
 {
 	int rc;
@@ -5493,7 +5495,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 	// clean up
 	if (!do_oci_stmt_release(stmthp, LOG_ALERT))
 	{
-		WRITE_LOG_ENTRY(logfile, LOG_INFO, "Error during cleanup in get_db_charset()");
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "Error during cleanup in get_db_charset()");
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
 	}
@@ -5518,6 +5520,8 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 	// do prepare
 	if( m_session_var_stmthp == NULL )
 	{
+		// A call to OCIStmtPrepare2() allocates the statement handle...It is not required to call OCIHandleAlloc() for the stmt handle...
+		// https://docs.oracle.com/en/database/oracle/oracle-database/19/lnoci/performance-topics.html#GUID-49C78457-8F76-48E1-A2CD-7EB22175042F
 		rc = OCIStmtPrepare2(svchp, &m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), (text *) NULL, (ub4) 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{

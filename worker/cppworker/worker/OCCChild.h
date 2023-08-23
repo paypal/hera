@@ -427,6 +427,10 @@ private:
 	// stores into buffer (overwrites)
 	int get_oracle_error(int rc, std::string& buffer);
 
+	// frees oci stmt handle and logs messages
+	// if the hndlp is NULL, then do nothing and return true
+	// returns false if error was detected
+	// Use this only for stmt handle. Use DO_OCI_HANDLE_FREE to free other handles
 	bool do_oci_stmt_release(OCIStmt *&stmthp, LogLevelEnum level);
 	// use the #define DO_OCI_HANDLE_FREE()
 	// it'll only be in the .cpp since this is private
