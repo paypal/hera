@@ -944,13 +944,15 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			
 			var ns []*netstring.Netstring
 			if GetConfig().EnableCmdClientInfoToWorker {
-				logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
-				if crd.poolName == "null" {
+				// logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
+				logger.GetLogger().Log(logger.Verbose, len(crd.poolName))
+				if crd.poolName == "null" || len(crd.poolName) == 0 {
 					crd.poolName = "unset"
 				}
-				clientInfoMessage := fmt.Sprintf("%s|%s", crd.poolName, crd.clientPoolStack)
+				// clientInfoMessage := fmt.Sprintf("%s|%s", crd.poolName, crd.clientPoolStack)
+				clientInfoMessage := crd.poolName
 				logger.GetLogger().Log(logger.Verbose, "GetConfig().EnableCmdClientInfoToWorker:", GetConfig().EnableCmdClientInfoToWorker)
-				logger.GetLogger().Log(logger.Verbose, clientInfoMessage)
+				logger.GetLogger().Log(logger.Verbose, "clientInfoMessage:", clientInfoMessage)
 				clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
 				if !request.IsComposite() {
 					ns = make([]*netstring.Netstring, 3)
