@@ -231,7 +231,7 @@ outloop:
 			if len(ns.Payload) == 0 {
 				logger.GetLogger().Log(logger.Verbose, "clientApplication: unknown")
 			} else {
-				logger.GetLogger().Log(logger.Verbose, "clientApplication: ", ns.Payload)
+				logger.GetLogger().Log(logger.Verbose, "clientApplication:", string(ns.Payload))
 			}
 			// splits := strings.Split(string(ns.Payload), "|")
 			// if (len(splits) == 2) {

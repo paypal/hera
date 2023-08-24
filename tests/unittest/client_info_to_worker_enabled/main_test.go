@@ -82,7 +82,7 @@ func TestClientInfoToWorkerHappyPath(t *testing.T) {
 	}
 	rows.Close()
 	
-	if testutil.RegexCountFile("clientInfoMessage:testApplication", "hera.log") < 1 {
+	if testutil.RegexCountFile("clientInfoMessage: testApplication", "hera.log") < 1 {
 		t.Fatalf("Error: should have sent CmdClientInfoToWorker to worker")
 	}
 
@@ -129,12 +129,16 @@ func TestClientInfoToWorkerMissingClientInfo(t *testing.T) {
 	}
 	rows.Close()
 
-	if testutil.RegexCountFile("clientInfoMessage:unset", "hera.log") < 1 {
+	if testutil.RegexCountFile("clientInfoMessage: unset", "hera.log") < 1 {
 		t.Fatalf("Error: mux should have set the poolName to unset")
 	}
 	
 	if testutil.RegexCountFile("clientApplication: unset", "hera.log") < 1 {
 		t.Fatalf("Error: should have got unset from mux")
+	}
+
+	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 1 {
+		t.Fatalf("Error: Mux should not have processed CmdClientInfo")
 	}
 
 	cancel()
@@ -172,7 +176,7 @@ func TestClientInfoToWorkerMissingPoolName(t *testing.T) {
 	}
 	rows.Close()
 
-	if testutil.RegexCountFile("clientInfoMessage:unset", "hera.log") < 1 {
+	if testutil.RegexCountFile("clientInfoMessage: unset", "hera.log") < 1 {
 		t.Fatalf("Error: mux should have set the poolName to unset")
 	}
 	
@@ -180,7 +184,7 @@ func TestClientInfoToWorkerMissingPoolName(t *testing.T) {
 		t.Fatalf("Error: should have got unset from mux")
 	}
 	
-	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 2 {
+	if testutil.RegexCountFile("CLIENT_INFO_MUX.*", "cal.log") < 2 {
 		t.Fatalf("Error: Mux should rename the CLIENT_INFO event")
 	}
 
