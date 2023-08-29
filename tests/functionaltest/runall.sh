@@ -31,47 +31,29 @@ do
     d=`basename $pathD`
     ln $GOPATH/bin/mysqlworker .
 
-    if [ -f ../setup-mysql.sql -a ! -f ../setup-mysql.sql.out ]
-    then
-        cat ../setup-mysql.sql | mysql -h127.0.0.1 -uroot -p1-testDb heratestdb | tee ../setup-mysql.sql.out
-    elif [ -f ../setup-mysql.sql.out ]
-    then 
-        ls -l ../setup-mysql.sql.out
-    else
-        echo no common setup-mysql.sql $pathD
-    fi
-    if [ -f setup-mysql.sql ]
-    then
-        cat setup-mysql.sql | mysql -h127.0.0.1 -uroot -p1-testDb heratestdb
-    fi
-
     $GOROOT/bin/go test -c .
-    ./$d.test -test.v 2>&1 | tee std.log
-    egrep -n '^--- (PASS|[^:]*):' std.log
-    if ! grep -q '^--- PASS:' std.log
-    then
-        echo failing $pathD will retry
-        pkill watchdog
-        pkill mux 
-        pkill mysqlworker
-        if [ -f setup-mysql.sql ]
-        then
-            cat setup-mysql.sql | mysql -h127.0.0.1 -uroot -p1-testDb heratestdb
-        fi
-        mv std{,1}.log
+
+    retry=2
+    while [ $retry -ge 0 ]
+    do
         ./$d.test -test.v 2>&1 | tee std.log
-        egrep -n '^--- (PASS|[^:]*):' std.log
         if ! grep -q '^--- PASS:' std.log
         then
-            sleep 0.01
-            tail -n111 *.log
-            echo failing $pathD on retry ====
-            finalResult=1
+            echo failing $pathD with $retry retries left
+            sleep 11.1
+            mv std.log{,$retry}
+
+            if [ $retry -eq 0 ]
+            then
+                tail -n111 *.log
+                finalResult=1
+            fi
         fi
-    fi
-    pkill watchdog
-    pkill mux 
-    pkill mysqlworker
+        pkill watchdog
+        pkill mux
+        pkill mysqlworker
+        retry=$(($retry-1))
+    done
     popd
 done
 exit $finalResult
