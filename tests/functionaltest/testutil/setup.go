@@ -103,6 +103,7 @@ func (m *mux) setupConfig() error {
 	} else if m.wType == PostgresWorker {
 		m.appcfg["child.executable"] = "postgresworker"
 	}
+	m.appcfg["random_start_ms"] = "33"
 	err := createCfg(m.appcfg, "hera")
 	if err != nil {
 		return err
@@ -199,8 +200,8 @@ func (m *mux) cleanupConfig() error {
 func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 	CleanDB(dockerName)
 	if dbType == MySQL {
-		//Commented out temporarily so we don't have to run docker all the time
-		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
+		// mac must use port forward
+		cmd := exec.Command("docker", "run", "--name", dockerName, "-p3306:3306", "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
 		cmd.Run()
 
 		// find its IP
@@ -393,6 +394,9 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
+			if os.Getenv("SHELL") == "/bin/zsh" {
+				ip = "127.0.0.1" // for mac
+			}
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
