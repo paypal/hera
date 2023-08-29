@@ -15,7 +15,8 @@ import (
 	"strings"
 	"testing"
         "github.com/paypal/hera/client/gosqldriver"
-	_"github.com/paypal/hera/client/gosqldriver/tcp"
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	_ "github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -138,7 +139,7 @@ func RunMysql(sql string) (string, error) {
 
 
 func RunDML(dml string) error {
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
+	db, err := sql.Open("hera", fmt.Sprintf("%d:0:0", 0))
 	if err != nil {
 		return err
 	}
