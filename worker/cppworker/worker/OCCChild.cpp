@@ -1330,7 +1330,14 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				m_writer->write(OCC_MARKDOWN);
 				break;
 			}
-			std::string poolStack = _line;
+			std::string client_info = _line;
+			if (client_info.length() == 0)
+			{
+				client_info = "unknown";
+			}
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", client_info.c_str());
+			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
+			/* std::string poolStack = _line;
 			std::string client_info;
 
 			StringUtil::tokenize(poolStack, client_info, '|');
@@ -1344,7 +1351,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "set poolStack: %s", poolStack.c_str());
 				CalTransaction::SetParentStack(poolStack, std::string("CLIENT_INFO"));
 			}
-			e.AddPoolStack();
+			e.AddPoolStack(); */
 			// CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK, poolStack);
 
 			if (cur_stmt != NULL)
