@@ -37,8 +37,13 @@ do
     while [ $retry -ge 0 ]
     do
         ./$d.test -test.v 2>&1 | tee std.log
-        if ! grep -q '^--- PASS:' std.log
+        pkill watchdog
+        pkill mux
+        pkill mysqlworker
+        if grep -q '^--- PASS:' std.log
         then
+            break
+        else
             echo failing $pathD with $retry retries left
             sleep 11.1
             mv std.log{,$retry}
@@ -49,9 +54,6 @@ do
                 finalResult=1
             fi
         fi
-        pkill watchdog
-        pkill mux
-        pkill mysqlworker
         retry=$(($retry-1))
     done
     popd
