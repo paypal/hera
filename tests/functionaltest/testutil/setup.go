@@ -323,6 +323,7 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 			db0.SetMaxIdleConns(0)
 			// defer db0.Close()
 			dbs[ip+dbName] = db0
+			dbs["127.0.0.1"+dbName] = db0
 		}
 	} else if dbType == PostgreSQL {
 		if !ok {
