@@ -27,7 +27,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
-	appcfg["sharding_cfg_reload_interval"] = "0"
 	appcfg["rac_sql_interval"] = "-1"
         appcfg["lifespan_check_interval"] = "1"
 	appcfg["child.executable"] = "mysqlworker"

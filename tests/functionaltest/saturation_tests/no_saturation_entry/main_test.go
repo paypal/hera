@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
  */
 
 
-func NoSaturationEntry(t *testing.T) {
+func TestNoSaturationEntry(t *testing.T) {
 	fmt.Println ("NoSaturationEntry begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 	logger.GetLogger().Log(logger.Debug, "NoSaturationEntry begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 

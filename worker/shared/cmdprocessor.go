@@ -665,9 +665,9 @@ outloop:
 					if writeCols[i].Valid {
 						outstr = cp.adapter.ProcessResult(cts[i].DatabaseTypeName(), writeCols[i].String)
 					}
-					if logger.GetLogger().V(logger.Debug) {
+					/* if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, "query result", outstr)
-					}
+					} // causes high volume logs and can cause CI test issues */
 					nss = append(nss, netstring.NewNetstringFrom(common.RcValue, []byte(outstr)))
 				}
 			}
