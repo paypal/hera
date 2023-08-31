@@ -82,16 +82,12 @@ func TestClientInfoToWorkerHappyPath(t *testing.T) {
 	}
 	rows.Close()
 	
-	if testutil.RegexCountFile("testApplication|testApplication:testURL*CalThreadId=0*TopLevelTxnStartTime=18840b76115*Host=localhost*pid=100", "hera.log") < 1 {
+	if testutil.RegexCountFile("clientInfoMessage: testApplication", "hera.log") < 1 {
 		t.Fatalf("Error: should have sent CmdClientInfoToWorker to worker")
 	}
 
 	if testutil.RegexCountFile("clientApplication: testApplication", "hera.log") < 1 {
 		t.Fatalf("Error: CmdProcessor should have processed CmdClientInfo")
-	}
-
-	if testutil.RegexCountFile("poolStack: testApplication.*", "hera.log") < 1 {
-		t.Fatalf("Error: CmdProcessor should have proceesed CmdClientInfo")
 	}
 
 	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 1 {
@@ -132,17 +128,17 @@ func TestClientInfoToWorkerMissingClientInfo(t *testing.T) {
 		t.Fatalf("Expected 1 row")
 	}
 	rows.Close()
+
+	if testutil.RegexCountFile("clientInfoMessage: unset", "hera.log") < 1 {
+		t.Fatalf("Error: mux should have set the poolName to unset")
+	}
 	
-	if testutil.RegexCountFile("len clientApplication: 0", "hera.log") < 1 {
-		t.Fatalf("Error: should have sent empty clientApplication details to worker")
+	if testutil.RegexCountFile("clientApplication: unset", "hera.log") < 1 {
+		t.Fatalf("Error: should have got unset from mux")
 	}
 
-	if testutil.RegexCountFile("len poolStack: 0", "hera.log") < 1 {
-		t.Fatalf("Error: should have sent empty poolStack details to worker")
-	}
-
-	if testutil.RegexCountFile("clientApplication: unknown", "hera.log") < 1 {
-		t.Fatalf("Error: CmdProcessor should have renamed the missing poolName to unknown")
+	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 1 {
+		t.Fatalf("Error: Mux should not have processed CmdClientInfo")
 	}
 
 	cancel()
@@ -179,24 +175,16 @@ func TestClientInfoToWorkerMissingPoolName(t *testing.T) {
 		t.Fatalf("Expected 1 row")
 	}
 	rows.Close()
+
+	if testutil.RegexCountFile("clientInfoMessage: unset", "hera.log") < 1 {
+		t.Fatalf("Error: mux should have set the poolName to unset")
+	}
 	
-	if testutil.RegexCountFile("len clientApplication: 0", "hera.log") < 2 {
-		t.Fatalf("Error: should have sent empty clientApplication details to worker")
+	if testutil.RegexCountFile("clientApplication: unset", "hera.log") < 1 {
+		t.Fatalf("Error: should have got unset from mux")
 	}
-
-	if testutil.RegexCountFile("len poolStack: 93", "hera.log") < 1 {
-		t.Fatalf("Error: CmdProcessor should have proceesed CmdClientInfo")
-	}
-
-	if testutil.RegexCountFile("clientApplication: unknown", "hera.log") < 2 {
-		t.Fatalf("Error: CmdProcessor should have renamed the missing poolName to unknown")
-	}
-
-	if testutil.RegexCountFile("poolStack: testApplication.*", "hera.log") < 2 {
-		t.Fatalf("Error: CmdProcessor should have proceesed CmdClientInfo")
-	}
-
-	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 2 {
+	
+	if testutil.RegexCountFile("CLIENT_INFO_MUX.*", "cal.log") < 2 {
 		t.Fatalf("Error: Mux should rename the CLIENT_INFO event")
 	}
 
@@ -204,57 +192,4 @@ func TestClientInfoToWorkerMissingPoolName(t *testing.T) {
 	conn.Close()
 
 	logger.GetLogger().Log(logger.Debug, "TestClientInfoToWorkerMissingPoolName done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-}
-
-
-func TestClientInfoToWorkerMissingPoolStack(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestClientInfoToWorkerMissingPoolStack begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	time.Sleep(5*time.Second)
-	shard := 0
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-	if err != nil {
-		t.Fatal("Error starting Mux:", err)
-		return
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	conn, err := db.Conn(ctx);
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	mux := gosqldriver.InnerConn(conn)
-	mux.SetCalCorrID("583f5e4a2758e")
-	err = mux.SetClientInfoWithPoolStack("testApplication4", "localhost", "")
-	if err != nil {
-		t.Fatalf("Unable to set CLIENT_INFO")
-	}
-	rows, _ := conn.QueryContext(ctx, "SELECT version()")
-	// rows, _ := stmt.Query(1)
-	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
-	}
-	rows.Close()
-
-	if testutil.RegexCountFile("testApplication4|", "hera.log") < 1 {
-		t.Fatalf("Error: should have sent CmdClientInfoToWorker to worker")
-	}
-
-	if testutil.RegexCountFile("clientApplication: testApplication4", "hera.log") < 1 {
-		t.Fatalf("Error: CmdProcessor should have processed CmdClientInfo")
-	}
-	
-	if testutil.RegexCountFile("len poolStack: 0", "hera.log") < 2 {
-		t.Fatalf("Error: should have sent empty poolStack details to worker")
-	}
-
-	if testutil.RegexCountFile("CLIENT_INFO_MUX.*testApplication.*", "cal.log") < 3 {
-		t.Fatalf("Error: Mux should rename the CLIENT_INFO event")
-	}
-
-
-	cancel()
-	conn.Close()
-
-	logger.GetLogger().Log(logger.Debug, "TestClientInfoToWorkerMissingPoolStack done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }

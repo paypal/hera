@@ -180,3 +180,12 @@ func RegexCountFile(regex string, filename string) int {
 	//fmt.Println("DONE searching "+regex)
 	return count
 }
+
+func Fatal(msg ...interface{}) {
+       fmt.Println(msg...)
+       os.Exit(2)
+}
+func Fatalf(str string, msg ...interface{}) {
+       fmt.Printf(str,msg...)
+       os.Exit(1)
+}

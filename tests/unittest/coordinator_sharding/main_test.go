@@ -44,7 +44,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	return appcfg, opscfg, testutil.MySQLWorker
 }
 
-func setupShardMap(t *testing.T) {
+func setupShardMap() {
         twoTask := os.Getenv("TWO_TASK")
         if !strings.HasPrefix(twoTask, "tcp") {
                 // not mysql
@@ -53,7 +53,7 @@ func setupShardMap(t *testing.T) {
         shard := 0
         db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
         if err != nil {
-                t.Fatal("Error starting Mux:", err)
+                testutil.Fatal("Error starting Mux:", err)
                 return
         }
         db.SetMaxIdleConns(0)
@@ -62,7 +62,7 @@ func setupShardMap(t *testing.T) {
         defer cancel()
         conn, err := db.Conn(ctx)
         if err != nil {
-                t.Fatalf("Error getting connection %s\n", err.Error())
+                testutil.Fatalf("Error getting connection %s\n", err.Error())
         }
         defer conn.Close()
 
@@ -106,7 +106,7 @@ func cleanup(ctx context.Context, conn *sql.Conn) error {
 
 func TestShardingBasic(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasic setup")
-	setupShardMap(t)
+	setupShardMap()
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	hostname, _ := os.Hostname()
