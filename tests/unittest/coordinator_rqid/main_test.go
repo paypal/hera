@@ -79,29 +79,29 @@ func TestCoordinatorRqId(t *testing.T) {
 	// cleanup and insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		t.Errorf("Error getting connection %s\n", err.Error())
+		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 	tx, _ := conn.BeginTx(ctx, nil)
 	stmt, _ := tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/delete from "+tableName)
 	_, err = stmt.Exec()
 	if err != nil {
-		t.Errorf("Error preparing test (delete table) %s\n", err.Error())
+		t.Fatalf("Error preparing test (delete table) %s\n", err.Error())
 	}
 	stmt, _ = tx.PrepareContext(ctx, "/*TestCoordinatorRqId*/insert into "+tableName+" (id, int_val, str_val) VALUES(?, ?, ?)")
 	_, err = stmt.Exec(1, time.Now().Unix(), "val 1")
 	if err != nil {
-		t.Errorf("Error preparing test (create row in table) %s\n", err.Error())
+		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
 	}
 	err = tx.Commit()
 	if err != nil {
-		t.Errorf("Error commit %s\n", err.Error())
+		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
 	conn, err = db.Conn(ctx)
 	stmt, _ = conn.PrepareContext(ctx, "/*TestCoordinatorRqId*/Select id, int_val from "+tableName+" where id=?")
 	rows, _ := stmt.Query(1)
 	if !rows.Next() {
-		t.Errorf("Expected 1 row")
+		t.Fatalf("Expected 1 row")
 	}
 
 	rows.Close()
