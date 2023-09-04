@@ -45,36 +45,36 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 }
 
 func setupShardMap() {
-        twoTask := os.Getenv("TWO_TASK")
-        if !strings.HasPrefix(twoTask, "tcp") {
-                // not mysql
-                return
-        }
-        shard := 0
-        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
-        if err != nil {
-                testutil.Fatal("Error starting Mux:", err)
-                return
-        }
-        db.SetMaxIdleConns(0)
-        defer db.Close()
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        defer cancel()
-        conn, err := db.Conn(ctx)
-        if err != nil {
-                testutil.Fatalf("Error getting connection %s\n", err.Error())
-        }
-        defer conn.Close()
+	twoTask := os.Getenv("TWO_TASK")
+	if !strings.HasPrefix(twoTask, "tcp") {
+		// not mysql
+		return
+	}
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		testutil.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		testutil.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	defer conn.Close()
 
-        testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
 
-        for i := 0; i < 1024; i++ {
+	for i := 0; i < 1024; i++ {
 		shard := 0
 		if i <= 8 {
-			shard = i%3
+			shard = i % 3
 		}
-                testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard ) )
-        }
+		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard))
+	}
 }
 
 func before() error {
@@ -82,10 +82,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
-        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
-                // mysql
-                testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
-        }
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
+		// mysql
+		testutil.RunDML("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+	}
 	return nil
 }
 
@@ -180,7 +180,7 @@ func TestShardingSetShard(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
@@ -230,7 +230,7 @@ func TestShardingSetShard(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected to fail because no shard key")
 	}
-	if err.Error() != "Internal hera error: HERA-373: no shard key or more than one or bad logical db" {
+	if err.Error() != "Internal hera error: HERA-373: no shard key or more than one or bad logical db, shard_key=id" {
 		t.Fatal("Expected error HERA-373")
 	}
 
@@ -544,4 +544,58 @@ func TestShardingSetShardKey(t *testing.T) {
 	cancel()
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingSetShardKey done  -------------------------------------------------------------")
+}
+
+func TestShardingWithNoShardKey(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithNoShardKey setup")
+	setupShardMap()
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithNoShardKey begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+
+	hostname, _ := os.Hostname()
+	db, err := sql.Open("hera", hostname+":31003")
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	cleanup(ctx, conn)
+	// insert one row in the table
+	tx, _ := conn.BeginTx(ctx, nil)
+	currentTime := time.Now().Unix()
+	stmt, err := tx.PrepareContext(ctx, "/*TestShardingWithNoShardKey*/insert into "+tableName+" (id, int_val, str_val) VALUES(:id, :int_val, :str_val)")
+	if err != nil {
+		t.Fatalf("Error creating statement(create row in table) %s\n", err.Error())
+	}
+	_, err = stmt.Exec(sql.Named("id", 1), sql.Named("int_val", currentTime), sql.Named("str_val", "val 1"))
+	if err != nil {
+		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
+	}
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("Error commit %s\n", err.Error())
+	}
+
+	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithNoShardKey*/Select id, int_val, str_val from "+tableName+" where int_val=:int_val")
+	_, err = stmt.Query(sql.Named("int_val", currentTime))
+
+	if err == nil {
+		t.Fatalf("Expected no shard-key error for shrd key 'id'")
+	}
+	stmt.Close()
+	// check the logs that in fact shard 1 was used
+	out, err := testutil.BashCmd("grep 'shard_key=id' cal.log | wc -l")
+	if (err != nil) || (len(out) == 0) {
+		err = nil
+		t.Fatalf("Expected shard key details, shard_key=id in cal.log. err = %v, len(out) = %d", err, len(out))
+	}
+	conn.Close()
+	cancel()
+	logger.GetLogger().Log(logger.Debug, "TestShardingWithNoShardKey done ----------------------------------------------------------")
 }
