@@ -1,0 +1,9 @@
+# github.com/paypal/hera/tests/mocksqlsrv/dummy
+./connection.go fmt.Sprintf format %d reads arg #1, but call has 0 args
+	          if err != nil {
+	               log.Fatal(err)
+	          } else if i != packetsize + HEADER_SIZE {
+	               log.Fatal(fmt.Sprintf("Wrote %d bytes"))
+	          }
+	
+	          /* Update remaining payload length and sequence_id. */

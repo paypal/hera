@@ -1,0 +1,2 @@
+# github.com/paypal/hera/tests/unittest/manual_invalidation
+vet: ./main_test.go qTime.Millisecond undefined (type time.Duration has no field or method Millisecond)
