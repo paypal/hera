@@ -571,13 +571,13 @@ func (worker *WorkerClient) Close() {
 /**
  * Sends the recover signal to the worker
  */
-func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus) <-chan time.Time {
+func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior HeraWorkerStatus, recovParam WorkerClientRecoverParam) <-chan time.Time {
 	dice := rand.Intn(100)
 	freePct := 100*p.activeQ.Len()/p.desiredSize
 	var rv <-chan time.Time
 
 	// only skip and slow when on db-side (state==busy)
-	if 100-freePct > GetConfig().HighLoadPct && prior == wsBusy {
+	if recovParam.allowSkipOciBreak && 100-freePct > GetConfig().HighLoadPct && prior == wsBusy {
 		timeMs := GetConfig().HighLoadStrandedWorkerTimeoutMs/2 + rand.Intn(GetConfig().HighLoadStrandedWorkerTimeoutMs)
 		rv = time.After(time.Millisecond * time.Duration(timeMs))
 		if dice < GetConfig().HighLoadSkipInitiateRecoverPct {
@@ -615,10 +615,23 @@ func (worker *WorkerClient) callogStranded(evtName string, info *strandedCalInfo
 	et.Completed()
 }
 
+type WorkerClientRecoverParam struct {
+	// adaptivequemgr.go writes a message to worker's ctrlCh
+	// coordinator.go reads and calls Recover()
+
+	allowSkipOciBreak bool // for client disconn & taf
+	// could add param[0] which carries flags common.StrandedSkipBreakHiLoad..
+	// could add *WorkerPool, ticket, calInfo
+
+	// could add priorWorkerStatus that Recover() adds for downstream use in initiateRecover()
+
+	// initiateRecover() later writes to workerOOBConn that goes to worker process
+}
+
 // Recover interrupts a worker busy executing a request, usually because a client went away.
 // It sends a break to the worker and expect the worker to respond with EOR free. If worker is not
 // free-ing in two seconds, the worker is stopped with SIGKILL
-func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *strandedCalInfo, param ...int) {
+func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam WorkerClientRecoverParam, info *strandedCalInfo, param ...int) {
 	if atomic.CompareAndSwapInt32(&worker.isUnderRecovery, 0, 1) {
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "begin recover worker: ", worker.pid)
@@ -659,7 +672,7 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, info *stranded
 		killparam = param[0]
 	}
 	worker.callogStranded("RECOVERING", info) // TODO: should we have this?
-	workerRecoverTimeout := worker.initiateRecover(killparam, p, priorWorkerStatus)
+	workerRecoverTimeout := worker.initiateRecover(killparam, p, priorWorkerStatus, recovParam)
 	for {
 		select {
 		case <-workerRecoverTimeout:
