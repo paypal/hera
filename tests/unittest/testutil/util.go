@@ -79,6 +79,7 @@ func BackupAndClear(logbasename, grpName string) {
 	bakname := ""
 	for {
 		bakname = fmt.Sprintf("%s%d.log", logbasename, num)
+		num += 1
 		_, err := os.Stat(bakname)
 		if os.IsNotExist(err) {
 			break
@@ -109,8 +110,11 @@ func RunMysql(sql string) (string, error) {
         cmd.Stdin = strings.NewReader(sql)
         var cmdOutBuf bytes.Buffer
         cmd.Stdout = &cmdOutBuf
-        cmd.Run()
-	return cmdOutBuf.String(), nil
+	err := cmd.Run()
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "RunMysql", "sql=",sql, "err=",err, "out=",cmdOutBuf.String())
+	}
+	return cmdOutBuf.String(), err
 }
 
 func RunDML(dml string) error {

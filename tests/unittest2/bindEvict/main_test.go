@@ -32,6 +32,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["bind_eviction_names"] = "p"
+	appcfg["bind_eviction_threshold_pct"] = "50"
 
 	appcfg["request_backlog_timeout"]="1000";
 	appcfg["soft_eviction_probability"]="100";
@@ -52,13 +53,13 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 
 func before() error {
 	fmt.Printf("before run mysql")
-	testutil.RunMysql("create table sleep_info (id bigint, seconds float)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(10, 0.01)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(100, 0.1)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(1600, 2.6)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(21001111, 0.1)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(22001111, 0.1)")
-	testutil.RunMysql("insert into sleep_info (id,seconds) values(29001111, 2.9)")
+	testutil.RunMysql("create table sleep_info (id bigint, seconds float);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(10, 0.01);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(100, 0.1);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(1600, 2.6);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(21001111, 0.1);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(22001111, 0.1);")
+	testutil.RunMysql("insert into sleep_info (id,seconds) values(29001111, 2.9);")
 	out,err := testutil.RunMysql(`DELIMITER $$
 CREATE FUNCTION sleep_option (id bigint)
 RETURNS float
@@ -80,6 +81,8 @@ DELIMITER ;`);
 }
 
 func TestMain(m *testing.M) {
+	logger.GetLogger().Log(logger.Debug, "begin 20230918kkang TestMain")
+	fmt.Printf("TestMain 20230918kkang\n")
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
@@ -361,7 +364,7 @@ func TestBindLess(t *testing.T) {
 
 	if true {
 	logger.GetLogger().Log(logger.Debug, "TestBindLess midpt +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	err := partialBadLoad(0.3)
+	err := partialBadLoad(0.7)
 	if err != nil {
 		// t.Fatalf("main step function returned err %s", err.Error()) // can be triggered since test only has one sql
 	}

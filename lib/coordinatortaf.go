@@ -223,7 +223,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 						return nil
 					}
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
-					go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+					go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 					return ErrDML
 				}
 				GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
@@ -270,7 +270,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 							// return err
 						} else if err == ErrSaturationKill {
 							//go worker.Recover(primaryPool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
-							go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+							go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 						} else {
 							go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 						}
@@ -342,7 +342,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 				return nil
 			}
 			GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
-			go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+			go worker.Recover(primaryPool, ticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 			return ErrDML
 		}
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
@@ -369,9 +369,9 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 					fallbackPool.ReturnWorker(worker, fbticket)
 					// return err
 				} else if err == ErrSaturationKill {
-					go worker.Recover(fallbackPool, fbticket, WorkerClientRecoverParam{}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+					go worker.Recover(fallbackPool, fbticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 				} else {
-					go worker.Recover(fallbackPool, fbticket, WorkerClientRecoverParam{}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+					go worker.Recover(fallbackPool, fbticket, WorkerClientRecoverParam{allowSkipOciBreak:true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 				}
 			}
 		}
