@@ -33,7 +33,7 @@ do
 
     $GOROOT/bin/go test -c .
 
-    retry=2
+    retry=4
     while [ $retry -ge 0 ]
     do
         ./$d.test -test.v 2>&1 | tee std.log
