@@ -85,7 +85,7 @@ func BackupAndClear(logbasename, grpName string) {
 			break
 		}
 	}
-	logname := logbasename+".log"
+	logname := logbasename + ".log"
 	/* nowStr := time.Now().Format("15:04:05.000000")
 	f, err := os.OpenFile(logname, os.O_APPEND, 0666)
 	if err == nil {
@@ -106,13 +106,13 @@ func BackupAndClear(logbasename, grpName string) {
 }
 
 func RunMysql(sql string) (string, error) {
-        cmd := exec.Command("mysql","-h",os.Getenv("mysql_ip"),"-p1-testDb","-uroot", "heratestdb")
-        cmd.Stdin = strings.NewReader(sql)
-        var cmdOutBuf bytes.Buffer
-        cmd.Stdout = &cmdOutBuf
+	cmd := exec.Command("mysql", "-h", os.Getenv("mysql_ip"), "-p1-testDb", "-uroot", "heratestdb")
+	cmd.Stdin = strings.NewReader(sql)
+	var cmdOutBuf bytes.Buffer
+	cmd.Stdout = &cmdOutBuf
 	err := cmd.Run()
 	if err != nil {
-		logger.GetLogger().Log(logger.Debug, "RunMysql", "sql=",sql, "err=",err, "out=",cmdOutBuf.String())
+		logger.GetLogger().Log(logger.Debug, "RunMysql", "sql=", sql, "err=", err, "out=", cmdOutBuf.String())
 	}
 	return cmdOutBuf.String(), err
 }
@@ -186,10 +186,10 @@ func RegexCountFile(regex string, filename string) int {
 }
 
 func Fatal(msg ...interface{}) {
-       fmt.Println(msg...)
-       os.Exit(2)
+	fmt.Println(msg...)
+	os.Exit(2)
 }
 func Fatalf(str string, msg ...interface{}) {
-       fmt.Printf(str,msg...)
-       os.Exit(1)
+	fmt.Printf(str, msg...)
+	os.Exit(1)
 }
