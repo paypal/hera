@@ -1,0 +1,9 @@
+# github.com/paypal/hera/worker/mysqlworker
+./adapter.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	
+	// Checking master status
+	func (adapter *mysqlAdapter) Heartbeat(db *sql.DB) bool {
+		ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+		writable := false
+		conn, err := db.Conn(ctx)
+		if err != nil {

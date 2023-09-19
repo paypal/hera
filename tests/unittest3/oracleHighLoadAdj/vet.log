@@ -1,0 +1,17 @@
+# github.com/paypal/hera/tests/unittest3/oracleHighLoadAdj
+./main_test.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	}
+	
+	func execSql(t *testing.T, conn *sql.Conn, sql string, skipCommit bool) *sql.Tx {
+		ctx, _ := context.WithTimeout(context.Background(), 7*24*3600*time.Second)
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatalf("Error startT %s %s\n", sql, err.Error())
+./main_test.go unreachable code
+	func TestBadPassword(t *testing.T) {
+		fmt.Printf("badPass disabled function")
+		return
+		logger.GetLogger().Log(logger.Debug, "TestBadPassword +++++++++++++")
+	
+		retryPasswordLogCnt := testutil.RegexCountFile("Login Retry Attempt...:1", "hera.log")
+		if retryPasswordLogCnt != 1 {

@@ -28,4 +28,12 @@ do
     rm -f *.log 
     popd
 done
+
+./govet.sh
+rv=$?
+if [ 0 != $rv ]
+then
+    exit $rv
+fi
+
 exit $overall

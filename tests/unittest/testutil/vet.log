@@ -1,0 +1,9 @@
+# github.com/paypal/hera/tests/unittest/testutil
+./setup.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+		}
+		db0.SetMaxIdleConns(0)
+		dbs[ip+dbName] = db0
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		conn0, err := db0.Conn(ctx)
+		if err != nil {
+			return err

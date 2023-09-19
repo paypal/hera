@@ -1,0 +1,49 @@
+# github.com/paypal/hera/tests/functionaltest/bind_eviction_tests/util
+./dbops.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+./dbops.go this return statement may be reached without using the cancel var defined on line 37
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+	        }
+	        defer conn.Close()
+	        defer cancel()
+./dbops.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+./dbops.go this return statement may be reached without using the cancel var defined on line 84
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+	        }
+	        defer conn.Close()
+	        defer cancel()
+./dbops.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Println("Error creating context:", err)
+./dbops.go this return statement may be reached without using the cancel var defined on line 139
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Println("Error creating context:", err)
+	                return count
+	        }
+	        defer conn.Close()
+	        defer cancel()

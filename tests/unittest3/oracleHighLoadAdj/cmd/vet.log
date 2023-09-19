@@ -1,0 +1,9 @@
+# github.com/paypal/hera/tests/unittest3/oracleHighLoadAdj/cmd
+./rude.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	}
+	
+	func execSQL(conn *sql.Conn, sqlStr string, skipCommit bool) *sql.Tx {
+		ctx, _ := context.WithTimeout(context.Background(), 7*24*3600*time.Second)
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			fmt.Printf("Error startT %s %s\n", sqlStr, err.Error())

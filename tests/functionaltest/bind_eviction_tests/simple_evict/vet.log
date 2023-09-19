@@ -1,0 +1,33 @@
+# github.com/paypal/hera/tests/functionaltest/bind_eviction_tests/simple_evict
+./main_test_disable.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+./main_test_disable.go this return statement may be reached without using the cancel var defined on line 66
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+	        }
+	 
+	        defer conn.Close()
+./main_test_disable.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+./main_test_disable.go this return statement may be reached without using the cancel var defined on line 112
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+	        }
+	        defer conn.Close()
+	        // cancel must be called before conn.Close()

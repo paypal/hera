@@ -1,0 +1,9 @@
+# github.com/paypal/hera/tests/mocksqlsrv
+./samplequeries.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	     // Test selects.
+	     selects(db, disp)
+	
+	     ctx, _ /*cancel*/ := context.WithTimeout(context.Background(), 10*time.Second)
+	     // ctx := context.Background()
+		conn, err := db.Conn(ctx)
+	

@@ -1,0 +1,225 @@
+# github.com/paypal/hera/tests/functionaltest/testutil
+./setup.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+				dbs[ip+dbName] = db0
+			}
+		}
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		conn0, err := db0.Conn(ctx)
+		if err != nil {
+			return err
+./util.go the cancel function is not used on all paths (possible context leak)
+	        db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Println("Error creating context:", err)
+./util.go this return statement may be reached without using the cancel var defined on line 106
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Println("Error creating context:", err)
+	                return count
+	        }
+	        defer conn.Close()
+	        // cancel must be called before conn.Close()
+./util.go the cancel function is not used on all paths (possible context leak)
+	        //db.SetMaxIdleConns(0)
+	        defer db.Close()
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+./util.go this return statement may be reached without using the cancel var defined on line 193
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                return err
+	        }
+	        defer conn.Close()
+	        // cancel must be called before conn.Close()
+./util.go the cancel function is not used on all paths (possible context leak)
+	                return err
+	        }
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+./util.go this return statement may be reached without using the cancel var defined on line 242
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+	
+	        //Insert a rac maintenance row
+./util.go the cancel function is not used on all paths (possible context leak)
+	                return err
+	        }
+	
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+./util.go this return statement may be reached without using the cancel var defined on line 288
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+		 //Insert a rac maintenance row with no time
+	        txn, _ := conn.BeginTx(ctx, nil)
+./util.go the cancel function is not used on all paths (possible context leak)
+	        }
+	
+	        //Insert a rac maintenance row
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+./util.go this return statement may be reached without using the cancel var defined on line 338
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+	        txn, _ := conn.BeginTx(ctx, nil)
+	        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+./util.go fmt.Println call has possible formatting directive %s
+	        defer stmt.Close()
+	        _, err = stmt.Exec()
+	        if err != nil {
+	                fmt.Println ("Set autocommit to false: %s", err)
+	                return err
+	        }
+	        stmt, _ = tx.PrepareContext(ctx, dml)
+./util.go result of fmt.Errorf call not used
+	        fmt.Println ("Hostname: ", hostname);
+	        db, err := sql.Open("hera", hostname + ":31002")
+	        if err != nil {
+	                fmt.Errorf ("Error connection to go mux: %s", err)
+	                return err
+	        }
+	        db.SetMaxIdleConns(0)
+./util.go result of fmt.Errorf call not used
+	
+	        err = RunDML("DELETE from hera_maint")
+	        if err != nil {
+	                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+	        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+	         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+	        if err != nil {
+	        	fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+	        fmt.Println ("Hostname: ", hostname);
+	        db, err := sql.Open("hera", hostname + ":31002")
+	        if err != nil {
+	                fmt.Errorf ("Error connection to go mux: %s", err)
+	                return err
+	        }
+	        db.SetMaxIdleConns(0)
+./util.go result of fmt.Errorf call not used
+	
+	        err = RunDML("DELETE from hera_maint")
+	        if err != nil {
+	                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+		 //Insert a rac maintenance row with no time
+./util.go result of fmt.Errorf call not used
+	        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, module, machine) values (?,?,?,?)")
+	         _, err = stmt.Exec(0, status, module , hostname)
+	        if err != nil {
+	                fmt.Errorf ("Error executing sql rac insert statement with empty time %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+		stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+	         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+	        if err != nil {
+	                fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+	                return err
+	        }
+	        err = txn.Commit()
+./util.go result of fmt.Errorf call not used
+	        fmt.Println ("Hostname: ", hostname);
+	        db, err := sql.Open("hera", hostname + ":31002")
+	        if err != nil {
+	                fmt.Errorf ("Error connection to go mux: %s", err)
+	                return err
+	        }
+	        db.SetMaxIdleConns(0)
+./util.go result of fmt.Errorf call not used
+	
+	        err = RunDML("DELETE from hera_maint")
+	        if err != nil {
+	                fmt.Errorf ("Error preparing test (delete table) %s\n", err.Error())
+	                return err
+	        }
+	
+./util.go result of fmt.Errorf call not used
+	        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	        conn, err := db.Conn(ctx)
+	        if err != nil {
+	                fmt.Errorf ("Error getting connection %s\n", err.Error())
+	                return err
+	        }
+	        txn, _ := conn.BeginTx(ctx, nil)
+./util.go result of fmt.Errorf call not used
+	        stmt, _ := txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, status_time, module, machine) values (?,?,?,?,?)")
+	         _, err = stmt.Exec(0, status, time.Now().Unix()+diff_time, module , hostname)
+	        if err != nil {
+	                fmt.Errorf ("Error executing sql rac insert statement with empty time %s\n", err.Error())
+	                return err
+	        }
+	        //Insert a rac maintenance row with no time
+./util.go result of fmt.Errorf call not used
+	        stmt, _ = txn.PrepareContext(ctx, "/*cmd*/insert into hera_maint (inst_id, status, module, machine) values (?,?,?,?)")
+	         _, err = stmt.Exec(0, status, module , hostname)
+	        if err != nil {
+	                fmt.Errorf ("Error executing sql rac insert statement %s\n", err.Error())
+	                return err
+	        }
+	        err = txn.Commit()
+./util.go result of fmt.Errorf call not used
+	    //fmt.Println ("Grep command in ExtractClientId: ", cmd)
+	    out, err := BashCmd(cmd)
+	    if (err != nil) {
+	        fmt.Errorf("Error occur when extracting client id: %s", out)
+	    }
+	    client := strings.TrimSpace (string(out))
+	    return client
+./util.go result of fmt.Errorf call not used
+	    //fmt.Println ("Grep command to extract worker Id: ", cmd)
+	    out, err := BashCmd(cmd)
+	    if (err != nil) {
+	        fmt.Errorf("Error occur when extracting worker id: %s", out)
+	    }
+	    file, err := os.Open("pids.tmp")
+	    if err != nil {

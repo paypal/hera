@@ -1,0 +1,17 @@
+# github.com/paypal/hera/tests/unittest/failover3
+./main_test.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	}
+	
+	func commit(conn *sql.Conn, t* testing.T) {
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	        tx, err := conn.BeginTx(ctx, nil)
+	        if err != nil {
+	                t.Fatalf("Error begin tx %s\n", err.Error())
+./main_test.go the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak
+	func doCrud(conn *sql.Conn, id int, t* testing.T) (bool) {
+		note := time.Now().Format("test note 2006-01-02j15:04:05.000 failover")
+	
+		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	
+		stmt, err := conn.PrepareContext(ctx, "create table test_failover ( id int, note varchar(55), autoI int not null auto_increment, primary key (autoI) )")
+		if err != nil {
