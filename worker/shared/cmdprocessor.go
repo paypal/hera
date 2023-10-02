@@ -213,13 +213,17 @@ outloop:
 			logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID:", string(ns.Payload), string(ns.Serialized))
 		}
 		cp.m_corr_id = "unset"
-		if len(string(ns.Payload)) > 0 {
-			splits := strings.Split(string(ns.Payload), "=")
-			if (len(splits) == 2) && (len(splits[1]) > 0) {
-				logger.GetLogger().Log(logger.Verbose, "splits:", len(splits), splits[0], splits[1])
-				cp.m_corr_id = splits[1]
+		if ns != nil {
+			cid := string(ns.Payload)
+			pos := strings.Index(cid, "&")
+			if pos != -1 {
+				cid = cid[:pos]
+			}
+			pos = strings.Index(cid, "=")
+			if pos != -1 && strings.Compare(cid[:pos], "CorrId") == 0 {
+				cp.m_corr_id = cid[pos+1:]
 			} else {
-				logger.GetLogger().Log(logger.Warning, "CmdClientCalCorrelationID: Payload not in expected K=V format:", string(ns.Payload))
+				logger.GetLogger().Log(logger.Verbose, "CmdClientCalCorrelationID: Payload not in expected format:", string(ns.Payload))
 			}
 		}
 	case common.CmdClientInfo:

@@ -183,7 +183,7 @@ func TestCalClientSessionCorrIdInvalid(t *testing.T) {
 		t.Fatalf("Error: should have handled CmdClientCalCorrelationID")
 	}
 
-	if testutil.RegexCountFile("Payload not in expected K=V format.*corrid=aaaf5e4a2758e", "hera.log") < 1 {
+	if testutil.RegexCountFile("Payload not in expected format.*corrid=aaaf5e4a2758e", "hera.log") < 1 {
 		t.Fatalf("Error: should have thrown error due to corrId format")
 	}
 
