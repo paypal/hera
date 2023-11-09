@@ -19,7 +19,7 @@ do
     fi
     if [ 0 != $rv ]
     then
-        #grep ^ *.log
+        grep ^ *.log
         popd
         #exit $rv
         overall=1
