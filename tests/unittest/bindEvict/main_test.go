@@ -144,25 +144,6 @@ func simpleEvict() {
 	fmt.Printf("done waiting for bklg\n")
 }
 
-func TestSqlEvict(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestSqlEvict begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	simpleEvict()
-	if testutil.RegexCountFile("HERA-100: backlog timeout", "hera.log") == 0 {
-		t.Fatal("backlog timeout was not triggered")
-	} // */
-	/* if (testutil.RegexCountFile("coordinator dispatchrequest: no worker HERA-102: backlog eviction", "hera.log") == 0) {
-		t.Fatal("backlog eviction was not triggered")
-	} // */
-	if testutil.RegexCountFile("coordinator dispatchrequest: no worker HERA-104: saturation soft sql eviction", "hera.log") == 0 {
-		t.Fatal("soft eviction was not triggered")
-	}
-	if testutil.RegexCountFile("coordinator dispatchrequest: stranded conn HERA-101: saturation kill", "hera.log") == 0 {
-		t.Fatal("eviction was not triggered")
-	}
-	logger.GetLogger().Log(logger.Debug, "TestSqlEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	time.Sleep(2 * time.Second)
-}
-
 func fastAndSlowBinds() error {
 	db, err := sql.Open("hera", "127.0.0.1:31002")
 	if err != nil {
@@ -323,22 +304,6 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 	}
 }
 
-func TestBindEvict(t *testing.T) {
-	// we would like to clear hera.log, but even if we try, lots of messages still go there
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	err := fastAndSlowBinds()
-	if err != nil {
-		t.Fatalf("main step function returned err %s", err.Error())
-	}
-	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0 {
-		t.Fatalf("BIND_THROTTLE was not triggered")
-	}
-	if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
-		t.Fatalf("BIND_EVICT was not triggered")
-	}
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-}
-
 func TestBindLess(t *testing.T) {
 	// we would like to clear hera.log, but even if we try, lots of messages still go there
 	logger.GetLogger().Log(logger.Debug, "TestBindLess +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
@@ -373,3 +338,38 @@ func TestBindLess(t *testing.T) {
 	} // endif
 	logger.GetLogger().Log(logger.Debug, "TestBindLess done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 } // */
+
+func TestBindEvict(t *testing.T) {
+	// we would like to clear hera.log, but even if we try, lots of messages still go there
+	logger.GetLogger().Log(logger.Debug, "TestBindEvict +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	err := fastAndSlowBinds()
+	if err != nil {
+		t.Fatalf("main step function returned err %s", err.Error())
+	}
+	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0 {
+		t.Fatalf("BIND_THROTTLE was not triggered")
+	}
+	if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
+		t.Fatalf("BIND_EVICT was not triggered")
+	}
+	logger.GetLogger().Log(logger.Debug, "TestBindEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+}
+
+func TestSqlEvict(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestSqlEvict begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	simpleEvict()
+	if testutil.RegexCountFile("HERA-100: backlog timeout", "hera.log") == 0 {
+		t.Fatal("backlog timeout was not triggered")
+	} // */
+	/* if (testutil.RegexCountFile("coordinator dispatchrequest: no worker HERA-102: backlog eviction", "hera.log") == 0) {
+		t.Fatal("backlog eviction was not triggered")
+	} // */
+	if testutil.RegexCountFile("coordinator dispatchrequest: no worker HERA-104: saturation soft sql eviction", "hera.log") == 0 {
+		t.Fatal("soft eviction was not triggered")
+	}
+	if testutil.RegexCountFile("coordinator dispatchrequest: stranded conn HERA-101: saturation kill", "hera.log") == 0 {
+		t.Fatal("eviction was not triggered")
+	}
+	logger.GetLogger().Log(logger.Debug, "TestSqlEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	time.Sleep(2 * time.Second)
+}
