@@ -100,38 +100,49 @@ func sleepyQ(conn *sql.Conn, delayRow int) error {
 	return nil
 }
 
-func fastAndSlowBinds() error {
+var normCliErr error
+
+func NormCliErr() error {
+	if normCliErr == nil {
+		normCliErr = fmt.Errorf("normal client got error")
+	}
+	return normCliErr
+}
+
+func partialBadLoad(fracBad float64) error {
 	db, err := sql.Open("hera", "127.0.0.1:31002")
 	if err != nil {
 		fmt.Printf("Error db %s\n", err.Error())
 		return err
 	}
-	db.SetConnMaxLifetime(22 * time.Second)
+	db.SetConnMaxLifetime(111 * time.Second)
 	db.SetMaxIdleConns(0)
 	db.SetMaxOpenConns(22111)
 	defer db.Close()
 
 	// client threads of slow queries
 	var stop2 int
+	var stop3 int
 	var badCliErr string
-	mkClients(1+int(max_conn*1.6), &stop2, 29001111, "badClient", &badCliErr, db)
+	var cliErr string
+	numBad := int(max_conn * fracBad)
+	numNorm := int(max_conn*2.1) + 1 - numBad
+	fmt.Printf("spawning clients bad%d norm%d\n", numBad, numNorm)
+	mkClients(numBad, &stop2, 29001111, "badClient", &badCliErr, db)
+	mkClients(numNorm, &stop3, 100, "normClient", &cliErr, db) // bind value is short, so bindevict won't trigger
 	time.Sleep(3100 * time.Millisecond)
-	/* if (testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0) {
-		return fmt.Errorf("BIND_THROTTLE was not triggered")
-	}
-	if (testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0) {
-		return fmt.Errorf("BIND_EVICT was not triggered")
-	} // */
+	//time.Sleep(33100 * time.Millisecond)
 
 	// start normal clients after initial backlog timeouts
-	var normCliErrStr string
 	var stop int
+	var normCliErrStr string
 	mkClients(1, &stop, 21001111, "n client", &normCliErrStr, db)
 	time.Sleep(1100 * time.Millisecond)
 
 	// if we throttle down or stop, it restores
 	stop2 = 1 // stop bad clients
-	lib.GetConfig().BindEvictionDecrPerSec = 11500.1
+	stop3 = 1
+	lib.GetConfig().BindEvictionDecrPerSec = 11333.1
 	defer func() { lib.GetConfig().BindEvictionDecrPerSec = 1.1 }()
 	time.Sleep(1 * time.Second)
 	conn, err := db.Conn(context.Background())
@@ -148,19 +159,11 @@ func fastAndSlowBinds() error {
 	}
 
 	stop = 1
+	// tolerate soft eviction on normal client when we did not use bind eviction
 	if len(normCliErrStr) != 0 {
 		return NormCliErr()
-	}
+	} // */
 	return nil
-}
-
-var normCliErr error
-
-func NormCliErr() error {
-	if normCliErr == nil {
-		normCliErr = fmt.Errorf("normal client got error")
-	}
-	return normCliErr
 }
 
 func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db *sql.DB) {
@@ -203,18 +206,37 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 	}
 }
 
-func TestBindEvict(t *testing.T) {
+func TestBindLess(t *testing.T) {
 	// we would like to clear hera.log, but even if we try, lots of messages still go there
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	err := fastAndSlowBinds()
-	if err != nil {
+	logger.GetLogger().Log(logger.Debug, "TestBindLess +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	testutil.BackupAndClear("cal", "BindLess start")
+	testutil.BackupAndClear("hera", "BindLess start")
+	err := partialBadLoad(0.10)
+	if err != nil && err != NormCliErr() {
 		t.Fatalf("main step function returned err %s", err.Error())
 	}
-	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0 {
-		t.Fatalf("BIND_THROTTLE was not triggered")
+	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") > 0 {
+		t.Fatalf("BIND_THROTTLE should not trigger")
 	}
-	if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
-		t.Fatalf("BIND_EVICT was not triggered")
+	if testutil.RegexCountFile("BIND_EVICT", "cal.log") > 0 {
+		t.Fatalf("BIND_EVICT should not trigger")
 	}
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	if testutil.RegexCountFile("HERA-10", "hera.log") == 0 {
+		t.Fatal("backlog timeout or saturation was not triggered")
+	} // */
+
+	if true {
+		logger.GetLogger().Log(logger.Debug, "TestBindLess midpt +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+		err := partialBadLoad(0.7)
+		if err != nil {
+			// t.Fatalf("main step function returned err %s", err.Error()) // can be triggered since test only has one sql
+		}
+		if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0 {
+			t.Fatalf("BIND_THROTTLE should trigger")
+		}
+		if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
+			t.Fatalf("BIND_EVICT should trigger")
+		}
+	} // endif
+	logger.GetLogger().Log(logger.Debug, "TestBindLess done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 } // */
