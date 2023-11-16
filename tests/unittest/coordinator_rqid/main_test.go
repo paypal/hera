@@ -75,7 +75,7 @@ func TestCoordinatorRqId(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	// cleanup and insert one row in the table
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -97,7 +97,6 @@ func TestCoordinatorRqId(t *testing.T) {
 		t.Fatalf("Error commit %s\n", err.Error())
 	}
 
-	conn, err = db.Conn(ctx)
 	stmt, _ = conn.PrepareContext(ctx, "/*TestCoordinatorRqId*/Select id, int_val from "+tableName+" where id=?")
 	rows, _ := stmt.Query(1)
 	if !rows.Next() {
@@ -122,10 +121,10 @@ func TestCoordinatorRqId(t *testing.T) {
 		t.Fatalf("Expected 'wrqId: 13 ): EOR code: 0 , rqId:  13'")
 	}
 
-	out, err = testutil.BashCmd("grep 'wrqId: 21 ): EOR code: 0 , rqId:  21' hera.log | wc -l")
+	out, err = testutil.BashCmd("grep 'wrqId: 19 ): EOR code: 0 , rqId:  19' hera.log | wc -l")
 	if (err != nil) || (len(out) == 0) || (out[0] != '1') {
 		err = nil
-		t.Fatalf("Expected 'wrqId: 21 ): EOR code: 0 , rqId:  21'")
+		t.Fatalf("Expected 'wrqId: 19 ): EOR code: 0 , rqId:  19'")
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestCoordinatorRqId done  -------------------------------------------------------------")

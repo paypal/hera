@@ -19,7 +19,6 @@ package gosqldriver
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,13 +35,10 @@ type rows struct {
 	hera           *heraConnection
 	vals           []driver.Value
 	cols           int
-	colInfo        []string
 	currentRow     int
 	fetchChunkSize []byte
 	completed      bool
 }
-
-var columnInfo = []string{"Name", "Type", "Width", "Precision", "Scale"}
 
 // TODO: fetch chunk size
 func newRows(hera *heraConnection, cols int, fetchChunkSize []byte) (*rows, error) {
@@ -55,65 +51,24 @@ func newRows(hera *heraConnection, cols int, fetchChunkSize []byte) (*rows, erro
 }
 
 func (r *rows) fetchResults() error {
-	var localVals []driver.Value
-	var err error
-	var ns *netstring.Netstring
-outer:
 	for {
-		ns, err = r.hera.getResponse()
+		ns, err := r.hera.getResponse()
 		if err != nil {
-			break outer
+			return err
 		}
 		switch ns.Cmd {
 		case common.RcValue:
-			localVals = append(localVals, ns.Payload)
+			r.vals = append(r.vals, ns.Payload)
 		case common.RcOK:
-			break outer
+			return nil
 		case common.RcNoMoreData:
-			r.completed = true
-			break outer
-		}
-	}
-	//process localVals if length > 0
-	if len(localVals) > 0 {
-		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, r.hera.id, "Rows: cols = ", r.cols, ", numValues =", len(localVals))
-		}
-		if len(localVals) >= (r.cols*5 + 1) {
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, r.hera.id, "Column info present in data")
+				logger.GetLogger().Log(logger.Verbose, r.hera.id, "Rows: cols = ", r.cols, ", numValues =", len(r.vals))
 			}
-			r.vals = localVals[r.cols*5+1:]
-			//Create JSON string for column info
-			localVals = localVals[1 : r.cols*5+1]
-			for index := 0; index < len(localVals); {
-				columnData := localVals[index : index+5] //Each column has column info of size 5
-				columnInfoMap := make(map[string]string)
-				for index2 := 0; index2 < len(columnData); index2++ {
-					switch valType := columnData[index2].(type) {
-					case string:
-						columnInfoMap[columnInfo[index2]] = valType
-					case []byte:
-						columnInfoMap[columnInfo[index2]] = string(valType)
-					default:
-						if logger.GetLogger().V(logger.Verbose) {
-							logger.GetLogger().Log(logger.Verbose, r.hera.id, "Invalid data: ", valType)
-						}
-						columnInfoMap[columnInfo[index2]] = "UNDEFINED"
-					}
-				}
-				columnInfoStr, _ := json.Marshal(columnInfoMap)
-				r.colInfo = append(r.colInfo, string(columnInfoStr))
-				if logger.GetLogger().V(logger.Verbose) {
-					logger.GetLogger().Log(logger.Verbose, r.hera.id, "Column info :", string(columnInfoStr))
-				}
-				index = index + 5
-			}
-		} else {
-			r.vals = localVals
+			r.completed = true
+			return nil
 		}
 	}
-	return err
 }
 
 // Columns returns the names of the columns. The number of
@@ -122,9 +77,6 @@ outer:
 // string should be returned for that entry.
 func (r *rows) Columns() []string {
 	// TODO using hera column names command
-	if len(r.colInfo) > 0 {
-		return r.colInfo
-	}
 	return make([]string, r.cols)
 }
 
