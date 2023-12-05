@@ -22,9 +22,9 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -43,14 +43,14 @@ type racAct struct {
 	delay  bool
 }
 
-
 type racCfgKey struct {
-	inst int
+	inst   int
 	module string
 }
 
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
+
 var curTime int64
 var hostName string
 
@@ -185,7 +185,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 			cfgKey.inst = row.inst
 			cfgKey.module = row.module
 			_, ok := prev[cfgKey]
-			if (false == ok) {
+			if false == ok {
 				racRow := racCfg{}
 				racRow.inst = row.inst
 				racRow.status = "U"
@@ -193,7 +193,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 				racRow.module = row.module
 				prev[cfgKey] = racRow
 			}
-			if row.tm != prev[cfgKey].tm || (row.status != prev[cfgKey].status) {
+			if row.tm != prev[cfgKey].tm && (row.status != prev[cfgKey].status) {
 				racReq := racAct{instID: row.inst, tm: row.tm, delay: true}
 				if row.status == "R" {
 					racReq.delay = true
@@ -203,6 +203,11 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 					// any invalid command void the action
 					racReq.tm = 0
 					evt := cal.NewCalEvent("RACMAINT", "invalid_status", cal.TransOK, "")
+					evt.AddDataInt("inst", int64(row.inst))
+					evt.AddDataStr("module", row.module)
+					evt.AddDataStr("status", row.status)
+					evt.AddDataInt("tm", int64(row.tm))
+					evt.AddDataStr("priv_status", prev[cfgKey].status)
 					evt.Completed()
 				}
 
