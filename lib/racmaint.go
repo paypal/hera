@@ -193,7 +193,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 				racRow.module = row.module
 				prev[cfgKey] = racRow
 			}
-			if row.tm != prev[cfgKey].tm && (row.status != prev[cfgKey].status) {
+			if (row.tm != prev[cfgKey].tm || (row.status != prev[cfgKey].status)) && row.status != "U" {
 				racReq := racAct{instID: row.inst, tm: row.tm, delay: true}
 				if row.status == "R" {
 					racReq.delay = true
