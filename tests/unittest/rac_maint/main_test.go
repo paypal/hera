@@ -252,8 +252,11 @@ func TestRacMaintWithBothModules(t *testing.T) {
 		t.Fatalf("requires rac maint activation for main module status")
 	}
 
-	if 0 != testutil.RegexCountFile("module:HERA-TEST_TAF", "cal.log") {
-		t.Fatalf("Status 'U' should not log the RACMAINT_INFO_CHANGE event when previous status is also 'U'")
+	if 0 == testutil.RegexCountFile("module:HERA-TEST_TAF", "cal.log") {
+		t.Fatalf("Status 'U' should log the RACMAINT_INFO_CHANGE event")
+	}
+	if 0 != testutil.RegexCountFile("invalid_status", "cal.log") {
+		t.Fatalf("ram maint status 'U' should not skip with invalid-status event")
 	}
 	logger.GetLogger().Log(logger.Debug, "TestRacMaintWithBothModules done  -------------------------------------------------------------")
 }
