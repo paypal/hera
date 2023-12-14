@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.14.3
+FROM golang:1.18.2
 
 # Before doing a docker build, copy over the repo into this directory
 # tests/devdocker$ mkdir -p src/github.com/paypal/hera
@@ -25,8 +25,8 @@ ADD src /go/src
 ADD srv /srv
 
 RUN echo $(echo -n | openssl s_client -showcerts -connect www.github.com:443 2>/dev/null  | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p') >> /etc/ssl/certs/ca-certificates.crt
-RUN go get github.com/go-sql-driver/mysql
-RUN go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker
+RUN ( cd src/github.com/paypal/hera ; go get github.com/go-sql-driver/mysql )
+RUN ( cd src/github.com/paypal/hera ; go install github.com/paypal/hera/mux github.com/paypal/hera/worker/mysqlworker )
 
 CMD ["/srv/start.sh"]
 
