@@ -425,8 +425,9 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 			logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("shard info auto discovery: key_name=%s, num_values=%d", GetConfig().ShardKeyName, len(crd.shard.shardValues)))
 		}
 
-		if len(crd.shard.shardValues) > 0 {
+		if (len(crd.shard.shardValues) > 0) && GetConfig().ShardKeyValueTypeIsString {
 			// shard_key_auto_discovery
+			// restricting this event to only String type Shard Keys
 			evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardKeyAutodisc, cal.TransOK, "")
 			evt.AddDataStr("shardkey", GetConfig().ShardKeyName+"|"+crd.shard.shardValues[0])
 			evt.AddDataInt("shardid", int64(crd.shard.shardID))
