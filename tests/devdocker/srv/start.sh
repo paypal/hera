@@ -20,22 +20,22 @@ cd /srv
 ln -sf $GOPATH/bin/mux .
 ln -sf $GOPATH/bin/mysqlworker .
 
-export TWO_TASK="tcp(127.0.0.1:3306)/testschema"
+export TWO_TASK="tcp(mysql-11:3306)/testschema"
 # consider using dns so DBAs can move db nodes around
 
 # for read-write split
-#export TWO_TASK_READ=tcp(127.0.0.1:3306)/testschema
+#export TWO_TASK_READ=tcp(mysql-11:3306)/testschema
 
 # for read-replica retry
-#export TWO_TASK_STANDBY0=tcp(127.0.0.1:3306)/testschema
+#export TWO_TASK_STANDBY0=tcp(mysql-11:3306)/testschema
 
 # for sharding
-#export TWO_TASK_0=tcp(127.0.0.1:3306)/testschema
-#export TWO_TASK_READ_0=tcp(127.0.0.1:3306)/testschema
-#export TWO_TASK_STANDBY0_0=tcp(127.0.0.1:3306)/testschema
-#export TWO_TASK_1=tcp(127.0.0.1:3306)/testschema
-#export TWO_TASK_READ_1=tcp(127.0.0.1:3306)/testschema
-#export TWO_TASK_STANDBY0_1=tcp(127.0.0.1:3306)/testschema
+#export TWO_TASK_0=tcp(mysql-11:3306)/testschema
+#export TWO_TASK_READ_0=tcp(mysql-11:3306)/testschema
+#export TWO_TASK_STANDBY0_0=tcp(mysql-11:3306)/testschema
+#export TWO_TASK_1=tcp(mysql-11:3306)/testschema
+#export TWO_TASK_READ_1=tcp(mysql-11:3306)/testschema
+#export TWO_TASK_STANDBY0_1=tcp(mysql-11:3306)/testschema
 
 export username=root
 # docker command should pass in db password

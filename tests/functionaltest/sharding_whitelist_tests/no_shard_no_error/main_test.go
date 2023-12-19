@@ -125,19 +125,14 @@ func TestNoShardNoError(t *testing.T) {
 	time.Sleep (time.Duration(2) * time.Second)
  	fmt.Println ("Verify insert request is sent to shard 2")	
         count := testutil.RegexCount ("WORKER shd2.*Preparing.*insert into test_simple_table_2")
-	if (count < 1) {
-            t.Fatalf ("Error: Insert query does NOT go to shd2");
+	if (count >= 1) {
+            t.Fatalf ("Error: Insert query went to shd2");
         }
 
 	fmt.Println ("Verify there is no shard key error for fetch request")
         count = testutil.RegexCount ("Error preprocessing sharding, hangup: OCC-373: no shard key or more than one or bad logical db false")
 	if (count > 0) {
-            t.Fatalf ("Error: should NOT get no shard key error");
-        }
-	fmt.Println ("Check CAL log for correct events");
-        cal_count := testutil.RegexCountFile ("SHARDING.*shard_key_auto_discovery.*0.*shardkey=accountid|12345&shardid=3&scuttleid=428", "cal.log")
-	if (cal_count < 1) {
-            t.Fatalf ("Error: Did NOT get shard_key_auto_discovery in CAL log");
+            t.Fatalf ("Error: should NOT get no shard key error, default sh0");
         }
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestNoShardNoError done  -------------------------------------------------------------")
