@@ -134,10 +134,10 @@ func TestNoShardNoError(t *testing.T) {
 	if (count > 0) {
             t.Fatalf ("Error: should NOT get no shard key error");
         }
-	fmt.Println ("Check CAL log for correct events");
-        cal_count := testutil.RegexCountFile ("SHARDING.*shard_key_auto_discovery.*0.*shardkey=accountid|12345&shardid=3&scuttleid=428", "cal.log")
-	if (cal_count < 1) {
-            t.Fatalf ("Error: Did NOT get shard_key_auto_discovery in CAL log");
+	fmt.Println ("Check log for shard key auto discovery");
+        count = testutil.RegexCount ("shard key auto discovery: shardkey=accountid|12345&shardid=3&scuttleid=428")
+	if (count < 1) {
+            t.Fatalf ("Error: Did NOT get shard key auto discovery in log");
         }
 	testutil.DoDefaultValidation(t)
 	logger.GetLogger().Log(logger.Debug, "TestNoShardNoError done  -------------------------------------------------------------")
