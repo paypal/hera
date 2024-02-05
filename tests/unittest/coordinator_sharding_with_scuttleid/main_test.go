@@ -16,7 +16,6 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-var mx testutil.Mux
 var tableName string
 
 func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
@@ -59,14 +58,19 @@ func setupShardMap(t *testing.T) {
 		return
 	}
 	db.SetMaxIdleConns(0)
-	defer db.Close()
+	defer releaseDB(db)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	defer conn.Close()
+	defer func(conn *sql.Conn) {
+		err := conn.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing Conn: ", err)
+		}
+	}(conn)
 
 	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
 
@@ -80,13 +84,10 @@ func setupShardMap(t *testing.T) {
 }
 
 func before() error {
-	tableName = os.Getenv("TABLE_NAME")
-	if tableName == "" {
-		tableName = "jdbc_hera_test"
-	}
+	tableName = "jdbc_hera_scuttle_id_test"
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		// mysql
-		err := testutil.RunDML("create table jdbc_hera_test ( SCUTTLE_ID smallint not null, ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+		err := testutil.RunDML("create table " + tableName + " ( SCUTTLE_ID smallint not null, ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
 		if err != nil {
 			logger.GetLogger().Log(logger.Info, "Error while creating table")
 		}
@@ -96,17 +97,6 @@ func before() error {
 
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
-}
-
-func cleanup(ctx context.Context, conn *sql.Conn) error {
-	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*Cleanup*/delete from "+tableName+" where id != :id")
-	_, err := stmt.Exec(sql.Named("id", -123))
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
-	return nil
 }
 
 func TestShardingWithScuttleIDBasic(t *testing.T) {
@@ -121,14 +111,13 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 		return
 	}
 	db.SetMaxIdleConns(0)
-	defer db.Close()
-
+	defer releaseDB(db)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	cleanup(ctx, conn)
+
 	// insert one row in the table
 	tx, _ := conn.BeginTx(ctx, nil)
 	shardKey := 1
@@ -156,16 +145,19 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 	if !rows.Next() {
 		t.Fatalf("Expected 1 row")
 	}
-	var id, int_val uint64
-	var str_val sql.NullString
-	err = rows.Scan(&id, &int_val, &str_val)
+	var id, intVal uint64
+	var strVal sql.NullString
+	err = rows.Scan(&id, &intVal, &strVal)
 	if err != nil {
 		t.Fatalf("Expected values %s", err.Error())
 	}
-	if str_val.String != "val 1" {
-		t.Fatalf("Expected val 1 , got: %s", str_val.String)
+	if strVal.String != "val 1" {
+		t.Fatalf("Expected val 1 , got: %s", strVal.String)
 	}
-	rows.Close()
+	err = rows.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing rows: ", err)
+	}
 
 	//Change Scuttle ID value to in correct scuttle ID
 	shardKey = 2
@@ -181,9 +173,31 @@ func TestShardingWithScuttleIDBasic(t *testing.T) {
 		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
 	}
 	err = tx.Commit()
-	stmt.Close()
-	conn.Close()
 
+	//Add record2
+	// insert one row in the table
+	conn, err = db.Conn(ctx)
+	tx, _ = conn.BeginTx(ctx, nil)
+	shardKey = 2
+	scuttleID, err = testutil.ComputeScuttleId(shardKey, appCfg["max_scuttle"])
+	if err != nil {
+		t.Fatalf("Error generating scuttle ID %s\n", err.Error())
+	}
+	stmt, _ = tx.PrepareContext(ctx, "/*TestShardingBasicWithScuttleID*/insert into "+tableName+" (scuttle_id, id, int_val, str_val) VALUES(:scuttle_id, :id, :int_val, :str_val)")
+	_, err = stmt.Exec(sql.Named("scuttle_id", scuttleID), sql.Named("id", shardKey), sql.Named("int_val", time.Now().Unix()), sql.Named("str_val", "val 2"))
+
+	if err != nil {
+		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
+	}
+	err = tx.Commit()
+	err = stmt.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing statement: ", err)
+	}
+	err = conn.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing connection: ", err)
+	}
 	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingBasicWithScuttleID done  -------------------------------------------------------------")
 }
@@ -197,38 +211,64 @@ func TestShardingWithScuttleIDAndSetShard(t *testing.T) {
 		return
 	}
 	db.SetMaxIdleConns(0)
-	defer db.Close()
+	defer releaseDB(db)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
-	cleanup(ctx, conn)
 
 	mux := gosqldriver.InnerConn(conn)
-	mux.SetShardID(1)
+	err = mux.SetShardID(1)
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Failed to set shardId: ", err)
+	}
 	stmt, _ := conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndSetShard*/Select scuttle_id, id, int_val, str_val from "+tableName+" where id=1 and scuttle_id=:scuttle_id")
 	rows, _ := stmt.Query(sql.Named("scuttle_id", 2))
-	rows.Close()
-	stmt.Close()
+	if rows != nil {
+		err = rows.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing rows: ", err)
+		}
+	}
+	if stmt != nil {
+		err = stmt.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing statement: ", err)
+		}
+	}
 	out, err := testutil.BashCmd("grep 'Preparing: /\\*TestShardingWithScuttleIDAndSetShard\\*/' hera.log | grep 'WORKER shd1' | wc -l")
 	if (err != nil) || (len(out) == 0) {
 		err = nil
 		t.Fatalf("Request did not run on shard 1. err = %v, len(out) = %d", err, len(out))
 	}
 
-	mux.SetShardID(2)
+	err = mux.SetShardID(2)
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Failed to set shardId: ", err)
+	}
 	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithScuttleIDAndSetShard*/Select scuttle_id, id, int_val, str_val from "+tableName+" where id=2 and scuttle_id=:scuttle_id")
 	rows, _ = stmt.Query(sql.Named("scuttle_id", 1))
-	rows.Close()
-	stmt.Close()
+	if rows != nil {
+		err = rows.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing rows: ", err)
+		}
+	}
+	err = stmt.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing Statement: ", err)
+	}
 	out, err = testutil.BashCmd("grep 'Preparing: /\\*TestShardingWithScuttleIDAndSetShard\\*/' hera.log | grep 'WORKER shd2' | wc -l")
 	if (err != nil) || (len(out) == 0) {
 		err = nil
 		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
 	}
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing connection: ", err)
+	}
 	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndSetShard done  -------------------------------------------------------------")
 }
@@ -242,7 +282,7 @@ func TestShardingWithScuttleIDAndInvalidBindValue(t *testing.T) {
 		return
 	}
 	db.SetMaxIdleConns(0)
-	defer db.Close()
+	defer releaseDB(db)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	conn, err := db.Conn(ctx)
 	if err != nil {
@@ -264,7 +304,10 @@ func TestShardingWithScuttleIDAndInvalidBindValue(t *testing.T) {
 		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
 	}
 	tx.Commit()
-	conn.Close()
+	err = conn.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing connection: ", err)
+	}
 
 	conn, err = db.Conn(ctx)
 	//Test 2 select with no bind value scuttle_id
@@ -278,11 +321,28 @@ func TestShardingWithScuttleIDAndInvalidBindValue(t *testing.T) {
 		t.Fatal("Expected error HERA-208: scuttle_id mismatch")
 	}
 	if rows != nil {
-		rows.Close()
+		err := rows.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing rows object: ", err)
+		}
 	}
-	stmt.Close()
-
-	conn.Close()
+	if stmt != nil {
+		err = stmt.Close()
+		if err != nil {
+			logger.GetLogger().Log(logger.Info, "Error while closing statement: ", err)
+		}
+	}
+	err = conn.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing connection: ", err)
+	}
 	cancel()
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithScuttleIDAndWithoutBindValue done  -------------------------------------------------------------")
+}
+
+func releaseDB(db *sql.DB) {
+	err := db.Close()
+	if err != nil {
+		logger.GetLogger().Log(logger.Info, "Error while closing DB: ", err)
+	}
 }
