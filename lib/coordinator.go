@@ -53,6 +53,7 @@ type Coordinator struct {
 	clientHostPrefix string
 	clientHostName   string
 	poolName         string
+	clientPoolStack  string
 	// tells if the current request is SELECT
 	isRead bool
 	// for debugging
@@ -131,7 +132,7 @@ func (crd *Coordinator) Run() {
 				}
 				if crd.worker != nil {
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
-					go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+					go crd.worker.Recover(crd.workerpool, crd.ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 					crd.resetWorkerInfo()
 				}
 				return
@@ -153,7 +154,7 @@ func (crd *Coordinator) Run() {
 				//
 				if (wk != nil) && !(crd.inTransaction) && (ns.IsComposite()) {
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
-					go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SWITCH_RECOVER"}, common.StrandedSwitch)
+					go crd.worker.Recover(crd.workerpool, crd.ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SWITCH_RECOVER"}, common.StrandedSwitch)
 					crd.resetWorkerInfo()
 					//
 					// ignore messages from recovering worker
@@ -219,7 +220,7 @@ func (crd *Coordinator) Run() {
 						//
 						// not a worker failure. recover worker if failed to write to client
 						//
-						go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+						go crd.worker.Recover(crd.workerpool, crd.ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 					}
 					return
 				}
@@ -274,7 +275,7 @@ func (crd *Coordinator) Run() {
 						logger.GetLogger().Log(logger.Debug, crd.id, "Run: worker ctrlchan abort", crd.worker.pid)
 					}
 					GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
-					go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+					go crd.worker.Recover(crd.workerpool, crd.ticket, WorkerClientRecoverParam{allowSkipOciBreak: !msg.bindEvict}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 					crd.resetWorkerInfo()
 				} else {
 					// this should not happen, log in case it happens
@@ -306,7 +307,7 @@ func (crd *Coordinator) Run() {
 		et.Completed()
 
 		GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: crd.worker.shardID, wType: crd.worker.Type, instID: crd.worker.instID, oldCState: Assign, newCState: Idle})
-		go crd.worker.Recover(crd.workerpool, crd.ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+		go crd.worker.Recover(crd.workerpool, crd.ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 		crd.resetWorkerInfo()
 	}
 	if logger.GetLogger().V(logger.Debug) {
@@ -585,8 +586,12 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 			if pserr != nil {
 				logger.GetLogger().Log(logger.Alert, pserr)
 				evt := cal.NewCalEvent(cal.EventTypeClientInfo, crd.poolName, "1", pserr.Error())
+				if GetConfig().EnableCmdClientInfoToWorker {
+					evt.SetType("CLIENT_INFO_MUX")
+				}
 				evt.Completed()
 			}
+			crd.clientPoolStack = parentPoolStack
 		}
 	}
 	et.AddPoolStack()
@@ -607,6 +612,10 @@ func (crd *Coordinator) processClientInfoMuxCommand(clientInfo string) {
 		}
 	}
 	et.AddDataStr("corr_id", corrID)
+	// Rename after Adding PoolStack
+	if GetConfig().EnableCmdClientInfoToWorker {
+		et.SetType("CLIENT_INFO_MUX")
+	}
 	et.Completed()
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, crd.id, "client info:", clientInfo, "| server info:", serverInfo, "| corr_id:", corrID)
@@ -789,7 +798,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		// this can happen when Oracle returns inTransaction for read SQLs
 		if wait {
 			GetStateLog().PublishStateEvent(StateEvent{eType: ConnStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, oldCState: Assign, newCState: Idle})
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+			go worker.Recover(workerpool, ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 			return nil
 		}
 	}
@@ -822,9 +831,9 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		// donot return a stranded worker. recover inserts a good worker back to pool.
 		//
 		if err == ErrSaturationKill {
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
+			go worker.Recover(workerpool, ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 		} else {
-			go worker.Recover(workerpool, ticket, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
+			go worker.Recover(workerpool, ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
 		}
 	} else {
 		//
@@ -886,7 +895,7 @@ func parseBinds(request *netstring.Netstring) map[string]string {
  */
 func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, request *netstring.Netstring, clientWriter io.Writer, rqTimer *time.Timer) (bool, error) {
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequeset: starting")
+		logger.GetLogger().Log(logger.Verbose, crd.id, "coordinator dorequest: starting")
 	}
 	defer func() {
 		//
@@ -932,21 +941,51 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			if corrID == nil {
 				corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 			}
+
 			var ns []*netstring.Netstring
-			if !request.IsComposite() {
-				ns = make([]*netstring.Netstring, 2)
-				ns[0] = corrID
-				ns[1] = request
-			} else { // composite
-				rnss, _ := netstring.SubNetstrings(request)
-				ns = make([]*netstring.Netstring, len(rnss)+1)
-				ns[0] = corrID
-				for i := 0; i < len(rnss); i++ {
-					ns[i+1] = rnss[i]
+			if GetConfig().EnableCmdClientInfoToWorker {
+				// logger.GetLogger().Log(logger.Verbose, len(crd.poolName), len(crd.clientPoolStack))
+				logger.GetLogger().Log(logger.Verbose, len(crd.poolName))
+				if crd.poolName == "null" || len(crd.poolName) == 0 {
+					crd.poolName = "unset"
 				}
+				// clientInfoMessage := fmt.Sprintf("%s|%s", crd.poolName, crd.clientPoolStack)
+				clientInfoMessage := crd.poolName
+				logger.GetLogger().Log(logger.Verbose, "GetConfig().EnableCmdClientInfoToWorker:", GetConfig().EnableCmdClientInfoToWorker)
+				logger.GetLogger().Log(logger.Verbose, "clientInfoMessage:", clientInfoMessage)
+				clientInfo := netstring.NewNetstringFrom(common.CmdClientInfo, []byte(clientInfoMessage))
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 3)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					ns[2] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+2)
+					ns[0] = corrID
+					ns[1] = clientInfo
+					for i := 0; i < len(rnss); i++ {
+						ns[i+2] = rnss[i]
+					}
+				}
+				cnt += 2
+			} else {
+				if !request.IsComposite() {
+					ns = make([]*netstring.Netstring, 2)
+					ns[0] = corrID
+					ns[1] = request
+				} else { // composite
+					rnss, _ := netstring.SubNetstrings(request)
+					ns = make([]*netstring.Netstring, len(rnss)+1)
+					ns[0] = corrID
+					for i := 0; i < len(rnss); i++ {
+						ns[i+1] = rnss[i]
+					}
+				}
+				cnt++
 			}
 			plusAnyCorrId = netstring.NewNetstringEmbedded(ns)
-			cnt++
+
 		}
 		err := worker.Write(plusAnyCorrId, uint16(cnt))
 		if err != nil {

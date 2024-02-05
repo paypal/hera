@@ -323,7 +323,11 @@ func InitShardingCfg() error {
 		}
 		go func() {
 			for {
-				time.Sleep(time.Second * time.Duration(GetConfig().ShardingCfgReloadInterval))
+				reloadInterval := time.Second * time.Duration(GetConfig().ShardingCfgReloadInterval)
+				if reloadInterval < 100 * time.Millisecond {
+					reloadInterval = 100 * time.Millisecond
+				}
+				time.Sleep(reloadInterval)
 				for shard := 0; shard < GetConfig().NumOfShards; shard++ {
 					if db != nil {
 						db.Close()

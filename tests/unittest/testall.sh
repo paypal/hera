@@ -19,7 +19,10 @@ do
     fi
     if [ 0 != $rv ]
     then
-        #grep ^ *.log
+        echo "--- HERA_LOG ---"
+        grep ^ hera.log
+        echo "--- CAL LOG ---"
+        grep ^ cal.log
         popd
         #exit $rv
         overall=1

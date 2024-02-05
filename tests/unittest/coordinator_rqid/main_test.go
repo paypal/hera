@@ -52,10 +52,10 @@ func before() error {
 	if tableName == "" {
 		tableName = "jdbc_hera_test"
 	}
-        if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
+	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") { // mysql
 		// with testutil.RunDML, extra log line throws off test
 		testutil.DBDirect("create table jdbc_hera_test ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
-        }
+	}
 	return nil
 }
 

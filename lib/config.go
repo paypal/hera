@@ -120,6 +120,9 @@ type Config struct {
 	//
 	StateLogInterval int
 
+	// flag to enable CLIENT_INFO to worker
+	EnableCmdClientInfoToWorker bool
+
 	// if TAF is enabled
 	EnableTAF bool
 	// Timeout for a query to run on the primary, before fallback to secondary
@@ -340,6 +343,8 @@ func InitConfig() error {
 	gAppConfig.ShardKeyValueTypeIsString = cdb.GetOrDefaultBool("shard_key_value_type_is_string", false)
 
 	gAppConfig.HostnamePrefix = parseMapStrStr(cdb.GetOrDefaultString("hostname_prefix", ""))
+
+	gAppConfig.EnableCmdClientInfoToWorker = cdb.GetOrDefaultBool("enable_client_info_to_worker", false)
 
 	gAppConfig.CfgFromTns = cdb.GetOrDefaultBool("cfg_from_tns", true)
 	gAppConfig.CfgFromTnsOverrideNumShards = cdb.GetOrDefaultInt("cfg_from_tns_override_num_shards", -1)

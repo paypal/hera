@@ -14,6 +14,7 @@ import (
 
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
+	"github.com/paypal/hera/client/gosqldriver"
 )
 
 /*
@@ -42,8 +43,8 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
-	appcfg["rac_sql_interval"] = "2"
-	appcfg["db_heartbeat_interval"] = "3"
+	appcfg["rac_sql_interval"] = "0"
+	appcfg["db_heartbeat_interval"] = "20"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -85,6 +86,9 @@ func TestCalClientSessionDur(t *testing.T) {
 		t.Fatalf("Error getting connection %s\n", err.Error())
 	}
 
+	mux := gosqldriver.InnerConn(conn)
+	mux.SetCalCorrID("aaaf5e4a2758e")
+
 	stmt, err := conn.PrepareContext(ctx, "select 'foo' from dual")
 	if err != nil {
 		t.Fatalf("Error with the prepared statement")
@@ -98,15 +102,149 @@ func TestCalClientSessionDur(t *testing.T) {
 
 	cancel()
 	conn.Close()
-	clientSessionDurLogScan(t)
+	err = clientSessionDurLogScan()
+	if err != nil {
+		t.Fatalf("clientSessionDurLogScan %v", err)
+	}
 	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionDur done  -------------------------------------------------------------")
 }
 
-func clientSessionDurLogScan(t *testing.T){
+func TestCalClientSessionCorrId(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionCorrId begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	time.Sleep(5*time.Second)
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	conn, err := db.Conn(ctx);
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+	mux := gosqldriver.InnerConn(conn)
+	// mux.SetCalCorrID("583f5e4a27aaa")
+	mux.SetCalCorrID("583f5e4a27aaa&PoolStack: testApplication:*CalThreadId=1572864*TopLevelTxnStartTime=18aa9970c9c*Host=testNode")
+
+	rows, _ := conn.QueryContext(ctx, "SELECT version()")
+	// rows, _ := stmt.Query(1)
+	if !rows.Next() {
+		t.Fatalf("Expected 1 row")
+	}
+	rows.Close()
+
+	if testutil.RegexCountFile("CmdClientCalCorrelationID: CorrId=583f5e4a27aaa", "hera.log") < 1 {
+		t.Fatalf("Error: should have handled CmdClientCalCorrelationID")
+	}
+
+	if testutil.RegexCountFile("corr_id_= 583f5e4a27aaa", "hera.log") < 1 {
+		t.Fatalf("Error: should have parsed the input")
+	}
+
+	if testutil.RegexCountFile("CLIENT_SESSION.*corrid=583f5e4a27aaa", "cal.log") != 1 {
+		t.Fatalf("Error: should have corrid in CLIENT_SESSION")
+	}
+
+	cancel()
+	conn.Close()
+
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionCorrId done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+}
+
+func TestCalClientSessionCorrIdInvalid(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionCorrIdInvalid begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	time.Sleep(5*time.Second)
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	conn, err := db.Conn(ctx);
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+
+	mux := gosqldriver.InnerConn(conn)
+	mux.SetCalCorrID("PoolStack: testApplication:*CalThreadId=1572864*TopLevelTxnStartTime=18aa9970*Host=testNode")
+
+	rows, _ := conn.QueryContext(ctx, "SELECT version()")
+	// rows, _ := stmt.Query(1)
+	if !rows.Next() {
+		t.Fatalf("Expected 1 row")
+	}
+	rows.Close()
+
+	if testutil.RegexCountFile("corrid not in expected format.*PoolStack: testApplication", "hera.log") < 1 {
+		t.Fatalf("Error: should have thrown error due to corrId size")
+	}
+
+	if testutil.RegexCountFile("CLIENT_SESSION.*corrid=unset", "cal.log") != 1 {
+		t.Fatalf("Error: should have corrid as unset")
+	}
+
+	cancel()
+	conn.Close()
+
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionCorrIdInvalid done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+}
+
+func TestCalClientSessionEmptyCorrId(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionEmptyCorrId begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	time.Sleep(5*time.Second)
+	shard := 0
+	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
+	if err != nil {
+		t.Fatal("Error starting Mux:", err)
+		return
+	}
+	db.SetMaxIdleConns(0)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	conn, err := db.Conn(ctx);
+	if err != nil {
+		t.Fatalf("Error getting connection %s\n", err.Error())
+	}
+
+	mux := gosqldriver.InnerConn(conn)
+	mux.SetCalCorrID("")
+
+	rows, _ := conn.QueryContext(ctx, "SELECT version()")
+	// rows, _ := stmt.Query(1)
+	if !rows.Next() {
+		t.Fatalf("Expected 1 row")
+	}
+	rows.Close()
+
+	if testutil.RegexCountFile("corrid not in expected format: CorrId=", "hera.log") < 1 {
+		t.Fatalf("Error: should have thrown error due to corrId format")
+	}
+
+	if testutil.RegexCountFile("CLIENT_SESSION.*corrid=unset", "cal.log") != 2 {
+		t.Fatalf("Error: should have corrid as unset")
+	}
+
+	cancel()
+	conn.Close()
+
+	logger.GetLogger().Log(logger.Debug, "TestCalClientSessionEmptyCorrId done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+}
+
+func clientSessionDurLogScan() (error){
 	file, err := os.Open("cal.log")
 	defer file.Close()
 	if err != nil {
-		t.Fatalf("Error in opening cal.log")
+		fmt.Printf("Error in opening cal.log")
+		return err
 	}
 	re := regexp.MustCompile("[ |\t][0-9]+\\.[0-9]")
 	cliSession_re := regexp.MustCompile("CLIENT_SESSION.*corr_id_")
@@ -116,12 +254,15 @@ func clientSessionDurLogScan(t *testing.T){
 		if(cliSession_re.MatchString(line)){
 			_, err := strconv.ParseFloat(strings.TrimSpace(re.FindAllString(line, -1)[0]),32)
 			if(err != nil){
-				t.Fatalf("Num error for CLIENT_SESSION duration")
+				fmt.Printf("Num error for CLIENT_SESSION duration")
+				return err
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		t.Fatalf("cal.log read error")
+		fmt.Printf("cal.log read error")
+		return err
 	}
+	return nil
 }

@@ -24,7 +24,6 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
         appcfg["bind_port"] = "31002"
         appcfg["log_level"] = "5"
         appcfg["log_file"] = "hera.log"
-        appcfg["sharding_cfg_reload_interval"] = "0"
         appcfg["rac_sql_interval"] = "0"
 
 	//For sharding
@@ -144,11 +143,13 @@ func TestShardBasic(t *testing.T) {
             t.Fatalf ("Error: No Shard key event for fetch request in CAL");
         }
 	
- 	fmt.Println ("Check CAL log for correct events");
-        cal_count = testutil.RegexCountFile ("SHARDING.*shard_key_auto_discovery.*0.*shardkey=accountid|12346&shardid=3&scuttleid=", "cal.log")
-	if (cal_count < 1) {
-            t.Fatalf ("Error: No shard_key_auto_discovery event seen in CAL");
+ 	fmt.Println ("Check log for shard key auto discovery");
+        count = testutil.RegexCount ("shard key auto discovery: shardkey=accountid|12346&shardid=3&scuttleid=")
+	if (count < 1) {
+            t.Fatalf ("Error: Did NOT get shard key auto discovery in log");
         }
+	
+	fmt.Println ("Check CAL log for correct events")
         cal_count = testutil.RegexCountFile ("T.*API.*CLIENT_SESSION_3", "cal.log")
 	if (cal_count < 1) {
             t.Fatalf ("Error: Request is not executed by shard 3 as expected");

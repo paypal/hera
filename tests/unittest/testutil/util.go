@@ -81,6 +81,7 @@ func BackupAndClear(logbasename, grpName string) {
 	bakname := ""
 	for {
 		bakname = fmt.Sprintf("%s%d.log", logbasename, num)
+		num += 1
 		_, err := os.Stat(bakname)
 		if os.IsNotExist(err) {
 			break
@@ -111,8 +112,11 @@ func RunMysql(sql string) (string, error) {
 	cmd.Stdin = strings.NewReader(sql)
 	var cmdOutBuf bytes.Buffer
 	cmd.Stdout = &cmdOutBuf
-	cmd.Run()
-	return cmdOutBuf.String(), nil
+	err := cmd.Run()
+	if err != nil {
+		logger.GetLogger().Log(logger.Debug, "RunMysql", "sql=", sql, "err=", err, "out=", cmdOutBuf.String())
+	}
+	return cmdOutBuf.String(), err
 }
 
 func RunDML(dml string) error {
@@ -150,6 +154,7 @@ func RunDML(dml string) error {
 func RegexCount(regex string) int {
 	return RegexCountFile(regex, "hera.log")
 }
+
 func RegexCountFile(regex string, filename string) int {
 	time.Sleep(10 * time.Millisecond)
 	fa, err := regexp.Compile(regex)
@@ -217,4 +222,37 @@ func ComputeScuttleId(shardKey interface{}, maxScuttles string) (uint64, error) 
 		return 0, errors.New(fmt.Sprintf("Provided incorrect shardkey type: %v for tests for shard-key: %v", keyType, shardKey))
 	}
 	return 0, errors.New(fmt.Sprintf("Failed to compute scuttle ID for shardKey: %v", shardKey))
+}
+
+func Fatal(msg ...interface{}) {
+	fmt.Println(msg...)
+	os.Exit(2)
+}
+
+func Fatalf(str string, msg ...interface{}) {
+	fmt.Printf(str, msg...)
+	os.Exit(1)
+}
+
+func ClearLogsData() {
+	heraFile, err := os.OpenFile(runFolder+"/hera.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer heraFile.Close()
+
+	statelogFile, err := os.OpenFile(runFolder+"/state.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer statelogFile.Close()
+
+	calLogFile, err := os.OpenFile(runFolder+"/cal.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer calLogFile.Close()
 }

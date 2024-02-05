@@ -141,10 +141,12 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 }
 
 func before() error {
+	fmt.Printf("before function")
 	return nil
 }
 
 func TestMain(m *testing.M) {
+	fmt.Printf("TestMain function")
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
@@ -158,6 +160,7 @@ func mkConn(t *testing.T, db *sql.DB) (*sql.Conn, context.CancelFunc) {
 }
 
 func TestBadPassword(t *testing.T) {
+	fmt.Printf("badPass disabled function")
 	return
 	logger.GetLogger().Log(logger.Debug, "TestBadPassword +++++++++++++")
 
@@ -201,6 +204,7 @@ func TestBadPassword(t *testing.T) {
 }
 
 func TestLimitConcurrentInit(t *testing.T) {
+	fmt.Printf("T Lim Concur Init function")
 	logger.GetLogger().Log(logger.Debug, "TestLimitConcurrentInit +++++++++++++")
 	if max_conn < 15 {
 		t.Error("max_conn likely too low to see TestLimitConcurrentInit")
@@ -211,6 +215,8 @@ func TestLimitConcurrentInit(t *testing.T) {
 }
 
 func TestSkipOciBreak(t *testing.T) {
+	logMsg := ""
+	fmt.Printf("Skip OCI break function")
 	logger.GetLogger().Log(logger.Debug, "TestSkipOciBreak +++++++++++++")
 	hostname, _ := os.Hostname()
 	fmt.Println("Hostname: ", hostname)
@@ -219,14 +225,17 @@ func TestSkipOciBreak(t *testing.T) {
 		t.Fatal("Error db conn", err)
 		return
 	}
+	logMsg = "db conn ok"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
 	conn, _ := mkConn(t, db)
 	defer conn.Close()
+	logMsg = "pre tbl rm"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	execSql(t, conn, "delete from resilience_at_load", false)
 	// execSql() commits, mux releases conn
 
+	logMsg = "add load"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	// simulate high load
 	numConn := 6
 	stuckConn := make([]*sql.Conn, numConn)
@@ -236,11 +245,13 @@ func TestSkipOciBreak(t *testing.T) {
 		stuckConn[i] = c
 		stuckTx[i] = execSql(t, c, fmt.Sprintf("insert into resilience_at_load(id,note)values(%d,'stuckConn')", 1000+i), true)
 	}
+	logMsg = "add load done"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	time.Sleep(1000*time.Millisecond)
 
 	// helper starts sql and rudely stops
 	// first with insert which stays in wait state for the client
 	// we want to keep current behavior
+	logMsg = "doing rude.go"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	out, err := exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go", "insert").Output()
 	if err != nil {
 		fmt.Printf("go run rude.go - output %s", out)
@@ -249,12 +260,14 @@ func TestSkipOciBreak(t *testing.T) {
 	time.Sleep(50*time.Millisecond)
 
 	// check for behavior we want
+	logMsg = "pre chk"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	if testutil.RegexCountFile("is high load, skipping", "hera.log") != 0 {
 		t.Fatal("skip oci break, on waiting db txn")
 	}
 
 
 	// slow query, client timesout/crashes
+	logMsg = "add slow clients"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	out, err = exec.Command(os.Getenv("GOROOT")+"/bin/go", "run", "cmd/rude.go", "usleep").Output()
 	if err != nil {
 		fmt.Printf("go run rude.go - output %s", out)
@@ -263,16 +276,19 @@ func TestSkipOciBreak(t *testing.T) {
 	time.Sleep(50*time.Millisecond)
 
 	// check for behavior we want
+	logMsg = "pre chk, slow"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	if testutil.RegexCountFile("is high load, skipping", "hera.log") < 1 {
 		t.Fatal("Error did not skip oci break")
 	}
 
 	// start restore
 	// release stuckConn
+	logMsg = "pre restore"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	for i := 0; i < numConn; i++ {
 		stuckTx[i].Rollback()
 		stuckConn[i].Close()
 	}
+	logMsg = "chk restore"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	acpt4 := 0
 	for i := 0; i < 33; i++ {
 		acpt4, _ = testutil.StatelogGetField(2)
@@ -285,6 +301,7 @@ func TestSkipOciBreak(t *testing.T) {
 	if int(max_conn) != acpt4 {
 		t.Fatal("conn's did not restore")
 	}
+	logMsg = "skip oci break test done"; fmt.Printf(logMsg); logger.GetLogger().Log(logger.Debug, logMsg)
 	logger.GetLogger().Log(logger.Debug, "TestSkipOciBreak +++++++++++++ done")
 }
 

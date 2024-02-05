@@ -15,7 +15,8 @@ import (
 	"strings"
 	"testing"
         "github.com/paypal/hera/client/gosqldriver"
-	_"github.com/paypal/hera/client/gosqldriver/tcp"
+	_ "github.com/paypal/hera/client/gosqldriver/tcp"
+	_ "github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
 )
 
@@ -138,114 +139,22 @@ func RunMysql(sql string) (string, error) {
 
 
 func RunDML(dml string) error {
-	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
-	if err != nil {
-		return err
-	}
-	db.SetMaxIdleConns(0)
-	defer db.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// cancel must be called before conn.Close()
-	defer cancel()
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-        mux := gosqldriver.InnerConn(conn)
-        err= mux.SetClientInfo(GetClientInfo().Appname, GetClientInfo().Host)
-        if err != nil {
-               fmt.Println("Error sending Client Info:", err)
-        }
-	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, dml)
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
+	DBDirect(dml, "127.0.0.1" /* os.Getenv("MYSQL_IP") */, "heratestdb", MySQL)
 	return nil
 }
 
 func RunDML1(dml string) error {
-        hostname := GetHostname()
-        fmt.Println ("Hostname: ", hostname);
-        db, err := sql.Open("hera", hostname + ":31002")
-        if err != nil {
-                fmt.Println("Error connecting to OCC:", err)
-                return err
-        }
-        db.SetMaxIdleConns(0)
-        defer db.Close()
-
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        // cleanup and insert one row in the table
-        conn, err := db.Conn(ctx)
-        if err != nil {
-                return err
-        }
-        defer conn.Close()
-        // cancel must be called before conn.Close()
-        defer cancel()
-        mux := gosqldriver.InnerConn(conn)
-        err= mux.SetClientInfo(GetClientInfo().Appname, GetClientInfo().Host)
-        if err != nil {
-               fmt.Println("Error sending Client Info:", err)
-        }
-        tx, _ := conn.BeginTx(ctx, nil)
-        stmt, _ := tx.PrepareContext(ctx, dml)
-        defer stmt.Close()
-        _, err = stmt.Exec()
-        if err != nil {
-                return err
-        }
-        err = tx.Commit()
-        if err != nil {
-                return err
-        }
-
-        return nil
+	return RunDML(dml)
 }
 
 func PopulateShardMap(max_scuttle int) error {
-        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
-        if err != nil {
-                return err
-        }
-        db.SetMaxIdleConns(0)
-        defer db.Close()
-
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        // cancel must be called before conn.Close()
-        defer cancel()
-        // cleanup and insert one row in the table
-        conn, err := db.Conn(ctx)
-        if err != nil {
-                return err
-        }
-        defer conn.Close()
-        tx, _ := conn.BeginTx(ctx, nil)
         for x := 0; x < max_scuttle; x++ {
 	    dml := fmt.Sprint ("INSERT INTO hera_shard_map VALUES (", x, ", ",  x % 5, ",'Y','Y','Y','Initial')")
-            stmt, _ := tx.PrepareContext(ctx, dml)
-       	    defer stmt.Close()
-            _, err = stmt.Exec()
+            err := RunDML(dml)
+            if err != nil {
+                return err
+            }
 	}
-        if err != nil {
-                return err
-        }
-        err = tx.Commit()
-        if err != nil {
-                return err
-        }
-
-        fmt.Println ("=== Finished loading shard map ===")
         return nil
 }
 
@@ -260,37 +169,13 @@ func PopulateWhilelistShardMap() error {
 	query[6] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 444, 4, 'Y', 'Y' )"
 	query[7] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 555, 5, 'Y', 'Y' )"
 	query[8] = "INSERT INTO hera_whitelist ( enable, shard_key, shard_id, read_status, write_status ) VALUES ( 'Y', 1234, 4, 'Y', 'Y' )"
-        db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", 0))
-        if err != nil {
-                return err
-        }
-        db.SetMaxIdleConns(0)
-        defer db.Close()
 
-        ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-        // cancel must be called before conn.Close()
-        defer cancel()
-        // cleanup and insert one row in the table
-        conn, err := db.Conn(ctx)
-        if err != nil {
-                return err
-        }
-        defer conn.Close()
-        tx, _ := conn.BeginTx(ctx, nil)
         for x := 0; x < len (query) ; x++ {
-            stmt, _ := tx.PrepareContext(ctx, query[x])
-            defer stmt.Close()
-            _, err = stmt.Exec() 
-        }
-        if err != nil {
+            err := RunDML(query[x])
+            if err != nil {
                 return err
+            }
         }
-        err = tx.Commit()
-        if err != nil {
-                return err
-        }
-
-        fmt.Println ("***Done loading shard map")
         return nil
 }
 
@@ -606,10 +491,5 @@ func ModifyOpscfgParam (t *testing.T, logfile string, opscfg_param string, opscf
 }
 
 func GetHostname() string {
-        hostname,err := os.Hostname()
-
-        if err != nil {
-                hostname = "127.0.0.1" 
-        }
-        return hostname
+        return "127.0.0.1"
 }

@@ -398,6 +398,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 					}
 					evt := cal.NewCalEvent(EvtTypeSharding, EvtNameBadShardKey, cal.TransOK, "")
 					evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+					evt.AddDataStr("shard_key", GetConfig().ShardKeyName)
 					evt.Completed()
 					ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoShardValue.Error()))
 					crd.respond(ns.Serialized)
@@ -430,8 +431,9 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 						}
 						evt := cal.NewCalEvent(EvtTypeSharding, EvtNameNoShardKey, cal.TransOK, "")
 						evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+						evt.AddDataStr("shard_key", GetConfig().ShardKeyName)
 						evt.Completed()
-						ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoShardKey.Error()))
+						ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard_key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 						crd.respond(ns.Serialized)
 						return false /*don't hangup*/, ErrNoShardKey
 					}
@@ -469,15 +471,30 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 
 		if len(crd.shard.shardValues) > 0 {
 			// shard_key_auto_discovery
-			evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardKeyAutodisc, cal.TransOK, "")
-			evt.AddDataStr("shardkey", GetConfig().ShardKeyName+"|"+crd.shard.shardValues[0])
-			evt.AddDataInt("shardid", int64(crd.shard.shardID))
-			if len(crd.shard.shardRecs) > 0 {
-				evt.AddDataInt("scuttleid", int64(crd.shard.shardRecs[0].bin))
-				evt.AddDataInt("flags", int64(crd.shard.shardRecs[0].flags))
+			shardkey := GetConfig().ShardKeyName + "|" + crd.shard.shardValues[0]
+			shardid := int64(crd.shard.shardID)
+			shardRecs := crd.shard.shardRecs
+			sqlhash := int64(uint32(crd.sqlhash))
+			if logger.GetLogger().V(logger.Verbose) {
+				logmsg := fmt.Sprintf("shard key auto discovery: shardkey=%s&shardid=%d", shardkey, shardid)
+				if len(shardRecs) > 0 {
+					logmsg += fmt.Sprintf("&scuttleid=%d&flags=%d", int64(shardRecs[0].bin), int64(shardRecs[0].flags))
+				}
+				logmsg += fmt.Sprintf("&sqlhash=%d", sqlhash)
+				logger.GetLogger().Log(logger.Verbose, logmsg)
 			}
-			evt.AddDataInt("sqlhash", int64(uint32(crd.sqlhash)))
-			evt.Completed()
+			// restricting cal event to only String type Shard Keys
+			if GetConfig().ShardKeyValueTypeIsString {
+				evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardKeyAutodisc, cal.TransOK, "")
+				evt.AddDataStr("shardkey", shardkey)
+				evt.AddDataInt("shardid", shardid)
+				if len(shardRecs) > 0 {
+					evt.AddDataInt("scuttleid", int64(shardRecs[0].bin))
+					evt.AddDataInt("flags", int64(shardRecs[0].flags))
+				}
+				evt.AddDataInt("sqlhash", sqlhash)
+				evt.Completed()
+			}
 		}
 
 		//This will handle scuttleID verification as part of this it compares scuttleID value with bucket value in shardRec
@@ -535,7 +552,7 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 			crd.shard.shardRecs[0] = &ShardMapRecord{logical: 0}
 			crd.shard.shardID = 0
 		} else {
-			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoShardKey.Error()))
+			ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard_key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 			crd.respond(ns.Serialized)
 			hangup := ((len(crd.shard.shardValues) > 0) && ((crd.shard.shardRecs[0].flags & ShardMapRecordFlagsBadLogical) != 0))
 			return hangup, ErrNoShardKey
@@ -549,9 +566,10 @@ func (crd *Coordinator) verifyValidShard() (bool, error) {
 		}
 		evt := cal.NewCalEvent(EvtTypeSharding, EvtNameNoShardKey, cal.TransOK, "")
 		evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+		evt.AddDataStr("shard_key", GetConfig().ShardKeyName)
 		evt.Completed()
 
-		ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoShardKey.Error()))
+		ns := netstring.NewNetstringFrom(common.RcError, []byte(fmt.Sprintf("%s, shard_key=%s", ErrNoShardKey.Error(), GetConfig().ShardKeyName)))
 		crd.respond(ns.Serialized)
 		hangup := ((len(crd.shard.shardValues) > 0) && ((crd.shard.shardRecs[0].flags & ShardMapRecordFlagsBadLogical) != 0))
 		return hangup, ErrNoShardKey
