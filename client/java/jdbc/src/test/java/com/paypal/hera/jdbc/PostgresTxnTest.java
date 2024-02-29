@@ -180,7 +180,7 @@ public class PostgresTxnTest {
 			dbConn.setAutoCommit(true);
 			try {
 				// Syntax error
-				pst2 = dbConn.prepareStatement("insert into "+TEST_TABLE+" ( id , note ) values ( ?, ? )" );
+				pst2 = dbConn.prepareStatement("inset into "+TEST_TABLE+" ( id , note ) values ( ?, ? )" );
 				pst2.setInt(1, 15);
 				pst2.setString(2, "fifteen");
 				pst2.executeUpdate();

@@ -77,6 +77,7 @@ The following sections explain the process for manually building mux without Doc
 2.  Install [MySQL](http://dev.mysql.com/downloads/mysql), [Oracle](https://www.oracle.com/index.html) or [PostgresSQL](https://www.postgresql.org/download/).
 3.  Install the [MySQL driver](https://github.com/go-sql-driver/mysql), [Oracle driver](https://github.com/go-goracle/goracle) and the [PostgreSQL driver](https://github.com/lib/pq)
 4.  Install Oracle instant client.
+5.  Install GCC.
 
 ### Build Binaries
 
@@ -89,7 +90,7 @@ The following sections explain the process for manually building mux without Doc
 
     Clone the source code from [github](https://github.com/paypal/hera)
     ```
-    git clone git@github.com:paypal/hera src/github.com/paypal/hera
+    git clone https://github.com/paypal/hera src/github.com/paypal/hera
     ```
     Option 2
 
@@ -101,6 +102,7 @@ The following sections explain the process for manually building mux without Doc
     ```
 3.  Install the dependencies: MySQL, Oracle and PostgreSQL driver
     ```
+    cd src/github.com/paypal/hera
     go get github.com/go-sql-driver/mysql
     go get github.com/godror/godror
     go get github.com/lib/pq
