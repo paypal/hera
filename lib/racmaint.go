@@ -22,9 +22,9 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -43,14 +43,14 @@ type racAct struct {
 	delay  bool
 }
 
-
 type racCfgKey struct {
-	inst int
+	inst   int
 	module string
 }
 
 // MaxRacID is the maximum number of racs supported
 const MaxRacID = 16
+
 var curTime int64
 var hostName string
 
@@ -148,10 +148,6 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	}
 	defer rows.Close()
 
-	// TODO: we could have this cal transaction however, it is no longer needed since
-	// there is an EXEC cal transaction by the worker
-	evt := cal.NewCalEvent("FETCH_MGMT", fmt.Sprintf("MAINT_%d", shard), cal.TransOK, "")
-	evt.Completed()
 	for rows.Next() {
 		row := racCfg{}
 		// use NullXYZ types for NULLABLE db columns
@@ -185,7 +181,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 			cfgKey.inst = row.inst
 			cfgKey.module = row.module
 			_, ok := prev[cfgKey]
-			if (false == ok) {
+			if false == ok {
 				racRow := racCfg{}
 				racRow.inst = row.inst
 				racRow.status = "U"
