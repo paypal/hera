@@ -193,3 +193,26 @@ func Fatalf(str string, msg ...interface{}) {
 	fmt.Printf(str, msg...)
 	os.Exit(1)
 }
+
+func ClearLogsData() {
+	heraFile, err := os.OpenFile(runFolder+"/hera.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer heraFile.Close()
+
+	statelogFile, err := os.OpenFile(runFolder+"/state.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer statelogFile.Close()
+
+	calLogFile, err := os.OpenFile(runFolder+"/cal.log", os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to clear Hera log file")
+		return
+	}
+	defer calLogFile.Close()
+}
