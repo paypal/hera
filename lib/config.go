@@ -41,6 +41,7 @@ type Config struct {
 	NumStdbyDbs        int
 	InitialMaxChildren int
 	ReadonlyPct        int
+	TafPct 	   int
 	//
 	// backlog
 	//
@@ -392,6 +393,7 @@ func InitConfig() error {
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
+	gAppConfig.TafPct = cdb.GetOrDefaultInt("taf_children_pct", 100)
 	gAppConfig.InitialMaxChildren = numWorkers
 	if gAppConfig.EnableWhitelistTest {
 		if gAppConfig.NumWhitelistChildren < 2 {
@@ -564,6 +566,8 @@ func (cfg *Config) NumWorkersCh() <-chan int {
 func (cfg *Config) GetBacklogLimit(wtype HeraWorkerType, shard int) int {
 	if wtype == wtypeRO {
 		return gAppConfig.BacklogPct * GetNumRWorkers(shard) / 100
+	} else if wtype == wtypeStdBy {
+		return gAppConfig.BacklogPct * GetNumStdByWorkers(shard) / 100
 	}
 	return gAppConfig.BacklogPct * GetNumWWorkers(shard) / 100
 }
@@ -631,6 +635,22 @@ func GetNumRWorkers(shard int) int {
 	num := 0
 	if gAppConfig.ReadonlyPct > 0 {
 		num = GetNumWorkers(shard) * gAppConfig.ReadonlyPct / 100
+		if num == 0 {
+			num = 1
+		}
+	}
+	return num
+}
+
+// GetNumStdByWorkers gets the number of workers for the "StdBy" pool
+func GetNumStdByWorkers(shard int) int {
+	numWhiteList := GetWhiteListChildCount(shard)
+	if numWhiteList > 0 {
+		return numWhiteList
+	}
+	num := GetNumWorkers(shard)
+	if gAppConfig.TafPct > 0 {
+		num = num * gAppConfig.TafPct / 100
 		if num == 0 {
 			num = 1
 		}

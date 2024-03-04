@@ -179,6 +179,10 @@ There are two types of configuration parameters: **static parameters** and **dyn
 + In case of TAF (Transparent Application Failover), it is the timeout in milliseconds to wait for a query to complete before it is canceled to be re-tried on the falback database
 + default: 200
 
+#### taf_children_pct
++ If TAF is enabled, this is the percentage of workers connecting to a fallback database. By default, the fallback pool size is same as the primary pool size.
++ default: 100
+
 #### readonly_children_pct
 + If R/W split is enabled this is the percentage of workers connecting to a read node.
 + default: 0
