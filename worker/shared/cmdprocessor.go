@@ -660,6 +660,7 @@ outloop:
 			for i := range writeCols {
 				readCols[i] = &writeCols[i]
 			}
+			fetchBufferLen := 0
 			for cp.rows.Next() {
 				err = cp.rows.Scan(readCols...)
 				if err != nil {
@@ -681,8 +682,10 @@ outloop:
 						logger.GetLogger().Log(logger.Debug, "query result", outstr)
 					} // causes high volume logs and can cause CI test issues */
 					nss = append(nss, netstring.NewNetstringFrom(common.RcValue, []byte(outstr)))
+					fetchBufferLen += len(outstr)
 				}
 			}
+			calt.AddDataInt("psize", int64(fetchBufferLen))
 			if len(nss) > 0 {
 				resns := netstring.NewNetstringEmbedded(nss)
 				err = WriteAll(cp.SocketOut, resns)
