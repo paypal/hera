@@ -148,10 +148,6 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	}
 	defer rows.Close()
 
-	// TODO: we could have this cal transaction however, it is no longer needed since
-	// there is an EXEC cal transaction by the worker
-	evt := cal.NewCalEvent("FETCH_MGMT", fmt.Sprintf("MAINT_%d", shard), cal.TransOK, "")
-	evt.Completed()
 	for rows.Next() {
 		row := racCfg{}
 		// use NullXYZ types for NULLABLE db columns
