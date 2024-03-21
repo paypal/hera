@@ -100,7 +100,7 @@ func getSQL() string {
 /*
 	load the physical to logical maping
 */
-func loadMap(ctx context.Context, db *sql.DB) error {
+func loadMap(ctx *context.Context, db *sql.DB, queryTimeoutInterval time.Duration) error {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Begin loading shard map")
 	}
@@ -109,17 +109,18 @@ func loadMap(ctx context.Context, db *sql.DB) error {
 			logger.GetLogger().Log(logger.Verbose, "Done loading shard map")
 		}()
 	}
-
-	conn, err := db.Conn(ctx)
+	queryContext, cancel := context.WithTimeout(*ctx, queryTimeoutInterval)
+	defer cancel()
+	conn, err := db.Conn(queryContext)
 	if err != nil {
 		return fmt.Errorf("Error (conn) loading shard map: %s", err.Error())
 	}
 	defer conn.Close()
-	stmt, err := conn.PrepareContext(ctx, getSQL())
+	stmt, err := conn.PrepareContext(queryContext, getSQL())
 	if err != nil {
 		return fmt.Errorf("Error (stmt) loading shard map: %s", err.Error())
 	}
-	rows, err := stmt.QueryContext(ctx)
+	rows, err := stmt.QueryContext(queryContext)
 	if err != nil {
 		return fmt.Errorf("Error (query) loading shard map: %s", err.Error())
 	}
@@ -216,7 +217,7 @@ func getWLSQL() string {
 /*
 	load the whitelist mapping
 */
-func loadWhitelist(ctx context.Context, db *sql.DB) {
+func loadWhitelist(ctx *context.Context, db *sql.DB, timeout time.Duration) {
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Begin loading whitelist")
 	}
@@ -225,19 +226,20 @@ func loadWhitelist(ctx context.Context, db *sql.DB) {
 			logger.GetLogger().Log(logger.Verbose, "Done loading whitelist")
 		}()
 	}
-
-	conn, err := db.Conn(ctx)
+	queryContext, cancel := context.WithTimeout(*ctx, timeout)
+	defer cancel()
+	conn, err := db.Conn(queryContext)
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error (conn) loading whitelist:", err)
 		return
 	}
 	defer conn.Close()
-	stmt, err := conn.PrepareContext(ctx, getWLSQL())
+	stmt, err := conn.PrepareContext(queryContext, getWLSQL())
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error (stmt) loading whitelist:", err)
 		return
 	}
-	rows, err := stmt.QueryContext(ctx)
+	rows, err := stmt.QueryContext(queryContext)
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error (query) loading whitelist:", err)
 		return
@@ -291,7 +293,10 @@ func InitShardingCfg() error {
 		ctx := context.Background()
 		var db *sql.DB
 		var err error
-
+		reloadInterval := time.Second * time.Duration(GetConfig().ShardingCfgReloadInterval)
+		if reloadInterval < 100*time.Millisecond {
+			reloadInterval = 100 * time.Millisecond
+		}
 		i := 0
 		for ; i < 60; i++ {
 			for shard := 0; shard < GetConfig().NumOfShards; shard++ {
@@ -300,7 +305,7 @@ func InitShardingCfg() error {
 				}
 				db, err = openDb(shard)
 				if err == nil {
-					err = loadMap(ctx, db)
+					err = loadMap(&ctx, db, reloadInterval/2)
 					if err == nil {
 						break
 					}
@@ -319,32 +324,34 @@ func InitShardingCfg() error {
 			return errors.New("Failed to load shard map, no more retry")
 		}
 		if GetConfig().EnableWhitelistTest {
-			loadWhitelist(ctx, db)
+			loadWhitelist(&ctx, db, reloadInterval/2)
 		}
 		go func() {
+			reloadTimer := time.NewTimer(reloadInterval) //Periodic reload timer
 			for {
-				reloadInterval := time.Second * time.Duration(GetConfig().ShardingCfgReloadInterval)
-				if reloadInterval < 100 * time.Millisecond {
-					reloadInterval = 100 * time.Millisecond
-				}
-				time.Sleep(reloadInterval)
-				for shard := 0; shard < GetConfig().NumOfShards; shard++ {
-					if db != nil {
-						db.Close()
-					}
-					db, err = openDb(shard)
-					if err == nil {
-						err = loadMap(ctx, db)
-						if err == nil {
-							if shard == 0 && GetConfig().EnableWhitelistTest {
-								loadWhitelist(ctx, db)
-							}
-							break
+				select {
+				case <-ctx.Done():
+					logger.GetLogger().Log(logger.Alert, "Application main context has been closed, so exiting from shard-config data reload.")
+					return
+				case <-reloadTimer.C:
+					for shard := 0; shard < GetConfig().NumOfShards; shard++ {
+						if db != nil {
+							db.Close()
 						}
+						db, err = openDb(shard)
+						if err == nil {
+							err = loadMap(&ctx, db, reloadInterval/2)
+							if err == nil {
+								if shard == 0 && GetConfig().EnableWhitelistTest {
+									loadWhitelist(&ctx, db, reloadInterval/2)
+								}
+								break
+							}
+						}
+						logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the shard map from shard", shard)
+						evt := cal.NewCalEvent(cal.EventTypeError, "no_shard_map", cal.TransOK, "Error loading shard map")
+						evt.Completed()
 					}
-					logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the shard map from shard", shard)
-					evt := cal.NewCalEvent(cal.EventTypeError, "no_shard_map", cal.TransOK, "Error loading shard map")
-					evt.Completed()
 				}
 			}
 		}()
