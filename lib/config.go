@@ -20,8 +20,10 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -421,7 +423,7 @@ func InitConfig() error {
 	default_evict_names := fmt.Sprintf("id,num,%s", SrcPrefixAppKey)
 	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", default_evict_names)
 	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 60)
-	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "10000000.0"),
+	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", strconv.Itoa(math.MaxInt32)),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
 	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")

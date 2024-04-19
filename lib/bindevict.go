@@ -104,11 +104,6 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 			}
 			updateCopy[k] = v
 		}
-		if len(updateCopy) > 0 {
-			bindEvict.BindThrottle[entry.Sqlhash] = updateCopy
-		} else {
-			delete(bindEvict.BindThrottle, entry.Sqlhash)
-		}
 		gBindEvict.Store(bindEvict)
 	}
 }
@@ -128,7 +123,7 @@ func (bindEvict *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string
 	entryTime := time.Now()
 	defer func() {
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Info, fmt.Sprintf("bind throttle check operation exec duration  is %v microseconds Bind-eviction decrese per sec  %v", time.Now().Sub(entryTime).Microseconds(), GetConfig().BindEvictionDecrPerSec))
+			logger.GetLogger().Log(logger.Info, fmt.Sprintf("bind throttle check operation exec duration  is %v microseconds and Bind-eviction-decrease/sec  %v", time.Now().Sub(entryTime).Microseconds(), GetConfig().BindEvictionDecrPerSec))
 		}
 	}()
 	bindEvict.lock.Lock()
