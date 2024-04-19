@@ -42,21 +42,22 @@ type BindEvict struct {
 	// evicted binds get throttled to have overall steady state during bad bind queries
 	// nested map uses sqlhash "bindName|bindValue"
 	BindThrottle map[uint32]map[string]*BindThrottle
-	lock sync.Mutex
+	lock         sync.Mutex
 }
 
 func GetBindEvict() *BindEvict {
 	cfg := gBindEvict.Load()
 	if cfg == nil {
-		out := BindEvict{BindThrottle:make(map[uint32]map[string]*BindThrottle)}
+		out := BindEvict{BindThrottle: make(map[uint32]map[string]*BindThrottle)}
 		gBindEvict.Store(&out)
 		return &out
 	}
 	return cfg.(*BindEvict)
 }
-func (this *BindEvict) Copy() *BindEvict {
-	out := BindEvict{BindThrottle:make(map[uint32]map[string]*BindThrottle)}
-	for k,v := range this.BindThrottle {
+
+func (bindEvict *BindEvict) Copy() *BindEvict {
+	out := BindEvict{BindThrottle: make(map[uint32]map[string]*BindThrottle)}
+	for k, v := range bindEvict.BindThrottle {
 		out.BindThrottle[k] = v
 	}
 	return &out
@@ -77,7 +78,7 @@ func NormalizeBindName(bindName0 string) string {
 
 func (entry *BindThrottle) decrAllowEveryX(y int) {
 	if y >= 2 && logger.GetLogger().V(logger.Warning) {
-		info := fmt.Sprintf("hash:%d bindName:%s val:%s allowEveryX:%d-%d",entry.Sqlhash, entry.Name, entry.Value, entry.AllowEveryX, y)
+		info := fmt.Sprintf("hash:%d bindName:%s val:%s allowEveryX:%d-%d", entry.Sqlhash, entry.Name, entry.Value, entry.AllowEveryX, y)
 		logger.GetLogger().Log(logger.Warning, "bind throttle decr", info)
 	}
 	entry.AllowEveryX -= y
@@ -85,29 +86,36 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 		return
 	}
 	entry.AllowEveryX = 0
-	GetBindEvict().lock.Lock()
-	defer GetBindEvict().lock.Unlock()
+	bindEvict := GetBindEvict()
+	bindEvict.lock.Lock()
+	defer bindEvict.lock.Unlock()
 	// delete entry
-	if len(GetBindEvict().BindThrottle[entry.Sqlhash]) == 1 {
-		updateCopy := GetBindEvict().Copy()
+	if len(bindEvict.BindThrottle[entry.Sqlhash]) == 1 {
+		updateCopy := bindEvict.Copy()
 		delete(updateCopy.BindThrottle, entry.Sqlhash)
 		gBindEvict.Store(updateCopy)
 	} else {
 		// copy everything except bindKV (skipping it is deleting it)
 		bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
 		updateCopy := make(map[string]*BindThrottle)
-		for k,v := range GetBindEvict().BindThrottle[entry.Sqlhash] {
+		for k, v := range bindEvict.BindThrottle[entry.Sqlhash] {
 			if k == bindKV {
 				continue
 			}
 			updateCopy[k] = v
 		}
-		GetBindEvict().BindThrottle[entry.Sqlhash] = updateCopy
+		if len(updateCopy) > 0 {
+			bindEvict.BindThrottle[entry.Sqlhash] = updateCopy
+		} else {
+			delete(bindEvict.BindThrottle, entry.Sqlhash)
+		}
+		gBindEvict.Store(bindEvict)
 	}
 }
+
 func (entry *BindThrottle) incrAllowEveryX() {
 	if logger.GetLogger().V(logger.Warning) {
-		info := fmt.Sprintf("hash:%d bindName:%s val:%s prev:%d",entry.Sqlhash, entry.Name, entry.Value, entry.AllowEveryX)
+		info := fmt.Sprintf("hash:%d bindName:%s val:%s prev:%d", entry.Sqlhash, entry.Name, entry.Value, entry.AllowEveryX)
 		logger.GetLogger().Log(logger.Warning, "bind throttle incr", info)
 	}
 	entry.AllowEveryX = 3*entry.AllowEveryX + 1
@@ -116,10 +124,16 @@ func (entry *BindThrottle) incrAllowEveryX() {
 	}
 }
 
-func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
-	GetBindEvict().lock.Lock()
-	sqlBinds := GetBindEvict().BindThrottle[sqlhash]
-	GetBindEvict().lock.Unlock()
+func (bindEvict *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
+	entryTime := time.Now()
+	defer func() {
+		if logger.GetLogger().V(logger.Verbose) {
+			logger.GetLogger().Log(logger.Info, fmt.Sprintf("bind throttle check operation exec duration  is %v microseconds Bind-eviction decrese per sec  %v", time.Now().Sub(entryTime).Microseconds(), GetConfig().BindEvictionDecrPerSec))
+		}
+	}()
+	bindEvict.lock.Lock()
+	sqlBinds := bindEvict.BindThrottle[sqlhash]
+	bindEvict.lock.Unlock()
 	for k0, v := range bindKV /*parseBinds(request)*/ {
 		k := NormalizeBindName(k0)
 		concatKey := fmt.Sprintf("%s|%s", k, v)
@@ -149,7 +163,7 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		entry.RecentAttempt.Store(&now)
 		entry.AllowEveryXCount++
 		if entry.AllowEveryXCount < entry.AllowEveryX {
-			return true/*block*/, entry
+			return true /*block*/, entry
 		}
 		entry.AllowEveryXCount = 0
 
