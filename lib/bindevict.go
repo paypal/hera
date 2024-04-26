@@ -97,14 +97,16 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 	} else {
 		// copy everything except bindKV (skipping it is deleting it)
 		bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
-		updateCopy := make(map[string]*BindThrottle)
+		updatedBindThrottleMap := make(map[string]*BindThrottle)
+		updateCopy := bindEvict.Copy()
 		for k, v := range bindEvict.BindThrottle[entry.Sqlhash] {
 			if k == bindKV {
 				continue
 			}
-			updateCopy[k] = v
+			updatedBindThrottleMap[k] = v
 		}
-		gBindEvict.Store(bindEvict)
+		updateCopy.BindThrottle[entry.Sqlhash] = updatedBindThrottleMap
+		gBindEvict.Store(updateCopy)
 	}
 }
 
