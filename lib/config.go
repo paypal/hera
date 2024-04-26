@@ -423,7 +423,7 @@ func InitConfig() error {
 	default_evict_names := fmt.Sprintf("id,num,%s", SrcPrefixAppKey)
 	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", default_evict_names)
 	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 60)
-	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", strconv.Itoa(math.MaxInt32)),
+	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", strconv.Itoa(math.MaxInt32)), //Setting the value to MaxInt32 will help disable automatic bind throttle. If a specific OCC pool wants to enable automatic bind throttle, then it requires providing a value in hera.txt.
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
 	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")
