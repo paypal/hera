@@ -439,18 +439,6 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 				logmsg += fmt.Sprintf("&sqlhash=%d", sqlhash)
 				logger.GetLogger().Log(logger.Verbose, logmsg)
 			}
-			// restricting cal event to only String type Shard Keys
-			if GetConfig().ShardKeyValueTypeIsString {
-				evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardKeyAutodisc, cal.TransOK, "")
-				evt.AddDataStr("shardkey", shardkey)
-				evt.AddDataInt("shardid", shardid)
-				if len(shardRecs) > 0 {
-					evt.AddDataInt("scuttleid", int64(shardRecs[0].bin))
-					evt.AddDataInt("flags", int64(shardRecs[0].flags))
-				}
-				evt.AddDataInt("sqlhash", sqlhash)
-				evt.Completed()
-			}
 		}
 	}
 
