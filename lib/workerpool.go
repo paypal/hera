@@ -718,7 +718,7 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, window, pool.currentSize)
 			}
-			racMaintWorkers = append(racMaintWorkers, []interface{}{pool.moduleName, pool.ShardID, i, pool.workers[i].exitTime, pool.workers[i].exitTime - now})
+			racMaintWorkers = append(racMaintWorkers, []interface{}{pool.moduleName, pool.ShardID, i, pool.workers[i].pid, pool.workers[i].exitTime, pool.workers[i].exitTime - now})
 			if len(dbUname) == 0 {
 				dbUname = pool.workers[i].dbUname
 			}
@@ -729,14 +729,16 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 	// we keep the same. Think about changing it
 	for i := 0; i < len(racMaintWorkers); i++ {
 		poolModName, _ := racMaintWorkers[i][0].(string)
-		shardId, _ := racMaintWorkers[i][1].(int64)
-		workerId, _ := racMaintWorkers[i][2].(int64)
-		workerExitTime, _ := racMaintWorkers[i][3].(int64)
-		exitInSec := racMaintWorkers[i][4].(int64)
+		shardId, _ := racMaintWorkers[i][1].(int)
+		workerId, _ := racMaintWorkers[i][2].(int)
+		pid, _ := racMaintWorkers[i][3].(int)
+		workerExitTime, _ := racMaintWorkers[i][4].(int64)
+		exitInSec := racMaintWorkers[i][5].(int64)
 		evt := cal.NewCalEvent("RAC_ID", fmt.Sprintf("%d", racReq.instID), cal.TransOK, "")
 		evt.AddDataStr("poolModName", poolModName)
-		evt.AddDataInt("workerId", workerId)
-		evt.AddDataInt("shardId", shardId)
+		evt.AddDataInt("workerId", int64(workerId))
+		evt.AddDataInt("pid", int64(pid))
+		evt.AddDataInt("shardId", int64(shardId))
 		evt.AddDataInt("tm", int64(racReq.tm))
 		evt.AddDataInt("exitTime", workerExitTime)
 		evt.AddDataStr("exitInSec", fmt.Sprintf("%dsec", exitInSec))
