@@ -124,10 +124,10 @@ func TestQueryBindBlockerTableNotExistOrEmpty(t *testing.T) {
 	}
 
 	testutil.RunDML("create table hera_rate_limiter (herasqlhash numeric not null, herasqltext varchar(4000) not null, bindvarname varchar(200) not null, bindvarvalue varchar(200) not null, blockperc numeric not null, heramodule varchar(100) not null, end_time numeric not null, remarks varchar(200) not null)")
-	time.Sleep(3 * time.Second)
-	executeQuery(t, db)
 	time.Sleep(15 * time.Second)
+	executeQuery(t, db)
 	if testutil.RegexCountFile("Loaded 0 sqlhashes, 0 entries, query bind blocker entries", "hera.log") == 0 {
 		t.Fatalf("expected to 0 entries from hera_rate_limiter table")
 	}
+	logger.GetLogger().Log(logger.Debug, "TestQueryBindBlockerTableNotExistOrEmpty ends +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 }
