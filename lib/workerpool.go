@@ -697,8 +697,6 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 	}
 	now := time.Now().Unix()
 	window := GetConfig().RacRestartWindow
-	dbUname := ""
-	var racMaintWorkers [][]interface{}
 	pool.poolCond.L.Lock()
 	for i := 0; i < pool.currentSize; i++ {
 		if (pool.workers[i] != nil) && (racReq.instID == 0 || pool.workers[i].racID == racReq.instID) && (pool.workers[i].startTime < int64(racReq.tm)) {
@@ -718,34 +716,21 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, window, pool.currentSize)
 			}
-			racMaintWorkers = append(racMaintWorkers, []interface{}{pool.moduleName, pool.ShardID, i, pool.workers[i].pid, pool.workers[i].exitTime, pool.workers[i].exitTime - now})
-			if len(dbUname) == 0 {
-				dbUname = pool.workers[i].dbUname
-			}
+			//Trigger individual event for worker
+			evt := cal.NewCalEvent("RAC_ID", fmt.Sprintf("%d", racReq.instID), cal.TransOK, "")
+			evt.AddDataStr("poolModName", pool.moduleName)
+			evt.AddDataInt("workerId", int64(i))
+			evt.AddDataInt("pid", int64(pool.workers[i].pid))
+			evt.AddDataInt("shardId", int64(pool.ShardID))
+			evt.AddDataInt("tm", int64(racReq.tm))
+			evt.AddDataInt("exitTime", pool.workers[i].exitTime)
+			evt.AddDataStr("exitInSec", fmt.Sprintf("%dsec", pool.workers[i].exitTime-now))
+			evt.Completed()
+			evt = cal.NewCalEvent("DB_UNAME", pool.workers[i].dbUname, cal.TransOK, "")
+			evt.Completed()
 		}
 	}
 	pool.poolCond.L.Unlock()
-	// TODO: C++ worker logs one event for each worker, in the worker, so
-	// we keep the same. Think about changing it
-	for i := 0; i < len(racMaintWorkers); i++ {
-		poolModName, _ := racMaintWorkers[i][0].(string)
-		shardId, _ := racMaintWorkers[i][1].(int)
-		workerId, _ := racMaintWorkers[i][2].(int)
-		pid, _ := racMaintWorkers[i][3].(int)
-		workerExitTime, _ := racMaintWorkers[i][4].(int64)
-		exitInSec := racMaintWorkers[i][5].(int64)
-		evt := cal.NewCalEvent("RAC_ID", fmt.Sprintf("%d", racReq.instID), cal.TransOK, "")
-		evt.AddDataStr("poolModName", poolModName)
-		evt.AddDataInt("workerId", int64(workerId))
-		evt.AddDataInt("pid", int64(pid))
-		evt.AddDataInt("shardId", int64(shardId))
-		evt.AddDataInt("tm", int64(racReq.tm))
-		evt.AddDataInt("exitTime", workerExitTime)
-		evt.AddDataStr("exitInSec", fmt.Sprintf("%dsec", exitInSec))
-		evt.Completed()
-		evt = cal.NewCalEvent("DB_UNAME", dbUname, cal.TransOK, "")
-		evt.Completed()
-	}
 }
 
 // checkWorkerLifespan is called periodically to check if any worker lifetime has expired and terminates it
