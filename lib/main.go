@@ -166,6 +166,13 @@ func Run() {
 	}
 	InitRacMaint(*namePtr)
 
+	err = LogOccConfigs()
+	if err != nil {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "failed to logs OCC configurations:", err.Error())
+		}
+	}
+
 	srv := NewServer(lsn, HandleConnection)
 
 	go srv.Run()

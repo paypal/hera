@@ -1,0 +1,74 @@
+%DEFAULT.all
+opscfg.occ-account.server.max_lifespan_per_child = 28800
+opscfg.occ-account.server.max_connections = 4
+opscfg.occ-account.server.saturation_recover_threshold = 30
+opscfg.occ-account.server.saturation_recover_throttle_rate = 30
+
+
+%LIVE.opscfg
+opscfg.occ-account.server.max_connections = 6
+
+%LIVE2.opscfg
+opscfg.occ-account.server.max_connections = 6
+
+%LIVE3.opscfg
+opscfg.occ-account.server.max_connections = 47
+
+%LIVE5.opscfg
+opscfg.occ-account.server.max_connections = 31
+
+%LIVE6.opscfg
+opscfg.occ-account.server.max_connections = 6
+
+%LIVE8.opscfg
+opscfg.occ-account.server.max_connections = 6
+
+%LIVE9.opscfg
+opscfg.occ-account.server.max_connections = 16
+
+%LIVE10.opscfg
+opscfg.occ-account.server.max_connections = 16
+
+%LIVE11.opscfg
+opscfg.occ-account.server.max_connections = 43
+
+%LIVE14.opscfg
+opscfg.occ-account.server.max_connections = 4
+
+%LIVE16.opscfg
+opscfg.occ-account.server.max_connections = 30
+
+
+%LIVE20.opscfg
+opscfg.occ-account.server.max_connections = 30
+
+
+%LIVE21.opscfg
+opscfg.occ-account.server.max_connections = 47
+
+
+%LIVE23.opscfg
+opscfg.occ-account.server.max_connections = 47
+
+%STAGE.opscfg
+opscfg.occ-account.server.saturation_recover_throttle_rate = 0
+opscfg.occ-account.server.max_connections = 12
+
+%STAGE1.opscfg
+opscfg.occ-account.server.max_connections = 5
+
+%PLAY.opscfg
+opscfg.occ-account.server.max_connections = 5
+
+%SANDBOX.opscfg
+opscfg.occ-account.server.max_connections = 4
+
+%SANDBOX5.opscfg
+opscfg.occ-account.server.max_connections = 11
+
+%LIVE29.opscfg
+opscfg.occ-account.server.max_connections = 10
+
+%LIVE32.opscfg
+opscfg.occ-account.server.max_connections = 10
+
