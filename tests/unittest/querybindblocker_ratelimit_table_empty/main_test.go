@@ -119,7 +119,7 @@ func TestQueryBindBlockerTableNotExistOrEmpty(t *testing.T) {
 
 	executeQuery(t, db)
 	time.Sleep(3 * time.Second)
-	if testutil.RegexCountFile("Error 1146: Table 'heratestdb.hera_rate_limiter' doesn't exist", "hera.log") == 0 {
+	if testutil.RegexCountFile("loading query bind blocker: SQL error: Error 1146", "hera.log") == 0 {
 		t.Fatalf("expected to see table 'hera_rate_limiter' doesn't exist error")
 	}
 
