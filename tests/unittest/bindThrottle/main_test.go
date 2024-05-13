@@ -84,7 +84,7 @@ func TestMain(m *testing.M) {
 }
 
 func sleepyQ(conn *sql.Conn, delayRow int) error {
-	stmt, err := conn.PrepareContext(context.Background(), "select * from sleep_info where ( seconds > sleep_option(?) or seconds > 0.0 )")
+	stmt, err := conn.PrepareContext(context.Background(), fmt.Sprintf("select * from sleep_info where ( seconds > sleep_option(?) or seconds > 0.0 ) and id=%d", delayRow))
 	if err != nil {
 		fmt.Printf("Error preparing sleepyQ %s\n", err.Error())
 		return err
@@ -129,19 +129,18 @@ func partialBadLoad(fracBad float64) error {
 	fmt.Printf("spawning clients bad%d norm%d\n", numBad, numNorm)
 	mkClients(numBad, &stop2, 29001111, "badClient", &badCliErr, db)
 	mkClients(numNorm, &stop3, 100, "normClient", &cliErr, db) // bind value is short, so bindevict won't trigger
-	time.Sleep(3100 * time.Millisecond)
-	//time.Sleep(33100 * time.Millisecond)
+	time.Sleep(3000 * time.Millisecond)
 
 	// start normal clients after initial backlog timeouts
 	var stop int
 	var normCliErrStr string
 	mkClients(1, &stop, 21001111, "n client", &normCliErrStr, db)
-	time.Sleep(2000 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 
 	// if we throttle down or stop, it restores
 	stop2 = 1 // stop bad clients
 	stop3 = 1
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second) //Make sure that clear throttle
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		fmt.Printf("Error conn %s\n", err.Error())
@@ -174,31 +173,31 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 				nowStr := time.Now().Format("15:04:05.000000 ")
 				if conn == nil {
 					conn, err = db.Conn(context.Background())
-					fmt.Printf(grpName+" connected %d\n", clientId)
+					fmt.Printf("%s connected %d\n", grpName, clientId)
 					if err != nil {
-						fmt.Printf(nowStr+grpName+" Error %d conn %s\n", clientId, err.Error())
+						fmt.Printf("%s %s Error %d conn %s\n", nowStr, grpName, clientId, err.Error())
 						time.Sleep(7 * time.Millisecond)
 						continue
 					}
 				}
 
-				fmt.Printf(nowStr+grpName+"%d loop%d %s\n", clientId, count, time.Now().Format("20060102j150405.000000"))
+				fmt.Printf("%s %s %d loop%d %s\n", nowStr, grpName, clientId, count, time.Now().Format("20060102j150405.000000"))
 				err := sleepyQ(conn, bindV)
 				if err != nil {
 					if err.Error() == curErr {
-						fmt.Printf(nowStr+grpName+"%d same err twice\n", clientId)
+						fmt.Printf("%s %s %d same err twice\n", nowStr, grpName, clientId)
 						conn.Close()
 						conn = nil
 					} else {
 						curErr = err.Error()
 						*outErr = curErr
-						fmt.Printf(nowStr+grpName+"%d err %s\n", clientId, curErr)
+						fmt.Printf("%s %s %d err %s\n", nowStr, grpName, clientId, curErr)
 					}
 				}
 				count++
 				time.Sleep(10 * time.Millisecond)
 			}
-			fmt.Printf(time.Now().Format("15:04:05.000000 ")+grpName+"%d END loop%d\n", clientId, count)
+			fmt.Printf("%s %s %d END loop%d\n", time.Now().Format("15:04:05.000000 "), grpName, clientId, count)
 		}(i)
 	}
 }
@@ -220,18 +219,24 @@ func TestBindThrottle(t *testing.T) {
 		t.Fatal("backlog timeout or saturation was not triggered")
 	} // */
 
-	if true {
-		logger.GetLogger().Log(logger.Debug, "BindThrottle midpt +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-		err := partialBadLoad(0.8)
-		if err != nil {
-			// t.Fatalf("main step function returned err %s", err.Error()) // can be triggered since test only has one sql
-		}
-		if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") > 0 {
-			t.Fatalf("BIND_THROTTLE should not trigger with high default BindEvictionDecrPerSec value 10000")
-		}
-		if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
-			t.Fatalf("BIND_EVICT should trigger")
-		}
-	} // endif
+	logger.GetLogger().Log(logger.Debug, "BindThrottle midpt +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	err = partialBadLoad(0.8)
+	if err != nil {
+		// t.Fatalf("main step function returned err %s", err.Error()) // can be triggered since test only has one sql
+	}
+	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") < 0 {
+		t.Fatalf("BIND_THROTTLE should trigger")
+	}
+	if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
+		t.Fatalf("BIND_EVICT should trigger")
+	}
+
+	if testutil.RegexCountFile(".*BIND_EVICT\t1354401077\t1.*", "cal.log") < 1 {
+		t.Fatalf("BIND_EVICT should trigger for SQL HASH 1354401077")
+	}
+
+	if testutil.RegexCountFile(".*BIND_THROTTLE\t1354401077\t1.*", "cal.log") < 1 {
+		t.Fatalf("BIND_THROTTLE should trigger for SQL HASH 1354401077")
+	}
 	logger.GetLogger().Log(logger.Debug, "BindThrottle done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 } // */
