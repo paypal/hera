@@ -19,7 +19,6 @@ package lib
 
 import (
 	"fmt"
-	"math"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -32,7 +31,6 @@ type BindThrottle struct {
 	Name             string
 	Value            string
 	Sqlhash          uint32
-	lowWorkerUsage   float64
 	RecentAttempt    atomic.Value // time.Time
 	AllowEveryX      int
 	AllowEveryXCount int
@@ -146,22 +144,15 @@ func (bindEvict *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string
 		// update based on usage
 		if heavyUsage {
 			entry.incrAllowEveryX()
-			entry.lowWorkerUsage -= 1
-			if entry.lowWorkerUsage < 0 {
-				entry.lowWorkerUsage = 0
-			}
 		} else {
-			entry.lowWorkerUsage += 1
+			entry.decrAllowEveryX(2)
 		}
 
 		// check if not used in a while
 		now := time.Now()
 		recent := entry.RecentAttempt.Load().(*time.Time)
 		throttleReductionBase := now.Sub(*recent).Seconds()
-		if throttleReductionBase < 1 {
-			throttleReductionBase = 1
-		}
-		throttleReductionRate := throttleReductionBase * GetConfig().BindEvictionDecrPerSec * math.Exp(entry.lowWorkerUsage)
+		throttleReductionRate := throttleReductionBase * GetConfig().BindEvictionDecrPerSec
 		entry.decrAllowEveryX(int(throttleReductionRate))
 		if entry.AllowEveryX == 0 {
 			return false, nil
