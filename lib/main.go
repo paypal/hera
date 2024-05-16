@@ -50,6 +50,25 @@ func Run() {
 
 	rand.Seed(time.Now().Unix())
 
+	//
+	// worker also initialize a calclent with the same poolname using threadid==0 in
+	// its bootstrap label message. if we let worker fire off its msg first, all proxy
+	// messages will end up in the same swimminglane since that is what id(0) does.
+	// so, let's send the bootstrap label message from proxy first using threadid==1.
+	// that way, calmsgs with different threadids can end up in different swimminglanes,
+	//
+	caltxn := cal.NewCalTransaction(cal.TransTypeAPI, "mux-go", cal.TransOK, "", cal.DefaultTGName)
+	caltxn.SetCorrelationID("abc")
+	calclient := cal.GetCalClientInstance()
+	if calclient != nil {
+		release := calclient.GetReleaseBuildNum()
+		if release != "" {
+			evt := cal.NewCalEvent("VERSION", release, "0", "")
+			evt.Completed()
+		}
+	}
+	caltxn.Completed()
+
 	err := InitConfig()
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
@@ -70,25 +89,6 @@ func Run() {
 
 	os.Setenv("MUX_START_TIME_SEC", fmt.Sprintf("%d", time.Now().Unix()))
 	os.Setenv("MUX_START_TIME_USEC", "0")
-
-	//
-	// worker also initialize a calclent with the same poolname using threadid==0 in
-	// its bootstrap label message. if we let worker fire off its msg first, all proxy
-	// messages will end up in the same swimminglane since that is what id(0) does.
-	// so, let's send the bootstrap label message from proxy first using threadid==1.
-	// that way, calmsgs with different threadids can end up in different swimminglanes,
-	//
-	caltxn := cal.NewCalTransaction(cal.TransTypeAPI, "mux-go", cal.TransOK, "", cal.DefaultTGName)
-	caltxn.SetCorrelationID("abc")
-	calclient := cal.GetCalClientInstance()
-	if calclient != nil {
-		release := calclient.GetReleaseBuildNum()
-		if release != "" {
-			evt := cal.NewCalEvent("VERSION", release, "0", "")
-			evt.Completed()
-		}
-	}
-	caltxn.Completed()
 
 	//
 	// create singleton broker and start worker/pools

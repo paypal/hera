@@ -6,7 +6,6 @@ import (
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
 	"io/ioutil"
-	"os"
 	"regexp"
 	"strings"
 )
@@ -18,20 +17,21 @@ func extractValuesFromFile(file string) (map[string]string, error) {
 	}
 
 	values := make(map[string]string)
-
+	//get data from hera.txt and occ.def (config.go fetches everything from opscfg etc places and populates in hera.txt
+	//hera.txt is source of truth
 	switch file {
-	case "occ.def", "occ-account.def":
+	case "occ.def", "hera.txt":
 		re := regexp.MustCompile(`\b(\w+)\s*=\s*([^#\n]+)`)
 		matches := re.FindAllStringSubmatch(string(content), -1)
 		for _, match := range matches {
 			values[match[1]] = strings.TrimSpace(match[2])
 		}
-	case "config.go":
-		re := regexp.MustCompile(`cdb\.GetOrDefaultString\("([^"]+)",\s*"([^"]+)"\)`)
-		matches := re.FindAllStringSubmatch(string(content), -1)
-		for _, match := range matches {
-			values[match[1]] = strings.TrimSpace(match[2])
-		}
+		//case "config.go":
+		//	re := regexp.MustCompile(`cdb\.GetOrDefaultString\("([^"]+)",\s*"([^"]+)"\)`)
+		//	matches := re.FindAllStringSubmatch(string(content), -1)
+		//	for _, match := range matches {
+		//		values[match[1]] = strings.TrimSpace(match[2])
+		//	}
 	}
 
 	return values, nil
@@ -44,9 +44,8 @@ func LogOccConfigs() error {
 		"SHARDING": {"enable_sharding", "enable_sql_rewrite", "sharding_algo", "sharding_cross_keys_err", "sharding_postfix", "use_shardmap", "num_shards", "shard_key_name", "shard_key_value_type_is_string", "max_scuttle", "scuttle_col_name", "enable_whitelist_test", "whitelist_children", "sharding_cfg_reload_interval", "cfg_from_tns_override_num_shards"},
 	}
 
-	//debug
-	dir, _ := os.Getwd()
-	fmt.Println("pwd: ", dir)
+	//dir, _ := os.Getwd()
+	//fmt.Println("pwd: ", dir)
 
 	//Set the file search path to the current working directory
 	//err := os.Chdir(dir + "/lib")
@@ -56,7 +55,7 @@ func LogOccConfigs() error {
 	//}
 
 	// location of files to search values of the configs from
-	files := []string{"occ.def", "occ-account.def", "config.go"}
+	files := []string{"occ.def", "hera.txt"}
 	// fetch values of all whiteListConfigs
 	collectedValues := make(map[string]map[string]string)
 
@@ -78,14 +77,8 @@ func LogOccConfigs() error {
 				}
 			}
 		}
-		//print collected values
 	}
 	for feature, configs := range collectedValues {
-		//fmt.Printf("%s:\n", feature)
-
-		//for config, value := range configs {
-		//	fmt.Printf("\t%s: %s\n", config, value)
-		//}
 		configsMarshal, _ := json.Marshal(configs)
 		configsMarshalStr := string(configsMarshal)
 
@@ -93,17 +86,9 @@ func LogOccConfigs() error {
 			logger.GetLogger().Log(logger.Warning, "list of configs within the feature:", feature, ":", configsMarshalStr)
 		}
 
-		//fmt.Printf("configs in feature: %s \n", configsMarshalStr)
-
-		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf("list of configs within the feature: %v", feature), cal.TransOK, configsMarshalStr)
+		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, configsMarshalStr, "")
 		evt.Completed()
 	}
-
-	////blacklist_configs : = {}
-	//for key, value := range whiteListConfigs {
-	//	evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf("list of configs within the feature: %v", key), cal.TransOK, strings.Join(value, ", "))
-	//	evt.Completed()
-	//}
 
 	return nil
 }
