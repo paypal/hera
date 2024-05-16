@@ -176,6 +176,9 @@ type Config struct {
 
 	// Max desired percentage of healthy workers for the worker pool
 	MaxDesiredHealthyWorkerPct int
+
+	//Timeout for management queries.
+	ManagementQueriesTimeoutInMs int
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -463,6 +466,7 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
+	gAppConfig.ManagementQueriesTimeoutInMs = cdb.GetOrDefaultInt("management_queries_timeout_ms", 200)
 	return nil
 }
 

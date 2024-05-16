@@ -102,11 +102,11 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	binds[0], err = os.Hostname()
 	binds[0] = strings.ToUpper(binds[0])
 	binds[1] = strings.ToUpper(cmdLineModuleName) // */
-	waitTime := time.Second * time.Duration(interval)
 	//First time data loading
-	racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, waitTime/2)
+	racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, GetConfig().ManagementQueriesTimeoutInMs)
 
-	timeTicker := time.NewTicker(waitTime)
+	timeTicker := time.NewTicker(time.Second * time.Duration(interval))
+	defer timeTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -114,7 +114,8 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 			return
 		case <-timeTicker.C:
 			//Periodic data loading
-			racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, waitTime/2)
+			racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, GetConfig().ManagementQueriesTimeoutInMs)
+			timeTicker.Reset(time.Second * time.Duration(interval))
 		}
 	}
 }
@@ -123,7 +124,7 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	racMaint is the main function for RAC maintenance processing, being called regularly.
 	When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
 */
-func racMaint(ctx *context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg, queryTimeout time.Duration) {
+func racMaint(ctx *context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg, queryTimeoutInMs int) {
 	//
 	// print this log for unittesting
 	//
@@ -131,7 +132,7 @@ func racMaint(ctx *context.Context, shard int, db *sql.DB, racSQL string, cmdLin
 		logger.GetLogger().Log(logger.Verbose, "Rac maint check, shard =", shard)
 	}
 	//create cancellable context
-	queryContext, cancel := context.WithTimeout(*ctx, queryTimeout)
+	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(queryTimeoutInMs)*time.Millisecond)
 	defer cancel() // Always call cancel to release resources associated with the context
 
 	conn, err := db.Conn(queryContext)
