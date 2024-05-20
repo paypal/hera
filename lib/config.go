@@ -18,10 +18,14 @@
 package lib
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/cal"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 
@@ -461,6 +465,198 @@ func InitConfig() error {
 	gAppConfig.MaxDesiredHealthyWorkerPct = cdb.GetOrDefaultInt("max_desire_healthy_worker_pct", 90)
 	if gAppConfig.MaxDesiredHealthyWorkerPct > 100 {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
+	}
+
+	err = LogOccConfigs()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func extractValuesFromFile(file string) (map[string]string, error) {
+	content, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	values := make(map[string]string)
+	//get data from hera.txt and occ.def (config.go fetches everything from opscfg etc places and populates in hera.txt
+	//hera.txt is source of truth
+	switch file {
+	case "occ.def", "hera.txt":
+		re := regexp.MustCompile(`\b(\w+)\s*=\s*([^#\n]+)`)
+		matches := re.FindAllStringSubmatch(string(content), -1)
+		for _, match := range matches {
+			values[match[1]] = strings.TrimSpace(match[2])
+		}
+	}
+
+	return values, nil
+}
+
+func LogOccConfigs() error {
+
+	whiteListConfigs := map[string][]string{
+		"BACKLOG": {
+			"backlog_pct",
+			"request_backlog_timeout",
+			"short_backlog_timeout",
+			"saturation_recover_threshold",
+		},
+		"KEYMAKER": {
+			"config_reload_time_ms",
+			"enable_keymaker_integration",
+			"keymaker_password_prefix",
+			"keymaker_reload_interval_min",
+			"keymaker_tenant",
+			"keymaker_tnsname_prefix",
+			"skip_keymaker",
+			"use_keymaker_database_config",
+			"use_keymaker_root_of_trust",
+			"database_family",
+			"write_cert_to_file",
+			"keymaker_sqlnet_prefix",
+			"keymaker_ewallet_prefix",
+			"keymaker_cwallet_prefix",
+			"cert_chain_file",
+			"key_file",
+		},
+		"SHARDING": {
+			"enable_sharding",
+			"enable_sql_rewrite",
+			"sharding_algo",
+			"sharding_cross_keys_err",
+			"sharding_postfix",
+			"use_shardmap",
+			"num_shards",
+			"shard_key_name",
+			"shard_key_value_type_is_string",
+			"max_scuttle",
+			"scuttle_col_name",
+			"enable_whitelist_test",
+			"whitelist_children",
+			"sharding_cfg_reload_interval",
+			"cfg_from_tns_override_num_shards",
+		},
+		"TAF": {
+			"enable_taf",
+			"cfg_from_tns_override_taf",
+			"testing_enable_dml_taf",
+			"taf_timeout_ms",
+			"taf_bin_duration",
+			"taf_allow_slow_every_x",
+			"taf_normally_slow_count",
+		},
+		"DBA_QUERY_BIND_BLOCKER": {
+			"child.executable",
+			"enable_bind_hash_logging",
+			"enable_query_bind_blocker",
+		},
+		"BIND-EVICTION": {
+			"enable_query_bind_blocker",
+			"bind_eviction_threshold_pct",
+			"bind_eviction_decr_per_sec",
+			"bind_eviction_target_conn_pct",
+			"bind_eviction_max_throttle",
+			"bind_eviction_names",
+			"skip_eviction_host_prefix",
+			"eviction_host_prefix",
+			"query_bind_blocker_min_sql_prefix",
+		},
+		"SOFT-EVICTION": {
+			"soft_eviction_effective_time",
+			"soft_eviction_probability",
+		},
+		"WORKER-CONFIGURATIONS": {
+			"lifespan_check_interval",
+			"lifo_scheduler_enabled",
+			"num_workers_per_proxy",
+			"max_clients_per_worker",
+			"max_stranded_time_interval",
+			"high_load_max_stranded_time_interval",
+			"high_load_skip_initiate_recover_pct",
+			"enable_danglingworker_recovery",
+			"max_db_connects_per_sec",
+			"max_lifespan_per_child",
+			"max_requests_per_child",
+		},
+		"R-W-SPLIT": {
+			"readonly_children_pct",
+			"cfg_from_tns_override_rw_split",
+		},
+		"STATE-LOG": {
+			"state_log_file",
+			"state_log_interval",
+			"state_log_prefix",
+		},
+		"NO-CATEGORY": {
+			"log_level",
+			"high_load_pct",
+			"init_limit_pct",
+			"page_alert",
+			"socket_timeout",
+			"standby_children_pct",
+			"enable_occ_caching_routing",
+			"bits_to_match",
+			"max_batch_col_size",
+			"max_fetch_block_size",
+			"max_out_bind_var_size",
+			"write_cert_to_file",
+			"ping_interval",
+			"num_standby_dbs",
+		},
+	}
+
+	//dir, _ := os.Getwd()
+	//fmt.Println("pwd: ", dir)
+
+	//Set the file search path to the current working directory
+	//err := os.Chdir(dir + "/lib")
+	//if err != nil {
+	//	fmt.Println("Error:", err)
+	//	return nil
+	//}
+
+	// location of files to search values of the configs from
+	files := []string{"occ.def", "hera.txt"}
+	// fetch values of all whiteListConfigs
+	collectedValues := make(map[string]map[string]string)
+
+	for _, file := range files {
+		values, err := extractValuesFromFile(file)
+		if err != nil {
+			fmt.Printf("Error reading file %s: %v\n", file, err)
+			continue
+		}
+
+		// Compare collected values with configList
+		for feature, configs := range whiteListConfigs {
+			for _, config := range configs {
+				if value, ok := values[config]; ok {
+					if _, found := collectedValues[feature]; !found {
+						collectedValues[feature] = make(map[string]string)
+					}
+					collectedValues[feature][config] = value
+				}
+			}
+		}
+	}
+	for feature, configs := range collectedValues {
+		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
+		for config := range configs {
+			evt.AddDataStr(config, collectedValues[feature][config])
+		}
+		evt.Completed()
+
+		configsMarshal, _ := json.Marshal(configs)
+		configsMarshalStr := string(configsMarshal)
+
+		//TODO: remove below logs before final push
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "list of configs within the feature:", feature, ":", configsMarshalStr)
+		}
 	}
 
 	return nil
