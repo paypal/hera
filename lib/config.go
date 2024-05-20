@@ -607,6 +607,7 @@ func LogOccConfigs() error {
 		},
 	}
 
+	//TODO: for local testing only. Remove before final push
 	//dir, _ := os.Getwd()
 	//fmt.Println("pwd: ", dir)
 
