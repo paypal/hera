@@ -35,7 +35,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	}
 	appcfg["sharding_cfg_reload_interval"] = "2"
 	appcfg["rac_sql_interval"] = "0"
-	appcfg["management_queries_timeout_ms"] = "2"
+	appcfg["management_queries_timeout_us"] = "400"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -66,14 +66,14 @@ func setupShardMap() {
 	}
 	defer conn.Close()
 
-	testutil.RunDML("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))")
+	testutil.DBDirect("create table hera_shard_map ( scuttle_id smallint not null, shard_id tinyint not null, status char(1) , read_status char(1), write_status char(1), remarks varchar(500))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
 
-	for i := 0; i < 1024; i++ {
+	for i := 0; i < 9; i++ {
 		shard := 0
-		if i <= 8 {
+		if i >= 3 {
 			shard = i % 3
 		}
-		testutil.RunDML(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard))
+		testutil.DBDirect(fmt.Sprintf("insert into hera_shard_map ( scuttle_id, shard_id, status, read_status, write_status ) values ( %d, %d, 'Y', 'Y', 'Y' )", i, shard), os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
 	}
 }
 
@@ -84,24 +84,13 @@ func before() error {
 	}
 	if strings.HasPrefix(os.Getenv("TWO_TASK"), "tcp") {
 		// mysql
-		testutil.RunDML("create table jdbc_hera_test2 ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))")
+		testutil.DBDirect("create table jdbc_hera_test2 ( ID BIGINT, INT_VAL BIGINT, STR_VAL VARCHAR(500))", os.Getenv("MYSQL_IP"), "heratestdb", testutil.MySQL)
 	}
 	return nil
 }
 
 func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
-}
-
-func cleanup(ctx context.Context, conn *sql.Conn) error {
-	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*Cleanup*/delete from "+tableName+" where id != :id")
-	_, err := stmt.Exec(sql.Named("id", -123))
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
-	return nil
 }
 
 func TestShardingWithContextTimeout(t *testing.T) {
@@ -118,52 +107,10 @@ func TestShardingWithContextTimeout(t *testing.T) {
 	db.SetMaxIdleConns(0)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("Error getting connection %s\n", err.Error())
-	}
-	cleanup(ctx, conn)
-	// insert one row in the table
-	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*TestShardingWithContextTimeout*/insert into "+tableName+" (id, int_val, str_val) VALUES(:id, :int_val, :str_val)")
-	_, err = stmt.Exec(sql.Named("id", 1), sql.Named("int_val", time.Now().Unix()), sql.Named("str_val", "val 1"))
-	if err != nil {
-		t.Fatalf("Error preparing test (create row in table) %s\n", err.Error())
-	}
-	err = tx.Commit()
-	if err != nil {
-		t.Fatalf("Error commit %s\n", err.Error())
-	}
-
-	stmt, _ = conn.PrepareContext(ctx, "/*TestShardingWithContextTimeout*/Select id, int_val, str_val from "+tableName+" where id=:id")
-	rows, _ := stmt.Query(sql.Named("id", 1))
-	if !rows.Next() {
-		t.Fatalf("Expected 1 row")
-	}
-	var id, int_val uint64
-	var str_val sql.NullString
-	err = rows.Scan(&id, &int_val, &str_val)
-	if err != nil {
-		t.Fatalf("Expected values %s", err.Error())
-	}
-	if str_val.String != "val 1" {
-		t.Fatalf("Expected val 1 , got: %s", str_val.String)
-	}
-
-	rows.Close()
-	stmt.Close()
-
-	cancel()
-	conn.Close()
-
-	out, err := testutil.BashCmd("grep 'Preparing: /\\*TestShardingWithContextTimeout\\*/' hera.log | grep 'WORKER shd2' | wc -l")
-	if (err != nil) || (len(out) == 0) {
+	out := testutil.RegexCountFile("loading shard map: context deadline exceeded", "cal.log")
+	if out < 2 {
 		err = nil
-		t.Fatalf("Request did not run on shard 2. err = %v, len(out) = %d", err, len(out))
-	}
-	if out[0] != '2' {
-		t.Fatalf("Expected 2 excutions on shard 2, instead got %d", int(out[0]-'0'))
+		t.Fatalf("sharding management query should fail with context timeout")
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestShardingWithContextTimeout done  -------------------------------------------------------------")

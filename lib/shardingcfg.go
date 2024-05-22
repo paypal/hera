@@ -109,7 +109,7 @@ func loadMap(ctx *context.Context, db *sql.DB, queryTimeoutInterval int) error {
 			logger.GetLogger().Log(logger.Verbose, "Done loading shard map")
 		}()
 	}
-	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(queryTimeoutInterval)*time.Millisecond)
+	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(queryTimeoutInterval)*time.Microsecond)
 	defer cancel()
 	conn, err := db.Conn(queryContext)
 	if err != nil {
@@ -226,7 +226,7 @@ func loadWhitelist(ctx *context.Context, db *sql.DB, timeoutInMs int) {
 			logger.GetLogger().Log(logger.Verbose, "Done loading whitelist")
 		}()
 	}
-	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(timeoutInMs)*time.Millisecond)
+	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(timeoutInMs)*time.Microsecond)
 	defer cancel()
 	conn, err := db.Conn(queryContext)
 	if err != nil {
@@ -305,13 +305,13 @@ func InitShardingCfg() error {
 				}
 				db, err = openDb(shard)
 				if err == nil {
-					err = loadMap(&ctx, db, GetConfig().ManagementQueriesTimeoutInMs)
+					err = loadMap(&ctx, db, GetConfig().ManagementQueriesTimeoutInUs)
 					if err == nil {
 						break
 					}
 				}
 				logger.GetLogger().Log(logger.Warning, "Error <", err, "> loading the shard map from shard", shard)
-				evt := cal.NewCalEvent(cal.EventTypeError, "no_shard_map", cal.TransOK, "Error loading shard map")
+				evt := cal.NewCalEvent(cal.EventTypeError, "no_shard_map", cal.TransOK, fmt.Sprintf("Error loading shard map %v", err))
 				evt.Completed()
 			}
 			if err == nil {
@@ -324,7 +324,7 @@ func InitShardingCfg() error {
 			return errors.New("Failed to load shard map, no more retry")
 		}
 		if GetConfig().EnableWhitelistTest {
-			loadWhitelist(&ctx, db, GetConfig().ManagementQueriesTimeoutInMs)
+			loadWhitelist(&ctx, db, GetConfig().ManagementQueriesTimeoutInUs)
 		}
 		go func() {
 			reloadTimer := time.NewTimer(reloadInterval) //Periodic reload timer
@@ -341,10 +341,10 @@ func InitShardingCfg() error {
 						}
 						db, err = openDb(shard)
 						if err == nil {
-							err = loadMap(&ctx, db, GetConfig().ManagementQueriesTimeoutInMs)
+							err = loadMap(&ctx, db, GetConfig().ManagementQueriesTimeoutInUs)
 							if err == nil {
 								if shard == 0 && GetConfig().EnableWhitelistTest {
-									loadWhitelist(&ctx, db, GetConfig().ManagementQueriesTimeoutInMs)
+									loadWhitelist(&ctx, db, GetConfig().ManagementQueriesTimeoutInUs)
 								}
 								break
 							}
