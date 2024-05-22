@@ -33,28 +33,6 @@ import (
 	"time"
 )
 
-//
-//type Backlog struct {
-//	BacklogPct              int
-//	BacklogTimeoutMsec      int
-//	ShortBacklogTimeoutMsec int
-//	satRecoverThresholdMs   uint32
-//}
-//
-//type WhiteListConfigs struct {
-//	Backlog
-//	Keymaker
-//	Sharding
-//	Taf
-//	DbaQueryBindBlocker
-//	BindEviction
-//	SoftEviction
-//	WorkerConfigurations
-//	RWSplit
-//	StateLog
-//	NoCategory
-//}
-
 //The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
@@ -528,182 +506,204 @@ func extractValuesFromFile(file string) (map[string]string, error) {
 	return values, nil
 }
 
-func LogOccConfigs() error {
+func LogOccConfigs() {
 
-	whiteListConfigs := map[string][]string{
+	whiteListConfigs := map[string]map[string]interface{}{
 		"BACKLOG": {
-			"backlog_pct",
-			"request_backlog_timeout",
-			"short_backlog_timeout",
-			"saturation_recover_threshold",
-		},
-		"KEYMAKER": {
-			"config_reload_time_ms",
-			"enable_keymaker_integration",
-			"keymaker_password_prefix",
-			"keymaker_reload_interval_min",
-			"keymaker_tenant",
-			"keymaker_tnsname_prefix",
-			"skip_keymaker",
-			"use_keymaker_database_config",
-			"use_keymaker_root_of_trust",
-			"database_family",
-			"write_cert_to_file",
-			"keymaker_sqlnet_prefix",
-			"keymaker_ewallet_prefix",
-			"keymaker_cwallet_prefix",
-			"cert_chain_file",
-			"key_file",
+			"backlog_pct":                  gAppConfig.BacklogPct,
+			"request_backlog_timeout":      gAppConfig.BacklogTimeoutMsec,
+			"short_backlog_timeout":        gAppConfig.ShortBacklogTimeoutMsec,
+			"saturation_recover_threshold": gOpsConfig.satRecoverThresholdMs,
 		},
 		"SHARDING": {
-			"enable_sharding",
-			"enable_sql_rewrite",
-			"sharding_algo",
-			"sharding_cross_keys_err",
-			"sharding_postfix",
-			"use_shardmap",
-			"num_shards",
-			"shard_key_name",
-			"shard_key_value_type_is_string",
-			"max_scuttle",
-			"scuttle_col_name",
-			"enable_whitelist_test",
-			"whitelist_children",
-			"sharding_cfg_reload_interval",
-			"cfg_from_tns_override_num_shards",
+			"enable_sharding":                gAppConfig.EnableSharding,
+			"use_shardmap":                   gAppConfig.UseShardMap,
+			"num_shards":                     gAppConfig.NumOfShards,
+			"shard_key_name":                 gAppConfig.ShardKeyName,
+			"max_scuttle":                    gAppConfig.MaxScuttleBuckets,
+			"scuttle_col_name":               gAppConfig.ScuttleColName,
+			"shard_key_value_type_is_string": gAppConfig.ShardKeyValueTypeIsString,
+			"enable_whitelist_test":          gAppConfig.EnableWhitelistTest,
+			"whitelist_children":             gAppConfig.NumWhitelistChildren,
+			"sharding_postfix":               gAppConfig.ShardingPostfix,
+			"sharding_cfg_reload_interval":   gAppConfig.ShardingCfgReloadInterval,
+			"hostname_prefix":                gAppConfig.HostnamePrefix,
+			"sharding_cross_keys_err":        gAppConfig.ShardingCrossKeysErr,
+			//"enable_sql_rewrite", // not found anywhere?
+			"sharding_algo":                    gAppConfig.ShardingAlgoHash,
+			"cfg_from_tns_override_num_shards": gAppConfig.CfgFromTnsOverrideNumShards,
 		},
 		"TAF": {
-			"enable_taf",
-			"cfg_from_tns_override_taf",
-			"testing_enable_dml_taf",
-			"taf_timeout_ms",
-			"taf_bin_duration",
-			"taf_allow_slow_every_x",
-			"taf_normally_slow_count",
-		},
-		"DBA_QUERY_BIND_BLOCKER": {
-			"child.executable",
-			"enable_bind_hash_logging",
-			"enable_query_bind_blocker",
+			"enable_taf":                gAppConfig.EnableTAF,
+			"cfg_from_tns_override_taf": gAppConfig.CfgFromTnsOverrideTaf,
+			"testing_enable_dml_taf":    gAppConfig.TestingEnableDMLTaf,
+			"taf_timeout_ms":            gAppConfig.TAFTimeoutMs,
+			"taf_bin_duration":          gAppConfig.TAFBinDuration,
+			"taf_allow_slow_every_x":    gAppConfig.TAFAllowSlowEveryX,
+			"taf_normally_slow_count":   gAppConfig.TAFNormallySlowCount,
 		},
 		"BIND-EVICTION": {
-			"enable_query_bind_blocker",
-			"bind_eviction_threshold_pct",
-			"bind_eviction_decr_per_sec",
-			"bind_eviction_target_conn_pct",
-			"bind_eviction_max_throttle",
-			"bind_eviction_names",
-			"skip_eviction_host_prefix",
-			"eviction_host_prefix",
-			"query_bind_blocker_min_sql_prefix",
+			"child.executable":          gAppConfig.ChildExecutable,
+			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker, // where should we keep it? in
+			//"enable_bind_hash_logging" FOUND FOR SOME OCCs ONLY IN occ.def
+			"bind_eviction_threshold_pct":       gAppConfig.BindEvictionThresholdPct,
+			"bind_eviction_decr_per_sec":        gAppConfig.BindEvictionDecrPerSec,
+			"bind_eviction_target_conn_pct":     gAppConfig.BindEvictionTargetConnPct,
+			"bind_eviction_max_throttle":        gAppConfig.BindEvictionMaxThrottle,
+			"bind_eviction_names":               gAppConfig.BindEvictionNames,
+			"skip_eviction_host_prefix":         gAppConfig.SkipEvictRegex,
+			"eviction_host_prefix":              gAppConfig.EvictRegex,
+			"query_bind_blocker_min_sql_prefix": gAppConfig.QueryBindBlockerMinSqlPrefix,
+			"enable_connlimit_check":            gAppConfig.EnableConnLimitCheck,
 		},
 		"SOFT-EVICTION": {
-			"soft_eviction_effective_time",
-			"soft_eviction_probability",
+			"soft_eviction_effective_time": gAppConfig.SoftEvictionEffectiveTimeMs,
+			"soft_eviction_probability":    gAppConfig.SoftEvictionProbability,
 		},
 		"WORKER-CONFIGURATIONS": {
-			"lifespan_check_interval",
-			"lifo_scheduler_enabled",
-			"num_workers_per_proxy",
-			"max_clients_per_worker",
-			"max_stranded_time_interval",
-			"high_load_max_stranded_time_interval",
-			"high_load_skip_initiate_recover_pct",
-			"enable_danglingworker_recovery",
-			"max_db_connects_per_sec",
-			"max_lifespan_per_child",
-			"max_requests_per_child",
+			"lifespan_check_interval": gAppConfig.lifeSpanCheckInterval,
+			"lifo_scheduler_enabled":  gAppConfig.LifoScheduler,
+			//"num_workers_per_proxy",  // only present in occ.def for some occs
+			//"max_clients_per_worker", // only present in occ.def for some occs
+			"max_stranded_time_interval":           gAppConfig.StrandedWorkerTimeoutMs,
+			"high_load_max_stranded_time_interval": gAppConfig.HighLoadStrandedWorkerTimeoutMs,
+			"high_load_skip_initiate_recover_pct":  gAppConfig.HighLoadSkipInitiateRecoverPct,
+			"enable_danglingworker_recovery":       gAppConfig.EnableDanglingWorkerRecovery,
+			"max_db_connects_per_sec":              gAppConfig.MaxDbConnectsPerSec,
+			"max_lifespan_per_child":               gOpsConfig.maxLifespanPerChild,
+			"max_requests_per_child":               gOpsConfig.maxRequestsPerChild,
+			"max_desire_healthy_worker_pct":        gAppConfig.MaxDesiredHealthyWorkerPct,
 		},
 		"R-W-SPLIT": {
-			"readonly_children_pct",
-			"cfg_from_tns_override_rw_split",
+			"readonly_children_pct":          gAppConfig.ReadonlyPct,
+			"cfg_from_tns_override_rw_split": gAppConfig.CfgFromTnsOverrideRWSplit,
 		},
 		"STATE-LOG": {
-			"state_log_file",
-			"state_log_interval",
-			"state_log_prefix",
+			//"state_log_file", // default config in occ.def, present in hera.txt but not present in config.go
+			"state_log_interval": gAppConfig.StateLogInterval,
+			"state_log_prefix":   gAppConfig.StateLogPrefix,
+		},
+		"RAC": {
+			"management_table_prefix": gAppConfig.ManagementTablePrefix,
+			"rac_sql_interval":        gAppConfig.RacMaintReloadInterval,
+			"rac_restart_window":      gAppConfig.RacRestartWindow,
 		},
 		"NO-CATEGORY": {
-			"log_level",
-			"high_load_pct",
-			"init_limit_pct",
-			"page_alert",
-			"socket_timeout",
-			"standby_children_pct",
-			"enable_occ_caching_routing",
-			"bits_to_match",
-			"max_batch_col_size",
-			"max_fetch_block_size",
-			"max_out_bind_var_size",
-			"write_cert_to_file",
-			"ping_interval",
-			"num_standby_dbs",
+			"database_type":  gAppConfig.DatabaseType,
+			"cfg_from_tns":   gAppConfig.CfgFromTns,
+			"log_level":      gOpsConfig.logLevel,
+			"high_load_pct":  gAppConfig.HighLoadPct,
+			"init_limit_pct": gAppConfig.InitLimitPct,
+			//"page_alert",                 // default config in occ.def, present in hera.txt but not present in config.go
+			//"socket_timeout",             // present in occ.def for 1 or 2 occs only
+			//"standby_children_pct",       // default config in occ.def, present in hera.txt but not present in config.go
+			//"enable_occ_caching_routing", // default config in occ.def, present in hera.txt but not present in config.go
+			//"bits_to_match",              // present in occ.def for few OCCs. Can't find in config.go
+			//"max_batch_col_size",         // present in occ.def for few OCCs. Can't find in config.go
+			//"max_fetch_block_size",       // default and custom config in occ.def, present in hera.txt but not present in config.go
+			//"max_out_bind_var_size",      // present in occ.def for 1 or 2 occs only
+			//"ping_interval",              // present in occ.def for few OCCs.
+			"num_standby_dbs": gAppConfig.NumStdbyDbs,
 		},
 	}
 
 	//TODO: for local testing only. Remove before final push
-	//dir, _ := os.Getwd()
-	//fmt.Println("pwd: ", dir)
+	dir, _ := os.Getwd()
+	fmt.Println("pwd: ", dir)
 
 	//Set the file search path to the current working directory
-	//err := os.Chdir(dir + "/lib")
+	_ = os.Chdir(dir + "/lib")
 	//if err != nil {
 	//	fmt.Println("Error:", err)
 	//	return nil
 	//}
 
 	// location of files to search values of the configs from
-	files := []string{"hera.txt"}
-	// fetch values of all whiteListConfigs
-	collectedValues := make(map[string]map[string]string)
+	//files := []string{"hera.txt"}
+	//// fetch values of all whiteListConfigs
+	//collectedValues := make(map[string]map[string]string)
+	//
+	//for _, file := range files {
+	//	values, err := extractValuesFromFile(file)
+	//	if err != nil {
+	//		fmt.Printf("Error reading file %s: %v\n", file, err)
+	//		continue
+	//	}
+	//
+	//	// Compare collected values with configList
+	//	for feature, configs := range whiteListConfigs {
+	//		for _, cfg := range configs {
+	//			if value, ok := values[cfg]; ok {
+	//				if _, found := collectedValues[feature]; !found {
+	//					collectedValues[feature] = make(map[string]string)
+	//				}
+	//				if value != "" {
+	//					collectedValues[feature][cfg] = value
+	//				} else {
+	//					//collectedValues[feature][config] = gAppConfig.
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
 
-	for _, file := range files {
-		values, err := extractValuesFromFile(file)
-		if err != nil {
-			fmt.Printf("Error reading file %s: %v\n", file, err)
-			continue
-		}
-
-		// Compare collected values with configList
-		for feature, configs := range whiteListConfigs {
-			for _, config := range configs {
-				if value, ok := values[config]; ok {
-					if _, found := collectedValues[feature]; !found {
-						collectedValues[feature] = make(map[string]string)
-					}
-					if value != "" {
-						collectedValues[feature][config] = value
-					} else {
-						//collectedValues[feature][config] = gAppConfig.
-					}
-				}
-			}
-		}
-	}
-
-	for feature, configs := range collectedValues {
+	//for feature, configs := range collectedValues {
+	//	switch feature {
+	//	case "BACKLOG":
+	//		if collectedValues[feature]["backlog_pct"] == "0" {
+	//			continue
+	//		}
+	//	case "SHARDING":
+	//		if collectedValues[feature]["enable_sharding"] == "false" {
+	//			continue
+	//		}
+	//	case "TAF":
+	//		if collectedValues[feature]["enable_taf"] == "false" {
+	//			continue
+	//		}
+	//	case "R-W-SPLIT":
+	//		if collectedValues[feature]["readonly_children_pct"] == "0" {
+	//			continue
+	//		}
+	//	}
+	//
+	//	evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
+	//	for config := range configs {
+	//		evt.AddDataStr(config, collectedValues[feature][config])
+	//	}
+	//	evt.Completed()
+	//
+	//	configsMarshal, _ := json.Marshal(configs)
+	//	configsMarshalStr := string(configsMarshal)
+	//
+	//	//TODO: remove below logs before final push
+	//	if logger.GetLogger().V(logger.Warning) {
+	//		logger.GetLogger().Log(logger.Warning, "list of configs within the feature:", feature, ":", configsMarshalStr)
+	//	}
+	//}
+	for feature, configs := range whiteListConfigs {
 		switch feature {
 		case "BACKLOG":
-			if collectedValues[feature]["backlog_pct"] == "0" {
+			if gAppConfig.BacklogPct == 0 {
 				continue
 			}
 		case "SHARDING":
-			if collectedValues[feature]["enable_sharding"] == "false" {
+			if gAppConfig.EnableSharding == false {
 				continue
 			}
 		case "TAF":
-			if collectedValues[feature]["enable_taf"] == "false" {
+			if gAppConfig.EnableTAF == false {
 				continue
 			}
 		case "R-W-SPLIT":
-			if collectedValues[feature]["readonly_children_pct"] == "0" {
+			if gAppConfig.ReadonlyPct == 0 {
 				continue
 			}
 		}
 
 		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
-		for config := range configs {
-			evt.AddDataStr(config, collectedValues[feature][config])
+		for cfg, val := range configs {
+			evt.AddDataStr(cfg, val.(string))
 		}
 		evt.Completed()
 
