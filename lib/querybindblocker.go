@@ -47,6 +47,9 @@ type QueryBindBlockerCfg struct {
 	// check by sqltext prefix (delay to end)
 }
 
+var lastLoggingTime time.Time
+var defaultQBBTableMissingErrorLoggingInterval = 2 * time.Hour
+
 func (cfg *QueryBindBlockerCfg) IsBlocked(sqltext string, bindPairs []string) (bool, string) {
 	sqlhash := uint32(utility.GetSQLHash(sqltext))
 	if logger.GetLogger().V(logger.Verbose) {
@@ -134,10 +137,10 @@ func InitQueryBindBlocker(modName string) {
 		return
 	}
 	db.SetMaxIdleConns(0)
-
 	go func() {
 		time.Sleep(4 * time.Second)
 		logger.GetLogger().Log(logger.Info, "Loading query bind blocker - initial")
+
 		loadBlockQueryBind(db)
 		c := time.Tick(11 * time.Second)
 		for now := range c {
@@ -155,6 +158,7 @@ func loadBlockQueryBind(db *sql.DB) {
 		logger.GetLogger().Log(logger.Alert, "Error (conn) loading query bind blocker:", err)
 		return
 	}
+
 	defer conn.Close()
 	q := fmt.Sprintf("SELECT /*queryBindBlocker*/ %ssqlhash, %ssqltext, bindvarname, bindvarvalue, blockperc, %smodule FROM %s_rate_limiter where %smodule='%s'", GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, g_module)
 	logger.GetLogger().Log(logger.Info, "Loading query bind blocker meta-sql "+q)
@@ -165,8 +169,14 @@ func loadBlockQueryBind(db *sql.DB) {
 	}
 	rows, err := stmt.QueryContext(ctx)
 	if err != nil {
-		logger.GetLogger().Log(logger.Alert, "Error (query) loading query bind blocker:", err)
-		return
+		if lastLoggingTime.IsZero() || time.Since(lastLoggingTime) > defaultQBBTableMissingErrorLoggingInterval {
+			//In case table missing log alert event for every 2 hour
+			logger.GetLogger().Log(logger.Alert, "Error (query) loading query bind blocker:", err)
+			lastLoggingTime = time.Now()
+			return
+		} else {
+			return
+		}
 	}
 	defer rows.Close()
 
