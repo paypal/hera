@@ -22,16 +22,38 @@ import (
 	"errors"
 	"fmt"
 	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/config"
+	"github.com/paypal/hera/utility/logger"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
-
-	"github.com/paypal/hera/config"
-	"github.com/paypal/hera/utility/logger"
+	"time"
 )
+
+//
+//type Backlog struct {
+//	BacklogPct              int
+//	BacklogTimeoutMsec      int
+//	ShortBacklogTimeoutMsec int
+//	satRecoverThresholdMs   uint32
+//}
+//
+//type WhiteListConfigs struct {
+//	Backlog
+//	Keymaker
+//	Sharding
+//	Taf
+//	DbaQueryBindBlocker
+//	BindEviction
+//	SoftEviction
+//	WorkerConfigurations
+//	RWSplit
+//	StateLog
+//	NoCategory
+//}
 
 //The Config contains all the static configuration
 type Config struct {
@@ -194,8 +216,15 @@ type OpsConfig struct {
 	satRecoverThrottleRate uint32
 }
 
+//type AllConfigs struct {
+//	Config
+//	OpsConfig
+//}
+
 var gAppConfig *Config
 var gOpsConfig *OpsConfig
+
+//var gAllConfigs *AllConfigs
 
 // GetConfig returns the application config
 func GetConfig() *Config {
@@ -465,10 +494,14 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
-	err = LogOccConfigs()
-	if err != nil {
-		return err
-	}
+	go func() {
+		//sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
+		sleep := 5 * time.Minute // 5 minutes
+		for {
+			time.Sleep(sleep)
+			LogOccConfigs()
+		}
+	}()
 
 	return nil
 }
@@ -480,10 +513,11 @@ func extractValuesFromFile(file string) (map[string]string, error) {
 	}
 
 	values := make(map[string]string)
-	//get data from hera.txt and occ.def (config.go fetches everything from opscfg etc places and populates in hera.txt
+	//get data from hera.txt (config.go fetches everything from opscfg, occ.def etc places and populates in hera.txt)
 	//hera.txt is source of truth
+	//switch case to add other file locations in future
 	switch file {
-	case "occ.def", "hera.txt":
+	case "hera.txt":
 		re := regexp.MustCompile(`\b(\w+)\s*=\s*([^#\n]+)`)
 		matches := re.FindAllStringSubmatch(string(content), -1)
 		for _, match := range matches {
@@ -619,7 +653,7 @@ func LogOccConfigs() error {
 	//}
 
 	// location of files to search values of the configs from
-	files := []string{"occ.def", "hera.txt"}
+	files := []string{"hera.txt"}
 	// fetch values of all whiteListConfigs
 	collectedValues := make(map[string]map[string]string)
 
@@ -637,12 +671,36 @@ func LogOccConfigs() error {
 					if _, found := collectedValues[feature]; !found {
 						collectedValues[feature] = make(map[string]string)
 					}
-					collectedValues[feature][config] = value
+					if value != "" {
+						collectedValues[feature][config] = value
+					} else {
+						//collectedValues[feature][config] = gAppConfig.
+					}
 				}
 			}
 		}
 	}
+
 	for feature, configs := range collectedValues {
+		switch feature {
+		case "BACKLOG":
+			if collectedValues[feature]["backlog_pct"] == "0" {
+				continue
+			}
+		case "SHARDING":
+			if collectedValues[feature]["enable_sharding"] == "false" {
+				continue
+			}
+		case "TAF":
+			if collectedValues[feature]["enable_taf"] == "false" {
+				continue
+			}
+		case "R-W-SPLIT":
+			if collectedValues[feature]["readonly_children_pct"] == "0" {
+				continue
+			}
+		}
+
 		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
 		for config := range configs {
 			evt.AddDataStr(config, collectedValues[feature][config])
@@ -658,7 +716,6 @@ func LogOccConfigs() error {
 		}
 	}
 
-	return nil
 }
 
 // CheckOpsConfigChange checks if the ops config file needs to be reloaded and reloads it if necessary.
