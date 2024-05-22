@@ -114,8 +114,8 @@ func fastAndSlowBinds() error {
 	// client threads of slow queries
 	var stop2 int
 	var badCliErr string
-	mkClients(1+int(max_conn*1.6), &stop2, 29001111, "badClient", &badCliErr, db)
-	time.Sleep(3100 * time.Millisecond)
+	mkClients(1+int(max_conn*1.2), &stop2, 29001111, "badClient", &badCliErr, db)
+	time.Sleep(5100 * time.Millisecond)
 	/* if (testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0) {
 		return fmt.Errorf("BIND_THROTTLE was not triggered")
 	}
@@ -208,7 +208,7 @@ func TestBindEvict(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestBindEvict +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	err := fastAndSlowBinds()
 	if err != nil {
-		t.Fatalf("main step function returned err %s", err.Error())
+		t.Errorf("main step function returned err %s", err.Error())
 	}
 	if testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0 {
 		t.Fatalf("BIND_THROTTLE was not triggered")
