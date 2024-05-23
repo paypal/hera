@@ -20,13 +20,12 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/config"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-
-	"github.com/paypal/hera/config"
-	"github.com/paypal/hera/utility/logger"
 )
 
 //The Config contains all the static configuration
@@ -176,6 +175,9 @@ type Config struct {
 
 	// Max desired percentage of healthy workers for the worker pool
 	MaxDesiredHealthyWorkerPct int
+
+	//Timeout for management queries.
+	ManagementQueriesTimeoutInUs int
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -461,6 +463,7 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
+	gAppConfig.ManagementQueriesTimeoutInUs = cdb.GetOrDefaultInt("management_queries_timeout_us", 200000) //200 milliseconds
 	return nil
 }
 

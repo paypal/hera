@@ -102,9 +102,21 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	binds[0], err = os.Hostname()
 	binds[0] = strings.ToUpper(binds[0])
 	binds[1] = strings.ToUpper(cmdLineModuleName) // */
+	//First time data loading
+	racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, GetConfig().ManagementQueriesTimeoutInUs)
+
+	timeTicker := time.NewTicker(time.Second * time.Duration(interval))
+	defer timeTicker.Stop()
 	for {
-		racMaint(ctx, shard, db, racSQL, cmdLineModuleName, prev)
-		time.Sleep(time.Second * time.Duration(interval))
+		select {
+		case <-ctx.Done():
+			logger.GetLogger().Log(logger.Alert, "Application main context has been closed, so exiting from racmaint data reload.")
+			return
+		case <-timeTicker.C:
+			//Periodic data loading
+			racMaint(&ctx, shard, db, racSQL, cmdLineModuleName, prev, GetConfig().ManagementQueriesTimeoutInUs)
+			timeTicker.Reset(time.Second * time.Duration(interval))
+		}
 	}
 }
 
@@ -112,14 +124,18 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	racMaint is the main function for RAC maintenance processing, being called regularly.
 	When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
 */
-func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg) {
+func racMaint(ctx *context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg, queryTimeoutInUs int) {
 	//
 	// print this log for unittesting
 	//
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, "Rac maint check, shard =", shard)
 	}
-	conn, err := db.Conn(ctx)
+	//create cancellable context
+	queryContext, cancel := context.WithTimeout(*ctx, time.Duration(queryTimeoutInUs)*time.Microsecond)
+	defer cancel() // Always call cancel to release resources associated with the context
+
+	conn, err := db.Conn(queryContext)
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "Error (conn) rac maint for shard =", shard, ",err :", err)
@@ -127,7 +143,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 		return
 	}
 	defer conn.Close()
-	stmt, err := conn.PrepareContext(ctx, racSQL)
+	stmt, err := conn.PrepareContext(queryContext, racSQL)
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "Error (stmt) rac maint for shard =", shard, ",err :", err)
@@ -139,7 +155,7 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 	hostname = strings.ToUpper(hostname)
 	module := strings.ToUpper(cmdLineModuleName)
 	module_taf := fmt.Sprintf("%s_TAF", module)
-	rows, err := stmt.QueryContext(ctx, hostname, module_taf, module)
+	rows, err := stmt.QueryContext(queryContext, hostname, module_taf, module)
 	if err != nil {
 		if logger.GetLogger().V(logger.Info) {
 			logger.GetLogger().Log(logger.Info, "Error (query) rac maint for shard =", shard, ",err :", err)

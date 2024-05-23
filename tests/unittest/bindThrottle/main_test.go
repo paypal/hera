@@ -220,7 +220,7 @@ func TestBindThrottle(t *testing.T) {
 	} // */
 
 	logger.GetLogger().Log(logger.Debug, "BindThrottle midpt +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	err = partialBadLoad(0.8)
+	err = partialBadLoad(0.7)
 	if err != nil {
 		// t.Fatalf("main step function returned err %s", err.Error()) // can be triggered since test only has one sql
 	}
