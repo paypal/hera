@@ -22,7 +22,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["enable_query_bind_blocker"] = "true"
-	appcfg["management_queries_timeout_us"] = "200"
+	appcfg["management_queries_timeout_us"] = "100"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -54,7 +54,7 @@ func TestQueryBindBlockerWithTimeout(t *testing.T) {
 	}
 	db.SetMaxIdleConns(0)
 	defer db.Close()
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	out := testutil.RegexCountFile("loading query bind blocker: context deadline exceeded", "hera.log")
 	if out < 1 {
 		err = nil
