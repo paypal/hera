@@ -24,10 +24,8 @@ import (
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -476,6 +474,9 @@ func InitConfig() error {
 		//sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
 		sleep := 5 * time.Minute // 5 minutes
 		for {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "in goroutine LogOccConfigs()")
+			}
 			time.Sleep(sleep)
 			LogOccConfigs()
 		}
@@ -484,30 +485,11 @@ func InitConfig() error {
 	return nil
 }
 
-func extractValuesFromFile(file string) (map[string]string, error) {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-
-	values := make(map[string]string)
-	//get data from hera.txt (config.go fetches everything from opscfg, occ.def etc places and populates in hera.txt)
-	//hera.txt is source of truth
-	//switch case to add other file locations in future
-	switch file {
-	case "hera.txt":
-		re := regexp.MustCompile(`\b(\w+)\s*=\s*([^#\n]+)`)
-		matches := re.FindAllStringSubmatch(string(content), -1)
-		for _, match := range matches {
-			values[match[1]] = strings.TrimSpace(match[2])
-		}
-	}
-
-	return values, nil
-}
-
 func LogOccConfigs() {
-
+	//TODO: Remove log statements
+	//if logger.GetLogger().V(logger.Warning) {
+	//	logger.GetLogger().Log(logger.Warning, "Inside LogOccConfigs()")
+	//}
 	whiteListConfigs := map[string]map[string]interface{}{
 		"BACKLOG": {
 			"backlog_pct":                  gAppConfig.BacklogPct,
@@ -589,7 +571,7 @@ func LogOccConfigs() {
 			"rac_restart_window":      gAppConfig.RacRestartWindow,
 		},
 		"NO-CATEGORY": {
-			"database_type":  gAppConfig.DatabaseType,
+			"database_type":  gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
 			"cfg_from_tns":   gAppConfig.CfgFromTns,
 			"log_level":      gOpsConfig.logLevel,
 			"high_load_pct":  gAppConfig.HighLoadPct,
@@ -608,79 +590,16 @@ func LogOccConfigs() {
 	}
 
 	//TODO: for local testing only. Remove before final push
-	dir, _ := os.Getwd()
-	fmt.Println("pwd: ", dir)
+	//dir, _ := os.Getwd()
+	//fmt.Println("pwd: ", dir)
 
 	//Set the file search path to the current working directory
-	_ = os.Chdir(dir + "/lib")
+	//_ = os.Chdir(dir + "/lib")
 	//if err != nil {
 	//	fmt.Println("Error:", err)
 	//	return nil
 	//}
 
-	// location of files to search values of the configs from
-	//files := []string{"hera.txt"}
-	//// fetch values of all whiteListConfigs
-	//collectedValues := make(map[string]map[string]string)
-	//
-	//for _, file := range files {
-	//	values, err := extractValuesFromFile(file)
-	//	if err != nil {
-	//		fmt.Printf("Error reading file %s: %v\n", file, err)
-	//		continue
-	//	}
-	//
-	//	// Compare collected values with configList
-	//	for feature, configs := range whiteListConfigs {
-	//		for _, cfg := range configs {
-	//			if value, ok := values[cfg]; ok {
-	//				if _, found := collectedValues[feature]; !found {
-	//					collectedValues[feature] = make(map[string]string)
-	//				}
-	//				if value != "" {
-	//					collectedValues[feature][cfg] = value
-	//				} else {
-	//					//collectedValues[feature][config] = gAppConfig.
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-
-	//for feature, configs := range collectedValues {
-	//	switch feature {
-	//	case "BACKLOG":
-	//		if collectedValues[feature]["backlog_pct"] == "0" {
-	//			continue
-	//		}
-	//	case "SHARDING":
-	//		if collectedValues[feature]["enable_sharding"] == "false" {
-	//			continue
-	//		}
-	//	case "TAF":
-	//		if collectedValues[feature]["enable_taf"] == "false" {
-	//			continue
-	//		}
-	//	case "R-W-SPLIT":
-	//		if collectedValues[feature]["readonly_children_pct"] == "0" {
-	//			continue
-	//		}
-	//	}
-	//
-	//	evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
-	//	for config := range configs {
-	//		evt.AddDataStr(config, collectedValues[feature][config])
-	//	}
-	//	evt.Completed()
-	//
-	//	configsMarshal, _ := json.Marshal(configs)
-	//	configsMarshalStr := string(configsMarshal)
-	//
-	//	//TODO: remove below logs before final push
-	//	if logger.GetLogger().V(logger.Warning) {
-	//		logger.GetLogger().Log(logger.Warning, "list of configs within the feature:", feature, ":", configsMarshalStr)
-	//	}
-	//}
 	for feature, configs := range whiteListConfigs {
 		switch feature {
 		case "BACKLOG":
@@ -703,7 +622,9 @@ func LogOccConfigs() {
 
 		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
 		for cfg, val := range configs {
-			evt.AddDataStr(cfg, val.(string))
+			s := fmt.Sprintf("%v", val)
+			//fmt.Println("interface{} to string: ", s)
+			evt.AddDataStr(cfg, s)
 		}
 		evt.Completed()
 
