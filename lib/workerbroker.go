@@ -140,7 +140,7 @@ func (broker *WorkerBroker) init() error {
 
 		broker.poolCfgs[s][wtypeStdBy] = new(WorkerPoolCfg)
 		if GetConfig().EnableTAF {
-			broker.poolCfgs[s][wtypeStdBy].maxWorkerCnt = GetNumWWorkers(s)
+			broker.poolCfgs[s][wtypeStdBy].maxWorkerCnt = GetNumStdByWorkers(s)
 			broker.poolCfgs[s][wtypeStdBy].instCnt = 1
 		} else {
 			broker.poolCfgs[s][wtypeStdBy].maxWorkerCnt = 0
@@ -386,6 +386,7 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 func (broker *WorkerBroker) changeMaxWorkers() {
 	wW := GetNumWWorkers(0)
 	rW := GetNumRWorkers(0)
+	sW := GetNumStdByWorkers(0)
 
 	for i := 0; i < GetConfig().NumOfShards; i++ {
 		broker.resizePool(wtypeRW, wW, i)
@@ -395,7 +396,7 @@ func (broker *WorkerBroker) changeMaxWorkers() {
 
 		// if TAF enabled, handle stdby as well
 		if GetConfig().EnableTAF {
-			broker.resizePool(wtypeStdBy, wW, i)
+			broker.resizePool(wtypeStdBy, sW, i)
 		}
 
 		if GetConfig().EnableWhitelistTest {
