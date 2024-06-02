@@ -495,7 +495,6 @@ func LogOccConfigs() {
 			"backlog_pct":                  gAppConfig.BacklogPct,
 			"request_backlog_timeout":      gAppConfig.BacklogTimeoutMsec,
 			"short_backlog_timeout":        gAppConfig.ShortBacklogTimeoutMsec,
-			"saturation_recover_threshold": gOpsConfig.satRecoverThresholdMs,
 		},
 		"SHARDING": {
 			"enable_sharding":                gAppConfig.EnableSharding,
@@ -526,7 +525,6 @@ func LogOccConfigs() {
 		},
 		"BIND-EVICTION": {
 			"child.executable":          gAppConfig.ChildExecutable,
-			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker, // where should we keep it? in
 			//"enable_bind_hash_logging" FOUND FOR SOME OCCs ONLY IN occ.def
 			"bind_eviction_threshold_pct":       gAppConfig.BindEvictionThresholdPct,
 			"bind_eviction_decr_per_sec":        gAppConfig.BindEvictionDecrPerSec,
@@ -537,6 +535,13 @@ func LogOccConfigs() {
 			"eviction_host_prefix":              gAppConfig.EvictRegex,
 			"query_bind_blocker_min_sql_prefix": gAppConfig.QueryBindBlockerMinSqlPrefix,
 			"enable_connlimit_check":            gAppConfig.EnableConnLimitCheck,
+		},
+		"MANUAL-RATE-LIMITER": {
+			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker,
+		},
+		"SATURATION-RECOVERY": {
+			"saturation_recover_threshold":     gOpsConfig.satRecoverThresholdMs,
+			"saturation_recover_throttle_rate": gOpsConfig.satRecoverThrottleRate,
 		},
 		"SOFT-EVICTION": {
 			"soft_eviction_effective_time": gAppConfig.SoftEvictionEffectiveTimeMs,
@@ -559,11 +564,6 @@ func LogOccConfigs() {
 		"R-W-SPLIT": {
 			"readonly_children_pct":          gAppConfig.ReadonlyPct,
 			"cfg_from_tns_override_rw_split": gAppConfig.CfgFromTnsOverrideRWSplit,
-		},
-		"STATE-LOG": {
-			//"state_log_file", // default config in occ.def, present in hera.txt but not present in config.go
-			"state_log_interval": gAppConfig.StateLogInterval,
-			"state_log_prefix":   gAppConfig.StateLogPrefix,
 		},
 		"RAC": {
 			"management_table_prefix": gAppConfig.ManagementTablePrefix,
