@@ -75,6 +75,9 @@ type Config struct {
 	// config_reload_time_ms(30 * 1000)
 	//
 	ConfigReloadTimeMs int
+	//
+	//
+	ConfigLoggingReloadTimeHours int
 	// custom_auth_timeout(1000)
 	CustomAuthTimeoutMs int
 	// time_skew_threshold_warn(2)
@@ -277,6 +280,7 @@ func InitConfig() error {
 	}
 
 	gAppConfig.ConfigReloadTimeMs = cdb.GetOrDefaultInt("config_reload_time_ms", 30*1000)
+	gAppConfig.ConfigLoggingReloadTimeHours = cdb.GetOrDefaultInt("config_logging_reload_time_hours", 24)
 	gAppConfig.CustomAuthTimeoutMs = cdb.GetOrDefaultInt("custom_auth_timeout", 1000)
 	gAppConfig.TimeSkewThresholdWarnSec = cdb.GetOrDefaultInt("time_skew_threshold_warn", 2)
 	gAppConfig.TimeSkewThresholdErrorSec = cdb.GetOrDefaultInt("time_skew_threshold_error", 15)
@@ -471,8 +475,8 @@ func InitConfig() error {
 	}
 
 	go func() {
-		//sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
-		sleep := 5 * time.Minute // 5 minutes
+		sleep := time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour
+		//sleep := 5 * time.Minute // 5 minutes
 		for {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "in goroutine LogOccConfigs()")
@@ -616,6 +620,10 @@ func LogOccConfigs() {
 			}
 		case "R-W-SPLIT":
 			if gAppConfig.ReadonlyPct == 0 {
+				continue
+			}
+		case "SOFT-EVICTION", "BIND-EVICTION":
+			if gOpsConfig.satRecoverThrottleRate < 30 {
 				continue
 			}
 		}
