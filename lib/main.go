@@ -94,6 +94,8 @@ func Run() {
 	// create singleton broker and start worker/pools
 	//
 	nameForTns := *namePtr
+	//InitPyplAppConfig()
+	//sec, cert, err := LoadMysqlSecurity()
 	CfgFromTns(nameForTns)
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
@@ -153,6 +155,7 @@ func Run() {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	} else {
 		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
+		//lsn = NewCryptoTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port), sec, cert)
 	}
 
 	if GetConfig().EnableSharding {
@@ -166,7 +169,6 @@ func Run() {
 	}
 	InitRacMaint(*namePtr)
 
-	err = LogOccConfigs()
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to logs OCC configurations:", err.Error())
