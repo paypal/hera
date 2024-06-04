@@ -18,7 +18,6 @@
 package lib
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/paypal/hera/cal"
@@ -635,14 +634,6 @@ func LogOccConfigs() {
 			evt.AddDataStr(cfg, s)
 		}
 		evt.Completed()
-
-		configsMarshal, _ := json.Marshal(configs)
-		configsMarshalStr := string(configsMarshal)
-
-		//TODO: remove below logs before final push
-		if logger.GetLogger().V(logger.Warning) {
-			logger.GetLogger().Log(logger.Warning, "list of configs within the feature:", feature, ":", configsMarshalStr)
-		}
 	}
 
 }
