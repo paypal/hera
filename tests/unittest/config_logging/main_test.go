@@ -1,13 +1,13 @@
 package main
 
 import (
+	"github.com/paypal/hera/tests/unittest/testutil"
+	"github.com/paypal/hera/utility/logger"
+	"time"
+
 	//"fmt"
 	//	"os"
 	"testing"
-	"time"
-
-	"github.com/paypal/hera/tests/unittest/testutil"
-	"github.com/paypal/hera/utility/logger"
 )
 
 var mx testutil.Mux
@@ -21,13 +21,10 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
 	appcfg["sharding_cfg_reload_interval"] = "0"
-	if racmaint {
-		appcfg["rac_sql_interval"] = "3"
-	} else {
-		appcfg["rac_sql_interval"] = "0"
-	}
 
-	appcfg["db_heartbeat_interval"] = "5"
+	appcfg["config_logging_reload_time_hours"] = "1"
+	appcfg["backlog_pct"] = "30"
+	appcfg["enable_sharding"] = "true"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -46,14 +43,13 @@ func TestMain(m *testing.M) {
 	testutil.UtilMain(m, cfg, before)
 }
 
-func TestHB(t *testing.T) {
+func TestConfigLogging(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "Test config-logging begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	time.Sleep(12 * time.Second)
-	hb_count := 3 * 2 // 3 connections, 2 hb check in 12 seconds.
-	if hb_count != testutil.RegexCountFile("sending heartbeat to DB", "hera.log") {
-		t.Fatalf("incorrect heartbeat count")
+	if 4 == testutil.RegexCountFile("OCC_CONFIG", "cal.log") {
+		t.Fatalf("Can't find OCC_CONFIG cal event")
 	}
 
-	logger.GetLogger().Log(logger.Debug, "TestHB done  -------------------------------------------------------------")
+	time.Sleep(5 * time.Second)
+	logger.GetLogger().Log(logger.Debug, "Test config-logging done  -------------------------------------------------------------")
 }
