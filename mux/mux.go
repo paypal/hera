@@ -17,10 +17,9 @@
 
 package main
 
-import (
-	lib "github.com/paypal/hera/lib"
-)
+import "github.com/paypal/hera/lib"
 
 func main() {
-	lib.Run()
+	//lib.Run()
+	lib.LogOccConfigs()
 }

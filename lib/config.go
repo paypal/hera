@@ -194,15 +194,8 @@ type OpsConfig struct {
 	satRecoverThrottleRate uint32
 }
 
-//type AllConfigs struct {
-//	Config
-//	OpsConfig
-//}
-
 var gAppConfig *Config
 var gOpsConfig *OpsConfig
-
-//var gAllConfigs *AllConfigs
 
 // GetConfig returns the application config
 func GetConfig() *Config {
@@ -489,10 +482,6 @@ func InitConfig() error {
 }
 
 func LogOccConfigs() {
-	//TODO: Remove log statements
-	//if logger.GetLogger().V(logger.Warning) {
-	//	logger.GetLogger().Log(logger.Warning, "Inside LogOccConfigs()")
-	//}
 	whiteListConfigs := map[string]map[string]interface{}{
 		"BACKLOG": {
 			"backlog_pct":                  gAppConfig.BacklogPct,
@@ -579,15 +568,6 @@ func LogOccConfigs() {
 			"log_level":      gOpsConfig.logLevel,
 			"high_load_pct":  gAppConfig.HighLoadPct,
 			"init_limit_pct": gAppConfig.InitLimitPct,
-			//"page_alert",                 // default config in occ.def, present in hera.txt but not present in config.go
-			//"socket_timeout",             // present in occ.def for 1 or 2 occs only
-			//"standby_children_pct",       // default config in occ.def, present in hera.txt but not present in config.go
-			//"enable_occ_caching_routing", // default config in occ.def, present in hera.txt but not present in config.go
-			//"bits_to_match",              // present in occ.def for few OCCs. Can't find in config.go
-			//"max_batch_col_size",         // present in occ.def for few OCCs. Can't find in config.go
-			//"max_fetch_block_size",       // default and custom config in occ.def, present in hera.txt but not present in config.go
-			//"max_out_bind_var_size",      // present in occ.def for 1 or 2 occs only
-			//"ping_interval",              // present in occ.def for few OCCs.
 			"num_standby_dbs": gAppConfig.NumStdbyDbs,
 		},
 	}
