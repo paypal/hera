@@ -467,14 +467,14 @@ func InitConfig() error {
 	}
 
 	go func() {
-		sleep := time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour
+		configLoggingIntervalInHr := time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour
 		//sleep := 5 * time.Minute // 5 minutes
 		for {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "in goroutine LogOccConfigs()")
 			}
-			time.Sleep(sleep)
 			LogOccConfigs()
+			time.Sleep(configLoggingIntervalInHr)
 		}
 	}()
 
@@ -571,17 +571,6 @@ func LogOccConfigs() {
 			"num_standby_dbs": gAppConfig.NumStdbyDbs,
 		},
 	}
-
-	//TODO: for local testing only. Remove before final push
-	//dir, _ := os.Getwd()
-	//fmt.Println("pwd: ", dir)
-
-	//Set the file search path to the current working directory
-	//_ = os.Chdir(dir + "/lib")
-	//if err != nil {
-	//	fmt.Println("Error:", err)
-	//	return nil
-	//}
 
 	for feature, configs := range whiteListConfigs {
 		switch feature {
