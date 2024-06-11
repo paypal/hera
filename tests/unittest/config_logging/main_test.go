@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 func TestConfigLogging(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "Test config-logging begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
-	if testutil.RegexCountFile("OCC_CONFIG", "cal.log") < 6 {
+	if testutil.RegexCountFile("OCC_CONFIG", "cal.log") < 9 {
 		t.Fatalf("Can't find OCC_CONFIG cal event")
 	}
 
