@@ -468,7 +468,6 @@ func InitConfig() error {
 
 	go func() {
 		configLoggingIntervalInHr := time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour
-		//sleep := 5 * time.Minute // 5 minutes
 		for {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "in goroutine LogOccConfigs()")
@@ -484,9 +483,9 @@ func InitConfig() error {
 func LogOccConfigs() {
 	whiteListConfigs := map[string]map[string]interface{}{
 		"BACKLOG": {
-			"backlog_pct":                  gAppConfig.BacklogPct,
-			"request_backlog_timeout":      gAppConfig.BacklogTimeoutMsec,
-			"short_backlog_timeout":        gAppConfig.ShortBacklogTimeoutMsec,
+			"backlog_pct":             gAppConfig.BacklogPct,
+			"request_backlog_timeout": gAppConfig.BacklogTimeoutMsec,
+			"short_backlog_timeout":   gAppConfig.ShortBacklogTimeoutMsec,
 		},
 		"SHARDING": {
 			"enable_sharding":                gAppConfig.EnableSharding,
@@ -516,7 +515,7 @@ func LogOccConfigs() {
 			"taf_normally_slow_count":   gAppConfig.TAFNormallySlowCount,
 		},
 		"BIND-EVICTION": {
-			"child.executable":          gAppConfig.ChildExecutable,
+			"child.executable": gAppConfig.ChildExecutable,
 			//"enable_bind_hash_logging" FOUND FOR SOME OCCs ONLY IN occ.def
 			"bind_eviction_threshold_pct":       gAppConfig.BindEvictionThresholdPct,
 			"bind_eviction_decr_per_sec":        gAppConfig.BindEvictionDecrPerSec,
@@ -532,8 +531,8 @@ func LogOccConfigs() {
 			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker,
 		},
 		"SATURATION-RECOVERY": {
-			"saturation_recover_threshold":     gOpsConfig.satRecoverThresholdMs,
-			"saturation_recover_throttle_rate": gOpsConfig.satRecoverThrottleRate,
+			"saturation_recover_threshold":     GetSatRecoverThresholdMs(),
+			"saturation_recover_throttle_rate": GetSatRecoverThrottleRate(),
 		},
 		"SOFT-EVICTION": {
 			"soft_eviction_effective_time": gAppConfig.SoftEvictionEffectiveTimeMs,
@@ -549,8 +548,8 @@ func LogOccConfigs() {
 			"high_load_skip_initiate_recover_pct":  gAppConfig.HighLoadSkipInitiateRecoverPct,
 			"enable_danglingworker_recovery":       gAppConfig.EnableDanglingWorkerRecovery,
 			"max_db_connects_per_sec":              gAppConfig.MaxDbConnectsPerSec,
-			"max_lifespan_per_child":               gOpsConfig.maxLifespanPerChild,
-			"max_requests_per_child":               gOpsConfig.maxRequestsPerChild,
+			"max_lifespan_per_child":               GetMaxLifespanPerChild(),
+			"max_requests_per_child":               GetMaxRequestsPerChild(),
 			"max_desire_healthy_worker_pct":        gAppConfig.MaxDesiredHealthyWorkerPct,
 		},
 		"R-W-SPLIT": {
@@ -563,11 +562,11 @@ func LogOccConfigs() {
 			"rac_restart_window":      gAppConfig.RacRestartWindow,
 		},
 		"NO-CATEGORY": {
-			"database_type":  gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
-			"cfg_from_tns":   gAppConfig.CfgFromTns,
-			"log_level":      gOpsConfig.logLevel,
-			"high_load_pct":  gAppConfig.HighLoadPct,
-			"init_limit_pct": gAppConfig.InitLimitPct,
+			"database_type":   gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
+			"cfg_from_tns":    gAppConfig.CfgFromTns,
+			"log_level":       gOpsConfig.logLevel,
+			"high_load_pct":   gAppConfig.HighLoadPct,
+			"init_limit_pct":  gAppConfig.InitLimitPct,
 			"num_standby_dbs": gAppConfig.NumStdbyDbs,
 		},
 	}
@@ -591,7 +590,11 @@ func LogOccConfigs() {
 				continue
 			}
 		case "SOFT-EVICTION", "BIND-EVICTION":
-			if gOpsConfig.satRecoverThrottleRate < 30 {
+			if GetSatRecoverThrottleRate() <= 0 {
+				continue
+			}
+		case "MANUAL-RATE-LIMITER":
+			if gAppConfig.EnableQueryBindBlocker == false {
 				continue
 			}
 		}
