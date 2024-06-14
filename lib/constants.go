@@ -45,6 +45,8 @@ const (
 	EvtNameWhitelist          = "db_whitelist"
 	EvtNameShardKeyAutodisc   = "shard_key_auto_discovery"
 	EvtNameBadMapping         = "bad_mapping"
+	EvtNameScuttleIdMismatch  = "scuttle_id_mismatch"
+	EvtNameBadScuttleId       = "bad_scuttle_id"
 )
 
 // Shard map configuration
@@ -75,6 +77,7 @@ var (
 	ErrNoShardValue,
 	ErrAutodiscoverWhileSetShardID,
 	ErrNoScuttleIdPredicate,
+	ErrScuttleIDMismatch,
 	ErrCrossKeysDML,
 	ErrQueryBindBlocker,
 	ErrOther,
@@ -106,6 +109,7 @@ func MkErr(prefix string) {
 	ErrNoShardValue = errors.New(prefix + "-375: no shard value or wrong sharKey array binding")
 	ErrCrossKeysDML = errors.New(prefix + "-206: cross key dml")
 	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
+	ErrScuttleIDMismatch = errors.New(prefix + "-208: scuttle_id mismatch")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
 }

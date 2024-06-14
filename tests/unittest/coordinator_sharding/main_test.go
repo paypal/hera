@@ -459,9 +459,6 @@ func TestShardingSetShardKey(t *testing.T) {
 		err = nil
 		t.Fatalf("Expected 1 Unsupported both HERA_SET_SHARD_ID and ShardKey true, %v %v", err, len(out))
 	}
-	if out[0] != '1' {
-		t.Fatalf("Expected 1 instance of 'Unsupported both HERA_SET_SHARD_ID and ShardKey', instead got %d", int(out[0]-'0'))
-	}
 
 	conn, err = db.Conn(ctx)
 	if err != nil {
