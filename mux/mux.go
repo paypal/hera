@@ -17,7 +17,9 @@
 
 package main
 
-import "github.com/paypal/hera/lib"
+import (
+	lib "github.com/paypal/hera/lib"
+)
 
 func main() {
 	lib.Run()

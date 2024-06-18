@@ -28,9 +28,10 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["log_file"] = "hera.log"
 	appcfg["enable_sharding"] = "true"
 	appcfg["num_shards"] = "3"
+	appcfg["bouncer_enabled"] = "true"
 	appcfg["sharding_algo"] = "mod"
 	appcfg["shard_key_name"] = "id"
-	appcfg["config_logging_reload_time_hours"] = "1"
+	appcfg["config_logging_reload_time_hours"] = "0.0002"
 	pfx := os.Getenv("MGMT_TABLE_PREFIX")
 	if pfx != "" {
 		appcfg["management_table_prefix"] = pfx
@@ -99,17 +100,6 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
-func cleanup(ctx context.Context, conn *sql.Conn) error {
-	tx, _ := conn.BeginTx(ctx, nil)
-	stmt, _ := tx.PrepareContext(ctx, "/*Cleanup*/delete from "+tableName+" where id != :id")
-	_, err := stmt.Exec(sql.Named("id", -123))
-	if err != nil {
-		return err
-	}
-	err = tx.Commit()
-	return nil
-}
-
 func TestConfigLogging(t *testing.T) {
 	logger.GetLogger().Log(logger.Debug, "TestConfigLogging setup")
 	setupShardMap()
@@ -123,29 +113,29 @@ func TestConfigLogging(t *testing.T) {
 	}
 	db.SetMaxIdleConns(0)
 	defer db.Close()
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	if testutil.RegexCountFile("OCC_CONFIG\tSHARDING", "cal.log") < 1 {
-		t.Fatalf("Can't find OCC_CONFIG cal event for SHARDING")
+		t.Fatalf("SHARDING configuration details are missing.")
 	}
 
 	if testutil.RegexCountFile("OCC_CONFIG\tBACKLOG", "cal.log") < 1 {
-		t.Fatalf("All or some BACKLOG config-logs are missing")
+		t.Fatalf("BACKLOG config details are missing.")
 	}
 
 	if testutil.RegexCountFile("OCC_CONFIG\tTAF", "cal.log") > 0 {
-		t.Fatalf("TAF is not enabled so we should not see TAF config logging")
+		t.Fatalf("TAF is not enabled so we should not see TAF config logging.")
 	}
 
 	if testutil.RegexCountFile("OCC_CONFIG\tR-W-SPLIT", "cal.log") > 0 {
-		t.Fatalf("All or some R-W-SPLIT config-logs are missing")
+		t.Fatalf("R-W-SPLIT is not configured, it should not log R-W-SPLIT config details.")
 	}
 
 	if testutil.RegexCountFile("OCC_CONFIG\tSOFT-EVICTION", "cal.log") < 1 {
-		t.Fatalf("All or some SOFT-EVICTION config-logs are missing")
+		t.Fatalf("Saturation recovery enabled, so it should log SOFT-EVICTION configurations")
 	}
 
 	if testutil.RegexCountFile("OCC_CONFIG\tBIND-EVICTION", "cal.log") < 1 {
-		t.Fatalf("All or some BIND-EVICTION config-logs are missing")
+		t.Fatalf("Saturation recovery enabled, so it should log BIND-EVICTION configurations")
 	}
 	logger.GetLogger().Log(logger.Debug, "TestShardingMod done  -------------------------------------------------------------")
 }

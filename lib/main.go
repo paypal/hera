@@ -50,25 +50,6 @@ func Run() {
 
 	rand.Seed(time.Now().Unix())
 
-	//
-	// worker also initialize a calclent with the same poolname using threadid==0 in
-	// its bootstrap label message. if we let worker fire off its msg first, all proxy
-	// messages will end up in the same swimminglane since that is what id(0) does.
-	// so, let's send the bootstrap label message from proxy first using threadid==1.
-	// that way, calmsgs with different threadids can end up in different swimminglanes,
-	//
-	caltxn := cal.NewCalTransaction(cal.TransTypeAPI, "mux-go", cal.TransOK, "", cal.DefaultTGName)
-	caltxn.SetCorrelationID("abc")
-	calclient := cal.GetCalClientInstance()
-	if calclient != nil {
-		release := calclient.GetReleaseBuildNum()
-		if release != "" {
-			evt := cal.NewCalEvent("VERSION", release, "0", "")
-			evt.Completed()
-		}
-	}
-	caltxn.Completed()
-
 	err := InitConfig()
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
@@ -91,11 +72,28 @@ func Run() {
 	os.Setenv("MUX_START_TIME_USEC", "0")
 
 	//
+	// worker also initialize a calclent with the same poolname using threadid==0 in
+	// its bootstrap label message. if we let worker fire off its msg first, all proxy
+	// messages will end up in the same swimminglane since that is what id(0) does.
+	// so, let's send the bootstrap label message from proxy first using threadid==1.
+	// that way, calmsgs with different threadids can end up in different swimminglanes,
+	//
+	caltxn := cal.NewCalTransaction(cal.TransTypeAPI, "mux-go", cal.TransOK, "", cal.DefaultTGName)
+	caltxn.SetCorrelationID("abc")
+	calclient := cal.GetCalClientInstance()
+	if calclient != nil {
+		release := calclient.GetReleaseBuildNum()
+		if release != "" {
+			evt := cal.NewCalEvent("VERSION", release, "0", "")
+			evt.Completed()
+		}
+	}
+	caltxn.Completed()
+
+	//
 	// create singleton broker and start worker/pools
 	//
 	nameForTns := *namePtr
-	//InitPyplAppConfig()
-	//sec, cert, err := LoadMysqlSecurity()
 	CfgFromTns(nameForTns)
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
 		if logger.GetLogger().V(logger.Alert) {
@@ -115,6 +113,19 @@ func Run() {
 		for {
 			time.Sleep(time.Millisecond * sleep)
 			CheckOpsConfigChange()
+		}
+	}()
+
+	//This logs the configured parameter with the feature name in the CAL log periodically based on ConfigLoggingReloadTimeHours.
+	LogOccConfigs()
+	configLoggingTicker := time.NewTicker(time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour)
+	defer configLoggingTicker.Stop()
+	go func() {
+		for {
+			select {
+			case <-configLoggingTicker.C:
+				LogOccConfigs()
+			}
 		}
 	}()
 
@@ -155,7 +166,6 @@ func Run() {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
 	} else {
 		lsn = NewTCPListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
-		//lsn = NewCryptoTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port), sec, cert)
 	}
 
 	if GetConfig().EnableSharding {
@@ -168,12 +178,6 @@ func Run() {
 		}
 	}
 	InitRacMaint(*namePtr)
-
-	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to logs OCC configurations:", err.Error())
-		}
-	}
 
 	srv := NewServer(lsn, HandleConnection)
 

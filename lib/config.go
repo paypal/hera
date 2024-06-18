@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 //The Config contains all the static configuration
@@ -466,17 +465,6 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
-	go func() {
-		configLoggingIntervalInHr := time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour
-		for {
-			if logger.GetLogger().V(logger.Warning) {
-				logger.GetLogger().Log(logger.Warning, "in goroutine LogOccConfigs()")
-			}
-			LogOccConfigs()
-			time.Sleep(configLoggingIntervalInHr)
-		}
-	}()
-
 	return nil
 }
 
@@ -486,6 +474,16 @@ func LogOccConfigs() {
 			"backlog_pct":             gAppConfig.BacklogPct,
 			"request_backlog_timeout": gAppConfig.BacklogTimeoutMsec,
 			"short_backlog_timeout":   gAppConfig.ShortBacklogTimeoutMsec,
+		},
+		"BOUNCER": {
+			"bouncer_enabled":          gAppConfig.BouncerEnabled,
+			"bouncer_startup_delay":    gAppConfig.BouncerStartupDelay,
+			"bouncer_poll_interval_ms": gAppConfig.BouncerPollInterval,
+		},
+		"PROFILE": {
+			"enable_profile":      gAppConfig.EnableProfile,
+			"profile_http_port":   gAppConfig.ProfileHTTPPort,
+			"profile_telnet_port": gAppConfig.ProfileTelnetPort,
 		},
 		"SHARDING": {
 			"enable_sharding":                gAppConfig.EnableSharding,
@@ -577,12 +575,20 @@ func LogOccConfigs() {
 			if gAppConfig.BacklogPct == 0 {
 				continue
 			}
+		case "BOUNCER":
+			if !gAppConfig.BouncerEnabled {
+				continue
+			}
+		case "PROFILE":
+			if !gAppConfig.EnableProfile {
+				continue
+			}
 		case "SHARDING":
-			if gAppConfig.EnableSharding == false {
+			if !gAppConfig.EnableSharding {
 				continue
 			}
 		case "TAF":
-			if gAppConfig.EnableTAF == false {
+			if !gAppConfig.EnableTAF {
 				continue
 			}
 		case "R-W-SPLIT":
@@ -594,7 +600,7 @@ func LogOccConfigs() {
 				continue
 			}
 		case "MANUAL-RATE-LIMITER":
-			if gAppConfig.EnableQueryBindBlocker == false {
+			if !gAppConfig.EnableQueryBindBlocker {
 				continue
 			}
 		}
@@ -602,7 +608,6 @@ func LogOccConfigs() {
 		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
 		for cfg, val := range configs {
 			s := fmt.Sprintf("%v", val)
-			//fmt.Println("interface{} to string: ", s)
 			evt.AddDataStr(cfg, s)
 		}
 		evt.Completed()
