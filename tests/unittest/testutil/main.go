@@ -20,12 +20,19 @@ func setup(cfg cfgFunc) error {
 	if err != nil {
 		return err
 	}
+	if appcfg["enable_otel"] == "true" {
+		err = mx.StartOTelAgent()
+	}
+	if err != nil {
+		return err
+	}
 	err = mx.StartServer()
 	return err
 }
 
 func teardown() {
 	mx.StopServer()
+	mx.StopOTelAgent()
 }
 
 func copyFile(src, dest string) error {

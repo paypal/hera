@@ -21,6 +21,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	otel_logger "github.com/paypal/hera/utility/logger/otel"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
+	"go.opentelemetry.io/otel"
 	"log"
 	"os"
 	"path/filepath"
@@ -71,11 +74,9 @@ type ConnStateInfo struct {
 	perStateCnt []int
 }
 
-//
 // StateLog is exposed as a singleton. all stateful resources are protected behind a
 // message channel that sychronizes incoming messages. user should not call any of
 // the internal functions that are not threadsafe.
-//
 type StateLog struct {
 	//
 	// array of maps for different workertypes with each value holding a two dimension
@@ -482,6 +483,10 @@ func (sl *StateLog) init() error {
 	//
 	// for each shard, initialize map
 	//
+	var totalWorkersCount int //Use this value to initialize bufferred channel for statelog metrics
+	//
+	// for each shard, initialize map
+	//
 	for s := 0; s < sl.maxShardSize; s++ {
 		sl.mWorkerStates[s] = make(map[HeraWorkerType][][]*WorkerStateInfo, wtypeTotalCount)
 		sl.mConnStates[s] = make(map[HeraWorkerType][]*ConnStateInfo, wtypeTotalCount)
@@ -494,7 +499,7 @@ func (sl *StateLog) init() error {
 		for t := 0; t < int(wtypeTotalCount); t++ {
 			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
 			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
-
+			totalWorkersCount += workerCnt
 			sl.mWorkerStates[s][HeraWorkerType(t)] = make([][]*WorkerStateInfo, instCnt)
 			sl.mConnStates[s][HeraWorkerType(t)] = make([]*ConnStateInfo, instCnt)
 			sl.mTypeTitles[s][HeraWorkerType(t)] = make([]string, instCnt)
@@ -522,11 +527,10 @@ func (sl *StateLog) init() error {
 			}
 		}
 	}
-
 	//
 	// prepare horizontal (state) and vertical (workertype) titles.
 	//
-	var shardEnabled = (GetConfig().EnableSharding && (GetConfig().NumOfShards >= 1))
+	var shardEnabled = GetConfig().EnableSharding && (GetConfig().NumOfShards >= 1)
 	var buf bytes.Buffer
 	buf.WriteString("-----------")
 	for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
@@ -565,6 +569,16 @@ func (sl *StateLog) init() error {
 
 	sl.mEventChann = make(chan StateEvent, 3000)
 
+	if otelconfig.OTelConfigData.Enabled {
+		// Initialize statelog_metrics to send metrics information currently we are ignoring registration object returned from this call
+		stateStartErr := otel_logger.StartMetricsCollection(totalWorkersCount,
+			otel_logger.WithMetricProvider(otel.GetMeterProvider()),
+			otel_logger.WithAppName(otelconfig.OTelConfigData.PoolName))
+
+		if stateStartErr != nil {
+			logger.GetLogger().Log(logger.Alert, "failed to start metric collection agent for statelogs", stateStartErr)
+		}
+	}
 	//
 	// start periodical reporting
 	//
@@ -750,6 +764,14 @@ func (sl *StateLog) genReport() {
 				if workerCnt == 0 {
 					continue
 				}
+				// Initialize statedata object
+				workerStatesData := otel_logger.WorkersStateData{
+					ShardId:    int(s),
+					WorkerType: int(t),
+					InstanceId: int(n),
+					StateData:  make(map[string]int64),
+				}
+
 				//
 				// count all request/response for all workers under the instance
 				//
@@ -790,35 +812,39 @@ func (sl *StateLog) genReport() {
 						stateCnt[MaxWorkerState+c] = 0
 					}
 				}
-				//
-				// write collection into calheartbeat(cased out) and log (oneline).
-				//
-				hb := cal.NewCalHeartBeat("STATE", sl.mTypeTitles[s][HeraWorkerType(t)][n], cal.TransOK, "")
-				for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
-					buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
-					hb.AddDataInt(StateNames[i], int64(stateCnt[i]))
+
+				//Send statelog data to OTEL statsdata channel
+				if otelconfig.OTelConfigData.Enabled {
+					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
+						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
+						workerStatesData.StateData[StateNames[i]] = int64(stateCnt[i])
+					}
+					//Adding req and response metrics to OTEL
+					workerStatesData.StateData["req"] = int64(reqCnt - sl.mLastReqCnt[s][HeraWorkerType(t)][n])
+					workerStatesData.StateData["resp"] = int64(respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n])
+					otel_logger.AddDataPointToOTELStateDataChan(&workerStatesData)
+				} else {
+					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
+						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))
+					}
 				}
-				hb.AddDataInt("req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n]))
-				hb.AddDataInt("resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
-				/*
-					buf.WriteString(fmt.Sprintf("%6d", totalConnections))
-					if sl.HasActiveWorker()	{
-						buf.WriteString(fmt.Sprintf("%6d", 1))
-					} else	{
-						buf.WriteString(fmt.Sprintf("%6d", 0))
+
+				if !otelconfig.OTelConfigData.Enabled || (otelconfig.OTelConfigData.Enabled && !otelconfig.OTelConfigData.SkipCalStateLog) {
+					// write collection into calheartbeat(cased out) and log (oneline).
+					//If enable_otel_metrics_only not enabled then it sends CAL heart beat event or else send data to file and OTEL agent
+					hb := cal.NewCalHeartBeat("STATE", sl.mTypeTitles[s][HeraWorkerType(t)][n], cal.TransOK, "")
+					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
+						hb.AddDataInt(StateNames[i], int64(stateCnt[i]))
 					}
-					if sl.ProxyHasCapacity(GetConfig().BacklogLimit, GetConfig().ReadonlyBacklogLimit)	{
-						buf.WriteString(fmt.Sprintf("%6d", 1))
-					} else	{
-						buf.WriteString(fmt.Sprintf("%6d", 0))
-					}
-				*/
-				hb.Completed()
+					hb.AddDataInt("req", int64(reqCnt-sl.mLastReqCnt[s][HeraWorkerType(t)][n]))
+					hb.AddDataInt("resp", int64(respCnt-sl.mLastRspCnt[s][HeraWorkerType(t)][n]))
+					hb.Completed()
+				}
 				sl.fileLogger.Println(getTime() + buf.String())
 
 				sl.mLastReqCnt[s][HeraWorkerType(t)][n] = reqCnt
 				sl.mLastRspCnt[s][HeraWorkerType(t)][n] = respCnt
-			} // instance
+			} // instance// instance
 		} // wtype
 	} // sharding
 }

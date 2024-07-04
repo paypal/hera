@@ -20,6 +20,7 @@ package lib
 import (
 	"errors"
 	"fmt"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-//The Config contains all the static configuration
+// The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
 	KeyFile         string // leave blank for no SSL
@@ -219,7 +220,7 @@ func parseMapStrStr(encoded string) map[string]string {
 }
 
 // InitConfig initializes the configuration, both the static configuration (from hera.txt) and the dynamic configuration
-func InitConfig() error {
+func InitConfig(poolName string) error {
 	currentDir, abserr := filepath.Abs(filepath.Dir(os.Args[0]))
 
 	if abserr != nil {
@@ -461,7 +462,36 @@ func InitConfig() error {
 		gAppConfig.MaxDesiredHealthyWorkerPct = 90
 	}
 
+	//Initialize OTEL configs
+	initializeOTELConfigs(cdb, poolName)
+	if logger.GetLogger().V(logger.Info) {
+		otelconfig.OTelConfigData.Dump()
+	}
 	return nil
+}
+
+// This function takes care of initialize OTEL configuration
+func initializeOTELConfigs(cdb config.Config, poolName string) {
+	otelconfig.OTelConfigData = &otelconfig.OTelConfig{}
+	//TODO initialize the values
+	otelconfig.OTelConfigData.Enabled = cdb.GetOrDefaultBool("enable_otel", false)
+	otelconfig.OTelConfigData.SkipCalStateLog = cdb.GetOrDefaultBool("skip_cal_statelog", false)
+	otelconfig.OTelConfigData.MetricNamePrefix = cdb.GetOrDefaultString("otel_metric_prefix", "pp.occ")
+	otelconfig.OTelConfigData.Host = cdb.GetOrDefaultString("otel_agent_host", "localhost")
+	otelconfig.OTelConfigData.HttpPort = cdb.GetOrDefaultInt("otel_agent_http_port", 4318)
+	otelconfig.OTelConfigData.GRPCPort = cdb.GetOrDefaultInt("otel_agent_grpc_port", 4317)
+	otelconfig.OTelConfigData.UseOtelGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc", false)
+	otelconfig.OTelConfigData.MetricsURLPath = cdb.GetOrDefaultString("otel_agent_metrics_uri", "")
+	otelconfig.OTelConfigData.TraceURLPath = cdb.GetOrDefaultString("otel_agent_trace_uri", "")
+	otelconfig.OTelConfigData.PoolName = poolName
+	otelconfig.OTelConfigData.UseTls = cdb.GetOrDefaultBool("otel_use_tls", false)
+	otelconfig.OTelConfigData.TLSCertPath = cdb.GetOrDefaultString("otel_tls_cert_path", "")
+	otelconfig.OTelConfigData.ResolutionTimeInSec = cdb.GetOrDefaultInt("otel_resolution_time_in_sec", 1)
+	otelconfig.OTelConfigData.ExporterTimeout = cdb.GetOrDefaultInt("otel_exporter_time_in_sec", 30)
+	otelconfig.OTelConfigData.EnableRetry = cdb.GetOrDefaultBool("otel_enable_exporter_retry", false)
+	otelconfig.OTelConfigData.ResourceType = gAppConfig.StateLogPrefix
+	otelconfig.OTelConfigData.OTelErrorReportingInterval = cdb.GetOrDefaultInt("otel_error_reporting_interval_in_sec", 60)
+	otelconfig.SetOTelIngestToken(cdb.GetOrDefaultString("otel_ingest_token", ""))
 }
 
 // CheckOpsConfigChange checks if the ops config file needs to be reloaded and reloads it if necessary.
