@@ -478,9 +478,10 @@ func initializeOTELConfigs(cdb config.Config, poolName string) {
 	otelconfig.OTelConfigData.SkipCalStateLog = cdb.GetOrDefaultBool("skip_cal_statelog", false)
 	otelconfig.OTelConfigData.MetricNamePrefix = cdb.GetOrDefaultString("otel_metric_prefix", "pp.occ")
 	otelconfig.OTelConfigData.Host = cdb.GetOrDefaultString("otel_agent_host", "localhost")
-	otelconfig.OTelConfigData.HttpPort = cdb.GetOrDefaultInt("otel_agent_http_port", 4318)
-	otelconfig.OTelConfigData.GRPCPort = cdb.GetOrDefaultInt("otel_agent_grpc_port", 4317)
-	otelconfig.OTelConfigData.UseOtelGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc", false)
+	otelconfig.OTelConfigData.MetricsPort = cdb.GetOrDefaultInt("otel_agent_metrics_port", 4318)
+	otelconfig.OTelConfigData.TracePort = cdb.GetOrDefaultInt("otel_agent_trace_port", 4318)
+	otelconfig.OTelConfigData.OtelMetricGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc_metric", false)
+	otelconfig.OTelConfigData.OtelTraceGRPC = cdb.GetOrDefaultBool("otel_agent_use_grpc_trace", false)
 	otelconfig.OTelConfigData.MetricsURLPath = cdb.GetOrDefaultString("otel_agent_metrics_uri", "")
 	otelconfig.OTelConfigData.TraceURLPath = cdb.GetOrDefaultString("otel_agent_trace_uri", "")
 	otelconfig.OTelConfigData.PoolName = poolName

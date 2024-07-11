@@ -14,8 +14,8 @@ var OTelIngestTokenData atomic.Value
 type OTelConfig struct {
 	MetricNamePrefix           string
 	Host                       string
-	HttpPort                   int
-	GRPCPort                   int
+	MetricsPort                int
+	TracePort                  int
 	MetricsURLPath             string
 	TraceURLPath               string
 	PoolName                   string
@@ -26,7 +26,8 @@ type OTelConfig struct {
 	ExporterTimeout            int
 	UseTls                     bool
 	TLSCertPath                string
-	UseOtelGRPC                bool
+	OtelMetricGRPC             bool
+	OtelTraceGRPC              bool
 	OTelErrorReportingInterval int
 	EnableRetry                bool
 }
@@ -42,13 +43,14 @@ func (config *OTelConfig) validate() error {
 
 func (config *OTelConfig) Dump() {
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Host : %s", config.Host))
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Http Port: %d", config.HttpPort))
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf("GRPC Port: %d", config.GRPCPort))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("UseOtlMetricGRPC: %t", config.OtelMetricGRPC))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Metrics  Port: %d", config.MetricsPort))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("UseOtlMetricGRPC: %t", config.OtelTraceGRPC))
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Trace Port Port: %d", config.TracePort))
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("Poolname: %s", config.PoolName))
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("ResolutionTimeInSec: %d", config.ResolutionTimeInSec))
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("UseTls: %t", config.UseTls))
 	logger.GetLogger().Log(logger.Info, fmt.Sprintf("UrlPath: %s", config.MetricsURLPath))
-	logger.GetLogger().Log(logger.Info, fmt.Sprintf("UseOtelGRPC: %t", config.UseOtelGRPC))
 }
 
 func (config *OTelConfig) PopulateMetricNamePrefix(metricName string) string {

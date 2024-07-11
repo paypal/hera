@@ -127,7 +127,7 @@ func newMeterProvider(ctx context.Context) (*metric.MeterProvider, error) {
 
 // getMetricExporter Initialize metric exporter based protocol selected by user.
 func getMetricExporter(ctx context.Context) (metric.Exporter, error) {
-	if config.OTelConfigData.UseOtelGRPC {
+	if config.OTelConfigData.OtelMetricGRPC {
 		return newGRPCExporter(ctx)
 	}
 	return newHTTPExporter(ctx)
@@ -135,7 +135,7 @@ func getMetricExporter(ctx context.Context) (metric.Exporter, error) {
 
 // getTraceExporter Initialize span exporter based protocol(GRPC or HTTP) selected by user.
 func getTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
-	if config.OTelConfigData.UseOtelGRPC {
+	if config.OTelConfigData.OtelTraceGRPC {
 		return newGRPCTraceExporter(ctx)
 	}
 	return newHTTPTraceExporter(ctx)
@@ -153,7 +153,7 @@ func newHTTPExporter(ctx context.Context) (metric.Exporter, error) {
 	var temporalitySelector = func(instrument metric.InstrumentKind) metricdata.Temporality { return metricdata.DeltaTemporality }
 
 	return otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.HttpPort)),
+		otlpmetrichttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
 		otlpmetrichttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
 		otlpmetrichttp.WithCompression(otlpmetrichttp.NoCompression),
 		otlpmetrichttp.WithTemporalitySelector(temporalitySelector),
@@ -192,7 +192,7 @@ func newGRPCExporter(ctx context.Context) (metric.Exporter, error) {
 	var temporalitySelector = func(instrument metric.InstrumentKind) metricdata.Temporality { return metricdata.DeltaTemporality }
 
 	return otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.GRPCPort)),
+		otlpmetricgrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
 		otlpmetricgrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
 		otlpmetricgrpc.WithHeaders(headers),
 		otlpmetricgrpc.WithReconnectionPeriod(time.Duration(5)*time.Second),
@@ -224,7 +224,7 @@ func newHTTPTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
 	headers[IngestTokenHeader] = config.GetOTelIngestToken()
 
 	return otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.HttpPort)),
+		otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
 		otlptracehttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
 		otlptracehttp.WithHeaders(headers),
 		otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
@@ -256,7 +256,7 @@ func newGRPCTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
 	headers[IngestTokenHeader] = config.GetOTelIngestToken()
 
 	return otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.GRPCPort)),
+		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
 		otlptracegrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
 		otlptracegrpc.WithHeaders(headers),
 		otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{
@@ -290,17 +290,14 @@ func getResourceInfo(appName string) *resource.Resource {
 		attribute.String("source", "otel"),
 	}
 
-	environment, isPresent := os.LookupEnv("ENVIRONMENT")
-	if !isPresent {
-		environment = "dev"
+	environment, isEnvPresent := os.LookupEnv("ENVIRONMENT")
+	az, isAzPresent := os.LookupEnv("AVAILABILITY_ZONE")
+	if isEnvPresent {
+		attributes = append(attributes, attribute.String("environment", environment))
 	}
-	az, isPresent := os.LookupEnv("AVAILABILITY_ZONE")
-	if !isPresent {
-		az = "dev"
+	if isAzPresent {
+		attributes = append(attributes, attribute.String("az", az))
 	}
-	attributes = append(attributes, attribute.String("az", az))
-	attributes = append(attributes, attribute.String("environment", environment))
-
 	resource := resource.NewWithAttributes(fmt.Sprintf("%s resource", config.OTelConfigData.ResourceType),
 		attributes...,
 	)

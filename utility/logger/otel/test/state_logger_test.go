@@ -22,9 +22,11 @@ import (
 func initializeConsoleExporter() (*metric.MeterProvider, error) {
 	otelconfig.OTelConfigData = &otelconfig.OTelConfig{
 		Host:                       "localhost",
-		HttpPort:                   4318,
+		MetricsPort:                4318,
+		TracePort:                  4318,
 		Enabled:                    true,
-		UseOtelGRPC:                false,
+		OtelMetricGRPC:             false,
+		OtelTraceGRPC:              false,
 		ResolutionTimeInSec:        3,
 		OTelErrorReportingInterval: 10,
 		PoolName:                   "occ-testapp",
@@ -58,9 +60,11 @@ func initializeConsoleExporter() (*metric.MeterProvider, error) {
 func initializeCustomOTelExporter(t *testing.T) func(ctx context.Context) error {
 	otelconfig.OTelConfigData = &otelconfig.OTelConfig{
 		Host:                       "localhost",
-		HttpPort:                   4318,
+		MetricsPort:                4318,
+		TracePort:                  4318,
 		Enabled:                    true,
-		UseOtelGRPC:                false,
+		OtelMetricGRPC:             false,
+		OtelTraceGRPC:              false,
 		ResolutionTimeInSec:        3,
 		OTelErrorReportingInterval: 10,
 		PoolName:                   "occ-testapp",
