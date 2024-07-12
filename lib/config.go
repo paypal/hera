@@ -20,14 +20,14 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/config"
+	"github.com/paypal/hera/utility/logger"
 	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-
-	"github.com/paypal/hera/config"
-	"github.com/paypal/hera/utility/logger"
 )
 
 // The Config contains all the static configuration
@@ -74,6 +74,9 @@ type Config struct {
 	// config_reload_time_ms(30 * 1000)
 	//
 	ConfigReloadTimeMs int
+	//
+	//
+	ConfigLoggingReloadTimeHours int
 	// custom_auth_timeout(1000)
 	CustomAuthTimeoutMs int
 	// time_skew_threshold_warn(2)
@@ -269,6 +272,7 @@ func InitConfig(poolName string) error {
 	}
 
 	gAppConfig.ConfigReloadTimeMs = cdb.GetOrDefaultInt("config_reload_time_ms", 30*1000)
+	gAppConfig.ConfigLoggingReloadTimeHours = cdb.GetOrDefaultInt("config_logging_reload_time_hours", 24)
 	gAppConfig.CustomAuthTimeoutMs = cdb.GetOrDefaultInt("custom_auth_timeout", 1000)
 	gAppConfig.TimeSkewThresholdWarnSec = cdb.GetOrDefaultInt("time_skew_threshold_warn", 2)
 	gAppConfig.TimeSkewThresholdErrorSec = cdb.GetOrDefaultInt("time_skew_threshold_error", 15)
@@ -493,6 +497,167 @@ func initializeOTELConfigs(cdb config.Config, poolName string) {
 	otelconfig.OTelConfigData.ResourceType = gAppConfig.StateLogPrefix
 	otelconfig.OTelConfigData.OTelErrorReportingInterval = cdb.GetOrDefaultInt("otel_error_reporting_interval_in_sec", 60)
 	otelconfig.SetOTelIngestToken(cdb.GetOrDefaultString("otel_ingest_token", ""))
+}
+
+func LogOccConfigs() {
+	whiteListConfigs := map[string]map[string]interface{}{
+		"BACKLOG": {
+			"backlog_pct":             gAppConfig.BacklogPct,
+			"request_backlog_timeout": gAppConfig.BacklogTimeoutMsec,
+			"short_backlog_timeout":   gAppConfig.ShortBacklogTimeoutMsec,
+		},
+		"BOUNCER": {
+			"bouncer_enabled":          gAppConfig.BouncerEnabled,
+			"bouncer_startup_delay":    gAppConfig.BouncerStartupDelay,
+			"bouncer_poll_interval_ms": gAppConfig.BouncerPollInterval,
+		},
+		"OTEL": {
+			"enable_otel":                          otelconfig.OTelConfigData.Enabled,
+			"skip_cal_statelog":                    otelconfig.OTelConfigData.SkipCalStateLog,
+			"otel_agent_host":                      otelconfig.OTelConfigData.Host,
+			"otel_agent_metrics_port":              otelconfig.OTelConfigData.MetricsPort,
+			"otel_agent_trace_port":                otelconfig.OTelConfigData.TracePort,
+			"otel_agent_metrics_uri":               otelconfig.OTelConfigData.MetricsURLPath,
+			"otel_agent_trace_uri":                 otelconfig.OTelConfigData.TraceURLPath,
+			"otel_resolution_time_in_sec":          otelconfig.OTelConfigData.ResolutionTimeInSec,
+			"otel_error_reporting_interval_in_sec": otelconfig.OTelConfigData.OTelErrorReportingInterval,
+		},
+		"PROFILE": {
+			"enable_profile":      gAppConfig.EnableProfile,
+			"profile_http_port":   gAppConfig.ProfileHTTPPort,
+			"profile_telnet_port": gAppConfig.ProfileTelnetPort,
+		},
+		"SHARDING": {
+			"enable_sharding":                gAppConfig.EnableSharding,
+			"use_shardmap":                   gAppConfig.UseShardMap,
+			"num_shards":                     gAppConfig.NumOfShards,
+			"shard_key_name":                 gAppConfig.ShardKeyName,
+			"max_scuttle":                    gAppConfig.MaxScuttleBuckets,
+			"scuttle_col_name":               gAppConfig.ScuttleColName,
+			"shard_key_value_type_is_string": gAppConfig.ShardKeyValueTypeIsString,
+			"enable_whitelist_test":          gAppConfig.EnableWhitelistTest,
+			"whitelist_children":             gAppConfig.NumWhitelistChildren,
+			"sharding_postfix":               gAppConfig.ShardingPostfix,
+			"sharding_cfg_reload_interval":   gAppConfig.ShardingCfgReloadInterval,
+			"hostname_prefix":                gAppConfig.HostnamePrefix,
+			"sharding_cross_keys_err":        gAppConfig.ShardingCrossKeysErr,
+			//"enable_sql_rewrite", // not found anywhere?
+			"sharding_algo":                    gAppConfig.ShardingAlgoHash,
+			"cfg_from_tns_override_num_shards": gAppConfig.CfgFromTnsOverrideNumShards,
+		},
+		"TAF": {
+			"enable_taf":                gAppConfig.EnableTAF,
+			"cfg_from_tns_override_taf": gAppConfig.CfgFromTnsOverrideTaf,
+			"testing_enable_dml_taf":    gAppConfig.TestingEnableDMLTaf,
+			"taf_timeout_ms":            gAppConfig.TAFTimeoutMs,
+			"taf_bin_duration":          gAppConfig.TAFBinDuration,
+			"taf_allow_slow_every_x":    gAppConfig.TAFAllowSlowEveryX,
+			"taf_normally_slow_count":   gAppConfig.TAFNormallySlowCount,
+		},
+		"BIND-EVICTION": {
+			"child.executable": gAppConfig.ChildExecutable,
+			//"enable_bind_hash_logging" FOUND FOR SOME OCCs ONLY IN occ.def
+			"bind_eviction_threshold_pct":       gAppConfig.BindEvictionThresholdPct,
+			"bind_eviction_decr_per_sec":        gAppConfig.BindEvictionDecrPerSec,
+			"bind_eviction_target_conn_pct":     gAppConfig.BindEvictionTargetConnPct,
+			"bind_eviction_max_throttle":        gAppConfig.BindEvictionMaxThrottle,
+			"bind_eviction_names":               gAppConfig.BindEvictionNames,
+			"skip_eviction_host_prefix":         gAppConfig.SkipEvictRegex,
+			"eviction_host_prefix":              gAppConfig.EvictRegex,
+			"query_bind_blocker_min_sql_prefix": gAppConfig.QueryBindBlockerMinSqlPrefix,
+			"enable_connlimit_check":            gAppConfig.EnableConnLimitCheck,
+		},
+		"MANUAL-RATE-LIMITER": {
+			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker,
+		},
+		"SATURATION-RECOVERY": {
+			"saturation_recover_threshold":     GetSatRecoverThresholdMs(),
+			"saturation_recover_throttle_rate": GetSatRecoverThrottleRate(),
+		},
+		"SOFT-EVICTION": {
+			"soft_eviction_effective_time": gAppConfig.SoftEvictionEffectiveTimeMs,
+			"soft_eviction_probability":    gAppConfig.SoftEvictionProbability,
+		},
+		"WORKER-CONFIGURATIONS": {
+			"lifespan_check_interval": gAppConfig.lifeSpanCheckInterval,
+			"lifo_scheduler_enabled":  gAppConfig.LifoScheduler,
+			//"num_workers_per_proxy",  // only present in occ.def for some occs
+			//"max_clients_per_worker", // only present in occ.def for some occs
+			"max_stranded_time_interval":           gAppConfig.StrandedWorkerTimeoutMs,
+			"high_load_max_stranded_time_interval": gAppConfig.HighLoadStrandedWorkerTimeoutMs,
+			"high_load_skip_initiate_recover_pct":  gAppConfig.HighLoadSkipInitiateRecoverPct,
+			"enable_danglingworker_recovery":       gAppConfig.EnableDanglingWorkerRecovery,
+			"max_db_connects_per_sec":              gAppConfig.MaxDbConnectsPerSec,
+			"max_lifespan_per_child":               GetMaxLifespanPerChild(),
+			"max_requests_per_child":               GetMaxRequestsPerChild(),
+			"max_desire_healthy_worker_pct":        gAppConfig.MaxDesiredHealthyWorkerPct,
+		},
+		"R-W-SPLIT": {
+			"readonly_children_pct":          gAppConfig.ReadonlyPct,
+			"cfg_from_tns_override_rw_split": gAppConfig.CfgFromTnsOverrideRWSplit,
+		},
+		"RAC": {
+			"management_table_prefix": gAppConfig.ManagementTablePrefix,
+			"rac_sql_interval":        gAppConfig.RacMaintReloadInterval,
+			"rac_restart_window":      gAppConfig.RacRestartWindow,
+		},
+		"NO-CATEGORY": {
+			"database_type":   gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
+			"cfg_from_tns":    gAppConfig.CfgFromTns,
+			"log_level":       gOpsConfig.logLevel,
+			"high_load_pct":   gAppConfig.HighLoadPct,
+			"init_limit_pct":  gAppConfig.InitLimitPct,
+			"num_standby_dbs": gAppConfig.NumStdbyDbs,
+		},
+	}
+
+	for feature, configs := range whiteListConfigs {
+		switch feature {
+		case "BACKLOG":
+			if gAppConfig.BacklogPct == 0 {
+				continue
+			}
+		case "BOUNCER":
+			if !gAppConfig.BouncerEnabled {
+				continue
+			}
+		case "OTEL":
+			if !otelconfig.OTelConfigData.Enabled {
+				continue
+			}
+		case "PROFILE":
+			if !gAppConfig.EnableProfile {
+				continue
+			}
+		case "SHARDING":
+			if !gAppConfig.EnableSharding {
+				continue
+			}
+		case "TAF":
+			if !gAppConfig.EnableTAF {
+				continue
+			}
+		case "R-W-SPLIT":
+			if gAppConfig.ReadonlyPct == 0 {
+				continue
+			}
+		case "SOFT-EVICTION", "BIND-EVICTION":
+			if GetSatRecoverThrottleRate() <= 0 {
+				continue
+			}
+		case "MANUAL-RATE-LIMITER":
+			if !gAppConfig.EnableQueryBindBlocker {
+				continue
+			}
+		}
+
+		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
+		for cfg, val := range configs {
+			s := fmt.Sprintf("%v", val)
+			evt.AddDataStr(cfg, s)
+		}
+		evt.Completed()
+	}
 }
 
 // CheckOpsConfigChange checks if the ops config file needs to be reloaded and reloads it if necessary.

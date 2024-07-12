@@ -136,6 +136,19 @@ func Run() {
 		}
 	}()
 
+	//This logs the configured parameter with the feature name in the CAL log periodically based on ConfigLoggingReloadTimeHours.
+	LogOccConfigs()
+	configLoggingTicker := time.NewTicker(time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour)
+	defer configLoggingTicker.Stop()
+	go func() {
+		for {
+			select {
+			case <-configLoggingTicker.C:
+				LogOccConfigs()
+			}
+		}
+	}()
+
 	CheckEnableProfiling()
 	GoStats()
 
