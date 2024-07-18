@@ -230,6 +230,7 @@ func (stateLogMetrics *StateLogMetrics) asyncStateLogMetricsPoll(observer metric
 	stateLogMetrics.stateLock.Lock()
 	defer stateLogMetrics.stateLock.Unlock()
 	stateLogsData := make(map[string]map[string]int64)
+	var stateLogTitle string
 	//Infinite loop read through the channel and send metrics
 mainloop:
 	for {
@@ -245,6 +246,7 @@ mainloop:
 				stateLogsData[keyName] = make(map[string]int64)
 			}
 			//Update metadata information
+			stateLogTitle = workersState.StateTitle
 			stateLogsData[keyName][ShardId] = int64(workersState.ShardId)
 			stateLogsData[keyName][WorkerType] = int64(workersState.WorkerType)
 			stateLogsData[keyName][InstanceId] = int64(workersState.InstanceId)
@@ -273,7 +275,7 @@ mainloop:
 	}
 	//Process metrics data
 	if len(stateLogsData) > 0 {
-		err = stateLogMetrics.sendMetricsDataToCollector(observer, stateLogsData)
+		err = stateLogMetrics.sendMetricsDataToCollector(observer, &stateLogTitle, stateLogsData)
 	}
 	return err
 }
@@ -281,13 +283,14 @@ mainloop:
 /*
  *  Send metrics datat data-points to collector
  */
-func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metric.Observer, stateLogsData map[string]map[string]int64) (err error) {
+func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metric.Observer, stateLogTitle *string, stateLogsData map[string]map[string]int64) (err error) {
 	for key, aggStatesData := range stateLogsData {
-		logger.GetLogger().Log(logger.Info, fmt.Sprintf("calculated max value and aggregation of updown counter for key: %s using datapoints size: %d", key, aggStatesData[Datapoints]))
+		logger.GetLogger().Log(logger.Info, fmt.Sprintf("publishing metric with calculated max value and aggregation of gauge for shardid-workertype-instanceId: %s using datapoints size: %d", key, aggStatesData[Datapoints]))
 		commonLabels := []attribute.KeyValue{
 			attribute.Int(ShardId, int(aggStatesData[ShardId])),
 			attribute.Int(WorkerType, int(aggStatesData[WorkerType])),
 			attribute.Int(InstanceId, int(aggStatesData[InstanceId])),
+			attribute.String(OccWorkerParamName, *stateLogTitle),
 		}
 		//Observe states data
 		// 1. Worker States

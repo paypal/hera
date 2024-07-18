@@ -27,7 +27,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["enable_otel"] = "true"
-	appcfg["otel_resolution_time_in_sec"] = "3"
+	appcfg["otel_resolution_time_in_sec"] = "10"
 	appcfg["otel_agent_metrics_uri"] = "v2/metrics"
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -99,12 +99,14 @@ func TestOTELMetricsIncorrectEndPoint(t *testing.T) {
 	rows.Close()
 	stmt.Close()
 
+	time.Sleep(10 * time.Second)
 	publishingErrors := testutil.RegexCountFile("otel publishing error", "hera.log")
 	if publishingErrors < 2 {
 		t.Fatalf("otel publishing error should present in log because of in-correct OTEL port number")
 	}
 
-	calPublishingErrors := testutil.RegexCountFile("otel publishing error", "cal.log")
+	time.Sleep(5 * time.Second)
+	calPublishingErrors := testutil.RegexCountFile("failed to send metrics", "cal.log")
 	if calPublishingErrors < 1 {
 		t.Fatalf("otel publishing error should present in CAL log because of in-correct OTEL port number")
 	}

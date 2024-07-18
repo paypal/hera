@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,13 +23,21 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["bind_port"] = "31002"
 	appcfg["log_level"] = "5"
 	appcfg["log_file"] = "hera.log"
-	appcfg["sharding_cfg_reload_interval"] = "0"
+	appcfg["sharding_cfg_reload_interval"] = "5"
+	appcfg["enable_sharding"] = "true"
+	appcfg["num_shards"] = "3"
+	appcfg["max_scuttle"] = "9"
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["enable_otel"] = "true"
+	appcfg["otel_use_tls"] = "true"
+	appcfg["otel_agent_host"] = "otelmetrics-pp-observability.us-central1.gcp.dev.paypalinc.com"
+	appcfg["otel_agent_metrics_port"] = "30706"
+	appcfg["otel_agent_trace_port"] = "30706"
 	appcfg["otel_resolution_time_in_sec"] = "10"
+	appcfg["otel_agent_metrics_uri"] = "v1/metrics"
 	opscfg := make(map[string]string)
-	opscfg["opscfg.default.server.max_connections"] = "3"
+	opscfg["opscfg.default.server.max_connections"] = "5"
 	opscfg["opscfg.default.server.log_level"] = "5"
 	os.Setenv("AVAILABILITY_ZONE", "test-dev")
 	os.Setenv("ENVIRONMENT", "dev")
@@ -53,8 +60,8 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
-func TestOTELMetricsBasic(t *testing.T) {
-	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsBasic begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+func TestOTELMetricsRemoteEndPointWithTLS(t *testing.T) {
+	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsRemoteEndPointWithTLS begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 
 	shard := 0
 	db, err := sql.Open("heraloop", fmt.Sprintf("%d:0:0", shard))
@@ -99,32 +106,23 @@ func TestOTELMetricsBasic(t *testing.T) {
 	rows.Close()
 	stmt.Close()
 
-	cancel()
-	conn.Close()
-	time.Sleep(15 * time.Second)
-	//Read OTEL log file for metrics validation
-	logFilePath := filepath.Join(testutil.GetOTELLogDirPath(), "otel_collector.log")
-	count := testutil.RegexCountFile("{\"key\":\"application\",\"value\":{\"stringValue\":\"hera-test\"}", logFilePath)
-	if count < 1 {
-		t.Fatalf("OTEL event should contain application as hera-test")
-	}
-	initCount := testutil.RegexCountFile("\"name\":\"pp.occ.init_connection.count\"", logFilePath)
-	if initCount < 1 {
-		t.Fatalf("OTEL event should contain metric name pp.occ.init_connection.count")
-	}
-	tagsCount := testutil.RegexCountFile("{\"key\":\"InstanceId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"ShardId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"WorkerType\",\"value\":{\"intValue\":\"0\"}",
-		logFilePath)
-	if tagsCount < 1 {
-		t.Fatalf("mandatory tags InstanceId, ShardId, WorkerType should present")
-	}
-	azCount := testutil.RegexCountFile("{\"key\":\"az\",\"value\":{\"stringValue\":\"test-dev\"}", logFilePath)
-	if azCount < 1 {
-		t.Fatalf("az configured as test-dev and its value should present in otel metric dimension")
-	}
-	envCount := testutil.RegexCountFile("{\"key\":\"environment\",\"value\":{\"stringValue\":\"dev\"}", logFilePath)
-	if envCount < 1 {
-		t.Fatalf("az configured as test-dev and its value should present in otel metric dimension")
+	time.Sleep(10 * time.Second)
+	publishingErrors := testutil.RegexCountFile("otel publishing error", "hera.log")
+	if publishingErrors > 1 {
+		t.Fatalf("should not fail while publishing metrics remote host")
 	}
 
-	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsBasic done  -------------------------------------------------------------")
+	time.Sleep(5 * time.Second)
+	calPublishingErrors := testutil.RegexCountFile("failed to send metrics", "cal.log")
+	if calPublishingErrors > 1 {
+		t.Fatalf("should not fail while publishing metrics remote host")
+	}
+
+	cancel()
+	conn.Close()
+
+	for counter := 0; counter < 1000; counter++ {
+		time.Sleep(10 * time.Second)
+	}
+	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsRemoteEndPointWithTLS done  -------------------------------------------------------------")
 }

@@ -27,7 +27,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["enable_otel"] = "true"
-	appcfg["otel_resolution_time_in_sec"] = "3"
+	appcfg["otel_resolution_time_in_sec"] = "10"
 	appcfg["skip_cal_statelog"] = "true"
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
@@ -95,7 +95,7 @@ func TestOTELMetricsSkipCALEndPoint(t *testing.T) {
 		t.Fatalf("Expected 1 row")
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 	rows.Close()
 	stmt.Close()
 

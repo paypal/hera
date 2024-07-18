@@ -766,6 +766,7 @@ func (sl *StateLog) genReport() {
 				}
 				// Initialize statedata object
 				workerStatesData := otel_logger.WorkersStateData{
+					StateTitle: sl.mTypeTitles[s][HeraWorkerType(t)][n],
 					ShardId:    int(s),
 					WorkerType: int(t),
 					InstanceId: int(n),

@@ -152,31 +152,58 @@ func newHTTPExporter(ctx context.Context) (metric.Exporter, error) {
 	//This is useful for metrics like CPU usage, request rates, or other metrics where the rate of change is important.
 	var temporalitySelector = func(instrument metric.InstrumentKind) metricdata.Temporality { return metricdata.DeltaTemporality }
 
-	return otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
-		otlpmetrichttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
-		otlpmetrichttp.WithCompression(otlpmetrichttp.NoCompression),
-		otlpmetrichttp.WithTemporalitySelector(temporalitySelector),
-		otlpmetrichttp.WithHeaders(headers),
-		otlpmetrichttp.WithRetry(otlpmetrichttp.RetryConfig{
-			// Enabled indicates whether to not retry sending batches in case
-			// of export failure.
-			Enabled: false,
-			// InitialInterval the time to wait after the first failure before
-			// retrying.
-			InitialInterval: 1 * time.Second,
-			// MaxInterval is the upper bound on backoff interval. Once this
-			// value is reached the delay between consecutive retries will
-			// always be `MaxInterval`.
-			MaxInterval: 10 * time.Second,
-			// MaxElapsedTime is the maximum amount of time (including retries)
-			// spent trying to send a request/batch. Once this value is
-			// reached, the data is discarded.
-			MaxElapsedTime: 20 * time.Second,
-		}),
-		otlpmetrichttp.WithURLPath(config.OTelConfigData.MetricsURLPath),
-		otlpmetrichttp.WithInsecure(), //Since agent is local
-	)
+	if config.OTelConfigData.UseTls {
+		return otlpmetrichttp.New(ctx,
+			otlpmetrichttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
+			otlpmetrichttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlpmetrichttp.WithCompression(otlpmetrichttp.NoCompression),
+			otlpmetrichttp.WithTemporalitySelector(temporalitySelector),
+			otlpmetrichttp.WithHeaders(headers),
+			otlpmetrichttp.WithRetry(otlpmetrichttp.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlpmetrichttp.WithURLPath(config.OTelConfigData.MetricsURLPath),
+		)
+	} else {
+		return otlpmetrichttp.New(ctx,
+			otlpmetrichttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
+			otlpmetrichttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlpmetrichttp.WithCompression(otlpmetrichttp.NoCompression),
+			otlpmetrichttp.WithTemporalitySelector(temporalitySelector),
+			otlpmetrichttp.WithHeaders(headers),
+			otlpmetrichttp.WithRetry(otlpmetrichttp.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlpmetrichttp.WithURLPath(config.OTelConfigData.MetricsURLPath),
+			otlpmetrichttp.WithInsecure(), //Since agent is local
+		)
+	}
 }
 
 // newGRPCExporter Initializes The "otlpmetricgrpc" exporter in OpenTelemetry is used to export metrics data using the
@@ -190,31 +217,57 @@ func newGRPCExporter(ctx context.Context) (metric.Exporter, error) {
 	//over time or when you need to report only the differences (deltas) between measurements.
 	//This is useful for metrics like CPU usage, request rates, or other metrics where the rate of change is important.
 	var temporalitySelector = func(instrument metric.InstrumentKind) metricdata.Temporality { return metricdata.DeltaTemporality }
+	if config.OTelConfigData.UseTls {
+		return otlpmetricgrpc.New(ctx,
+			otlpmetricgrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
+			otlpmetricgrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlpmetricgrpc.WithHeaders(headers),
+			otlpmetricgrpc.WithReconnectionPeriod(time.Duration(5)*time.Second),
+			otlpmetricgrpc.WithTemporalitySelector(temporalitySelector),
+			otlpmetricgrpc.WithRetry(otlpmetricgrpc.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+		)
 
-	return otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
-		otlpmetricgrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
-		otlpmetricgrpc.WithHeaders(headers),
-		otlpmetricgrpc.WithReconnectionPeriod(time.Duration(5)*time.Second),
-		otlpmetricgrpc.WithTemporalitySelector(temporalitySelector),
-		otlpmetricgrpc.WithRetry(otlpmetricgrpc.RetryConfig{
-			// Enabled indicates whether to not retry sending batches in case
-			// of export failure.
-			Enabled: false,
-			// InitialInterval the time to wait after the first failure before
-			// retrying.
-			InitialInterval: 1 * time.Second,
-			// MaxInterval is the upper bound on backoff interval. Once this
-			// value is reached the delay between consecutive retries will
-			// always be `MaxInterval`.
-			MaxInterval: 10 * time.Second,
-			// MaxElapsedTime is the maximum amount of time (including retries)
-			// spent trying to send a request/batch. Once this value is
-			// reached, the data is discarded.
-			MaxElapsedTime: 20 * time.Second,
-		}),
-		otlpmetricgrpc.WithInsecure(), //Since agent is local
-	)
+	} else {
+		return otlpmetricgrpc.New(ctx,
+			otlpmetricgrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.MetricsPort)),
+			otlpmetricgrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlpmetricgrpc.WithHeaders(headers),
+			otlpmetricgrpc.WithReconnectionPeriod(time.Duration(5)*time.Second),
+			otlpmetricgrpc.WithTemporalitySelector(temporalitySelector),
+			otlpmetricgrpc.WithRetry(otlpmetricgrpc.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlpmetricgrpc.WithInsecure(), //Since agent is local
+		)
+	}
 }
 
 // newHTTPTraceExporter Initilizes The "otlptracehttp" exporter in OpenTelemetry is used to export spans data using the
@@ -222,30 +275,54 @@ func newGRPCExporter(ctx context.Context) (metric.Exporter, error) {
 func newHTTPTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
 	headers := make(map[string]string)
 	headers[IngestTokenHeader] = config.GetOTelIngestToken()
-
-	return otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
-		otlptracehttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
-		otlptracehttp.WithHeaders(headers),
-		otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
-			// Enabled indicates whether to not retry sending batches in case
-			// of export failure.
-			Enabled: false,
-			// InitialInterval the time to wait after the first failure before
-			// retrying.
-			InitialInterval: 1 * time.Second,
-			// MaxInterval is the upper bound on backoff interval. Once this
-			// value is reached the delay between consecutive retries will
-			// always be `MaxInterval`.
-			MaxInterval: 10 * time.Second,
-			// MaxElapsedTime is the maximum amount of time (including retries)
-			// spent trying to send a request/batch. Once this value is
-			// reached, the data is discarded.
-			MaxElapsedTime: 20 * time.Second,
-		}),
-		otlptracehttp.WithURLPath(config.OTelConfigData.TraceURLPath),
-		otlptracehttp.WithInsecure(), //Since agent is local
-	)
+	if config.OTelConfigData.UseTls {
+		return otlptracehttp.New(ctx,
+			otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
+			otlptracehttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlptracehttp.WithHeaders(headers),
+			otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlptracehttp.WithURLPath(config.OTelConfigData.TraceURLPath),
+		)
+	} else {
+		return otlptracehttp.New(ctx,
+			otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
+			otlptracehttp.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlptracehttp.WithHeaders(headers),
+			otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlptracehttp.WithURLPath(config.OTelConfigData.TraceURLPath),
+			otlptracehttp.WithInsecure(), //Since agent is local
+		)
+	}
 }
 
 // newGRPCTraceExporter Initilizes The "otlptracegrpc" exporter in OpenTelemetry is used to export spans data using the
@@ -255,28 +332,52 @@ func newGRPCTraceExporter(ctx context.Context) (*otlptrace.Exporter, error) {
 	headers := make(map[string]string)
 	headers[IngestTokenHeader] = config.GetOTelIngestToken()
 
-	return otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
-		otlptracegrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
-		otlptracegrpc.WithHeaders(headers),
-		otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{
-			// Enabled indicates whether to not retry sending batches in case
-			// of export failure.
-			Enabled: false,
-			// InitialInterval the time to wait after the first failure before
-			// retrying.
-			InitialInterval: 1 * time.Second,
-			// MaxInterval is the upper bound on backoff interval. Once this
-			// value is reached the delay between consecutive retries will
-			// always be `MaxInterval`.
-			MaxInterval: 10 * time.Second,
-			// MaxElapsedTime is the maximum amount of time (including retries)
-			// spent trying to send a request/batch. Once this value is
-			// reached, the data is discarded.
-			MaxElapsedTime: 20 * time.Second,
-		}),
-		otlptracegrpc.WithInsecure(), //Since agent is local
-	)
+	if config.OTelConfigData.UseTls {
+		return otlptracegrpc.New(ctx,
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
+			otlptracegrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlptracegrpc.WithHeaders(headers),
+			otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+		)
+	} else {
+		return otlptracegrpc.New(ctx,
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", config.OTelConfigData.Host, config.OTelConfigData.TracePort)),
+			otlptracegrpc.WithTimeout(time.Duration(config.OTelConfigData.ExporterTimeout)*time.Second),
+			otlptracegrpc.WithHeaders(headers),
+			otlptracegrpc.WithRetry(otlptracegrpc.RetryConfig{
+				// Enabled indicates whether to not retry sending batches in case
+				// of export failure.
+				Enabled: false,
+				// InitialInterval the time to wait after the first failure before
+				// retrying.
+				InitialInterval: 1 * time.Second,
+				// MaxInterval is the upper bound on backoff interval. Once this
+				// value is reached the delay between consecutive retries will
+				// always be `MaxInterval`.
+				MaxInterval: 10 * time.Second,
+				// MaxElapsedTime is the maximum amount of time (including retries)
+				// spent trying to send a request/batch. Once this value is
+				// reached, the data is discarded.
+				MaxElapsedTime: 20 * time.Second,
+			}),
+			otlptracegrpc.WithInsecure(), //Since agent is local
+		)
+	}
 }
 
 // getResourceInfo provide application context level attributes during initialization
@@ -287,7 +388,7 @@ func getResourceInfo(appName string) *resource.Resource {
 	attributes := []attribute.KeyValue{
 		attribute.String("container_host", hostname),
 		attribute.String("application", appName),
-		attribute.String("source", "otel"),
+		attribute.String("source", otelSource),
 	}
 
 	environment, isEnvPresent := os.LookupEnv("ENVIRONMENT")

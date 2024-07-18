@@ -25,14 +25,16 @@ const (
 )
 
 const (
-	Target      = string("target")
-	Endpoint    = string("target_ip_port")
-	TLS_version = string("tls_version")
-	Application = string("Application")
-	ShardId     = string("ShardId")
-	WorkerType  = string("WorkerType")
-	InstanceId  = string("InstanceId")
-	Datapoints  = string("datapoints")
+	Target             = string("target")
+	Endpoint           = string("target_ip_port")
+	TLS_version        = string("tls_version")
+	Application        = string("Application")
+	ShardId            = string("ShardId")
+	WorkerType         = string("WorkerType")
+	InstanceId         = string("InstanceId")
+	Datapoints         = string("datapoints")
+	otelSource         = string("otel")
+	OccWorkerParamName = string("occ_worker")
 )
 
 const OtelInstrumentationVersion string = "v1.0"
@@ -57,6 +59,7 @@ type Tags struct {
 }
 
 type WorkersStateData struct {
+	StateTitle string
 	ShardId    int
 	WorkerType int
 	InstanceId int

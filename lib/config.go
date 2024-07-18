@@ -513,6 +513,7 @@ func LogOccConfigs() {
 		},
 		"OTEL": {
 			"enable_otel":                          otelconfig.OTelConfigData.Enabled,
+			"otel_use_tls":                         otelconfig.OTelConfigData.UseTls,
 			"skip_cal_statelog":                    otelconfig.OTelConfigData.SkipCalStateLog,
 			"otel_agent_host":                      otelconfig.OTelConfigData.Host,
 			"otel_agent_metrics_port":              otelconfig.OTelConfigData.MetricsPort,

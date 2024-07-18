@@ -481,7 +481,7 @@ func (m *mux) StartOTelAgent() error {
 }
 
 func (m *mux) StopOTelAgent() error {
-	logger.GetLogger().Log(logger.Info, "starting OTEL agent locally at: ", time.Now())
+	logger.GetLogger().Log(logger.Info, "stoping OTEL agent locally at: ", time.Now())
 	shutdownAgent := exec.Command("docker-compose", "-f", OTEL_AGENT_DOCKER_CONFIG_PATH, "down")
 	err := shutdownAgent.Run()
 
