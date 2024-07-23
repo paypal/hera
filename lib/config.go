@@ -24,6 +24,7 @@ import (
 	"github.com/paypal/hera/config"
 	"github.com/paypal/hera/utility/logger"
 	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
+
 	"os"
 	"path/filepath"
 	"strings"
