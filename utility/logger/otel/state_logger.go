@@ -111,7 +111,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	//"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd", "cls"
 	var err error
 	if stateLogMetrics.initState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(InitConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(InitConnGuageMetric),
 		metric.WithDescription("Number of workers in init state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for init state", err)
@@ -119,7 +119,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.acptState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(AccptConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(AccptConnGuageMetric),
 		metric.WithDescription("Number of workers in accept state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for accept state", err)
@@ -127,7 +127,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.waitState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(WaitConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(WaitConnGuageMetric),
 		metric.WithDescription("Number of workers in wait state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for wait state", err)
@@ -135,7 +135,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.busyState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BusyConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BusyConnGuageMetric),
 		metric.WithDescription("Number of workers in busy state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for busy state", err)
@@ -143,7 +143,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.schdState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(ScheduledConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(ScheduledConnGuageMetric),
 		metric.WithDescription("Number of workers in scheduled state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for scheduled state", err)
@@ -151,7 +151,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.fnshState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(FinishedConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(FinishedConnGuageMetric),
 		metric.WithDescription("Number of workers in finished state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for finished state", err)
@@ -159,7 +159,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.quceState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(QuiescedConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(QuiescedConnGuageMetric),
 		metric.WithDescription("Number of workers in quiesced state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for quiesced state", err)
@@ -167,7 +167,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.asgnState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(AssignedConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(AssignedConnGuageMetric),
 		metric.WithDescription("Number of workers in assigned state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for assigned state", err)
@@ -175,7 +175,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.idleState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(IdleConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(IdleConnGuageMetric),
 		metric.WithDescription("Number of workers in idle state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for idle state", err)
@@ -183,7 +183,7 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.bklgState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BacklogConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BacklogConnGuageMetric),
 		metric.WithDescription("Number of workers in backlog state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for backlog state", err)
@@ -191,10 +191,83 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 	}
 
 	if stateLogMetrics.strdState, err = stateLogMetrics.meter.Int64ObservableGauge(
-		otelconfig.OTelConfigData.PopulateMetricNamePrefix(StrdConnCountMetric),
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(StrdConnGuageMetric),
 		metric.WithDescription("Number of connections in stranded state"),
 	); err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for stranded state", err)
+		return err
+	}
+	//Initialize max metrics
+	if stateLogMetrics.initStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(InitMaxGuageMetric),
+		metric.WithDescription("Maximum Number of workers in init state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for init max state", err)
+		return err
+	}
+
+	if stateLogMetrics.waitStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(WaitMaxGuageMetric),
+		metric.WithDescription("Maximum Number of workers in wait state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for max wait state", err)
+		return err
+	}
+
+	if stateLogMetrics.busyStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BusyMaxGuageMetric),
+		metric.WithDescription("Maximum Number of workers in busy state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for max busy state", err)
+		return err
+	}
+
+	if stateLogMetrics.schdStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(SchdMaxGuageMetric),
+		metric.WithDescription("Maximum Number of workers in scheduled state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for scheduled state", err)
+		return err
+	}
+
+	if stateLogMetrics.quceStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(QuiescedMaxGuageMetric),
+		metric.WithDescription("Maximum Number of workers in quiesced state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for quiesced state", err)
+		return err
+	}
+
+	if stateLogMetrics.idleStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(IdleMaxGuageMetric),
+		metric.WithDescription("Maximum Number of client connections in idle state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for max idle state", err)
+		return err
+	}
+
+	if stateLogMetrics.bklgStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(BacklogMaxGuageMetric),
+		metric.WithDescription("Maximum Number of client connections in backlog state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for max backlog state", err)
+		return err
+	}
+
+	if stateLogMetrics.strdStateMax, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(StrdMaxGuageMetric),
+		metric.WithDescription("Maximum Number of client connections in idle state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for max stranded state", err)
+		return err
+	}
+
+	//Initialize min for accpet
+	if stateLogMetrics.acptStateMin, err = stateLogMetrics.meter.Int64ObservableGauge(
+		otelconfig.OTelConfigData.PopulateMetricNamePrefix(AcceptMinGuageMetric),
+		metric.WithDescription("Minimum Number of workers in accept state within resolution time"),
+	); err != nil {
+		logger.GetLogger().Log(logger.Alert, "Failed to register guage metric for min accept state", err)
 		return err
 	}
 
@@ -214,6 +287,17 @@ func (stateLogMetrics *StateLogMetrics) register() error {
 			stateLogMetrics.idleState,
 			stateLogMetrics.bklgState,
 			stateLogMetrics.strdState,
+
+			stateLogMetrics.initStateMax, //Max
+			stateLogMetrics.waitStateMax,
+			stateLogMetrics.busyStateMax,
+			stateLogMetrics.schdStateMax,
+			stateLogMetrics.quceStateMax,
+			stateLogMetrics.idleStateMax,
+			stateLogMetrics.bklgStateMax,
+			stateLogMetrics.strdStateMax,
+
+			stateLogMetrics.acptStateMin, //Min
 		}...)
 
 	if err != nil {
@@ -257,10 +341,15 @@ mainloop:
 					stateLogsData[keyName][key] += value
 				} else {
 					maxKey := key + "Max"
+					minKey := key + "Min"
 					stateLogsData[keyName][key] = value
 					//check max update max value
 					if stateLogsData[keyName][maxKey] < value {
 						stateLogsData[keyName][maxKey] = value
+					}
+					//Min value
+					if stateLogsData[keyName][minKey] > value {
+						stateLogsData[keyName][minKey] = value
 					}
 				}
 			}
@@ -293,8 +382,7 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metr
 			attribute.String(OccWorkerParamName, *stateLogTitle),
 		}
 		//Observe states data
-		// 1. Worker States
-
+		//1. Worker States
 		observer.ObserveInt64(stateLogMetrics.initState, aggStatesData["init"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.acptState, aggStatesData["acpt"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.waitState, aggStatesData["wait"], metric.WithAttributes(commonLabels...))
@@ -303,11 +391,26 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metr
 		observer.ObserveInt64(stateLogMetrics.fnshState, aggStatesData["fnsh"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.quceState, aggStatesData["quce"], metric.WithAttributes(commonLabels...))
 
-		// 2. Connection States
+		//2. Connection States
 		observer.ObserveInt64(stateLogMetrics.asgnState, aggStatesData["asgn"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.idleState, aggStatesData["idle"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.bklgState, aggStatesData["bklg"], metric.WithAttributes(commonLabels...))
 		observer.ObserveInt64(stateLogMetrics.strdState, aggStatesData["strd"], metric.WithAttributes(commonLabels...))
+
+		//3. Worker States Max values
+		observer.ObserveInt64(stateLogMetrics.initStateMax, aggStatesData["initMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.waitStateMax, aggStatesData["waitMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.busyStateMax, aggStatesData["busyMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.schdStateMax, aggStatesData["schdMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.quceStateMax, aggStatesData["quceMax"], metric.WithAttributes(commonLabels...))
+
+		//4. Connection States Max values
+		observer.ObserveInt64(stateLogMetrics.idleStateMax, aggStatesData["idleMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.bklgStateMax, aggStatesData["bklgMax"], metric.WithAttributes(commonLabels...))
+		observer.ObserveInt64(stateLogMetrics.strdStateMax, aggStatesData["strdMax"], metric.WithAttributes(commonLabels...))
+
+		//5. Min accept state
+		observer.ObserveInt64(stateLogMetrics.acptStateMin, aggStatesData["acptMin"], metric.WithAttributes(commonLabels...))
 	}
 	return nil
 }

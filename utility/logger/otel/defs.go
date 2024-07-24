@@ -9,19 +9,30 @@ import (
 // Following Metric Names will get instrumented as part of StateLogMetrics
 const (
 	// Worker States
-	InitConnCountMetric      = "init_connection.count"
-	AccptConnCountMetric     = "accept_connection.count"
-	WaitConnCountMetric      = "wait_connection.count"
-	BusyConnCountMetric      = "busy_connection.count"
-	ScheduledConnCountMetric = "scheduled_connection.count"
-	FinishedConnCountMetric  = "finished_connection.count"
-	QuiescedConnCountMetric  = "quiesced_connection.count"
+	InitConnGuageMetric      = "init_connection.cnt"
+	AccptConnGuageMetric     = "accept_connection.cnt"
+	WaitConnGuageMetric      = "wait_connection.cnt"
+	BusyConnGuageMetric      = "busy_connection.cnt"
+	ScheduledConnGuageMetric = "scheduled_connection.cnt"
+	FinishedConnGuageMetric  = "finished_connection.cnt"
+	QuiescedConnGuageMetric  = "quiesced_connection.cnt"
 
 	// Connection States
-	AssignedConnCountMetric = "assigned_connection.count"
-	IdleConnCountMetric     = "idle_connection.count"
-	BacklogConnCountMetric  = "backlog_connection.count"
-	StrdConnCountMetric     = "stranded_connection.count"
+	AssignedConnGuageMetric = "assigned_connection.cnt"
+	IdleConnGuageMetric     = "idle_connection.cnt"
+	BacklogConnGuageMetric  = "backlog_connection.cnt"
+	StrdConnGuageMetric     = "stranded_connection.cnt"
+
+	InitMaxGuageMetric     = "init_connection.cnt.max"
+	AcceptMinGuageMetric   = "accept_connection.cnt.min"
+	WaitMaxGuageMetric     = "wait_connection.cnt.max"
+	BusyMaxGuageMetric     = "busy_connection.cnt.max"
+	SchdMaxGuageMetric     = "scheduled_connection.cnt.max"
+	QuiescedMaxGuageMetric = "quiesced_connection.cnt.max"
+
+	IdleMaxGuageMetric    = "idle_connection.cnt.max"
+	BacklogMaxGuageMetric = "backlog_connection.cnt.max"
+	StrdMaxGuageMetric    = "stranded_connection.cnt.max"
 )
 
 const (
@@ -111,6 +122,18 @@ type StateLogMetrics struct {
 	idleState metric.Int64ObservableGauge
 	bklgState metric.Int64ObservableGauge
 	strdState metric.Int64ObservableGauge
+
+	initStateMax metric.Int64ObservableGauge
+	waitStateMax metric.Int64ObservableGauge
+	busyStateMax metric.Int64ObservableGauge
+	schdStateMax metric.Int64ObservableGauge
+	quceStateMax metric.Int64ObservableGauge
+
+	idleStateMax metric.Int64ObservableGauge
+	bklgStateMax metric.Int64ObservableGauge
+	strdStateMax metric.Int64ObservableGauge
+
+	acptStateMin metric.Int64ObservableGauge
 }
 
 // Object represents the workers states data for worker belongs to specific shardId and workperType with flat-map

@@ -120,9 +120,12 @@ func TestOTELMetricsRemoteEndPointWithTLS(t *testing.T) {
 
 	cancel()
 	conn.Close()
+<<<<<<< HEAD
 
 	for counter := 0; counter < 1000; counter++ {
 		time.Sleep(10 * time.Second)
 	}
+=======
+>>>>>>> otel_logging_changes
 	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsRemoteEndPointWithTLS done  -------------------------------------------------------------")
 }

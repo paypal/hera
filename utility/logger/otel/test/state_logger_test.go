@@ -167,8 +167,8 @@ func TestSendingStateLogMetrics(t *testing.T) {
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
 	time.Sleep(5 * time.Second)
 	metricsData := mc.GetMetrics()
-	if len(metricsData) < 11 {
-		t.Fatalf("got %d, wanted %d", len(metricsData), 24)
+	if len(metricsData) < 20 {
+		t.Fatalf("got %d, wanted %d", len(metricsData), 20)
 	}
 }
 
