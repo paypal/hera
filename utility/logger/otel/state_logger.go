@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"os"
 	"sync"
 	"time"
 )
@@ -71,11 +72,16 @@ func StartMetricsCollection(totalWorkersCount int, opt ...StateLogOption) error 
 	var err error
 	//Registers instrumentation for metrics
 	registerStateMetrics.Do(func() {
+		hostName, hostErr := os.Hostname()
+		if hostErr != nil {
+			logger.GetLogger().Log(logger.Alert, "Failed to fetch hostname for current container", err)
+		}
 		//Initialize state-log metrics
 		metricsStateLogger = &StateLogMetrics{
 			meter: stateLogMetricsConfig.MeterProvider.Meter(StateLogMeterName,
 				metric.WithInstrumentationVersion(OtelInstrumentationVersion)),
 			metricsConfig:  stateLogMetricsConfig,
+			hostname:       hostName,
 			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			doneCh:         make(chan struct{}),
 		}
@@ -344,10 +350,18 @@ mainloop:
 					minKey := key + "Min"
 					stateLogsData[keyName][key] = value
 					//check max update max value
+					_, keyPresent := stateLogsData[keyName][maxKey]
+					if !keyPresent {
+						stateLogsData[keyName][maxKey] = value
+					}
 					if stateLogsData[keyName][maxKey] < value {
 						stateLogsData[keyName][maxKey] = value
 					}
 					//Min value
+					_, keyPresent = stateLogsData[keyName][minKey]
+					if !keyPresent {
+						stateLogsData[keyName][minKey] = value
+					}
 					if stateLogsData[keyName][minKey] > value {
 						stateLogsData[keyName][minKey] = value
 					}
@@ -380,6 +394,7 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(observer metr
 			attribute.Int(WorkerType, int(aggStatesData[WorkerType])),
 			attribute.Int(InstanceId, int(aggStatesData[InstanceId])),
 			attribute.String(OccWorkerParamName, *stateLogTitle),
+			attribute.String(HostDimensionName, stateLogMetrics.hostname),
 		}
 		//Observe states data
 		//1. Worker States
