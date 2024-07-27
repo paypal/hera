@@ -102,17 +102,16 @@ func TestOTELMetricsRemoteEndPointWithTLS(t *testing.T) {
 		t.Fatalf("Expected 1 row")
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 	rows.Close()
 	stmt.Close()
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 	publishingErrors := testutil.RegexCountFile("otel publishing error", "hera.log")
 	if publishingErrors > 1 {
 		t.Fatalf("should not fail while publishing metrics remote host")
 	}
 
-	time.Sleep(5 * time.Second)
 	calPublishingErrors := testutil.RegexCountFile("failed to send metrics", "cal.log")
 	if calPublishingErrors > 1 {
 		t.Fatalf("should not fail while publishing metrics remote host")
@@ -120,12 +119,5 @@ func TestOTELMetricsRemoteEndPointWithTLS(t *testing.T) {
 
 	cancel()
 	conn.Close()
-<<<<<<< HEAD
-
-	for counter := 0; counter < 1000; counter++ {
-		time.Sleep(10 * time.Second)
-	}
-=======
->>>>>>> otel_logging_changes
 	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsRemoteEndPointWithTLS done  -------------------------------------------------------------")
 }

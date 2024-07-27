@@ -386,9 +386,9 @@ func getResourceInfo(appName string) *resource.Resource {
 
 	// Create a slice to hold the attributes
 	attributes := []attribute.KeyValue{
-		attribute.String("container_host", hostname),
-		attribute.String("application", appName),
-		attribute.String("source", otelSource),
+		attribute.String(ContainerHostDimName, hostname),
+		attribute.String(ApplicationDimName, appName),
+		attribute.String(OtelSourceName, otelSource),
 	}
 
 	environment, isEnvPresent := os.LookupEnv("ENVIRONMENT")

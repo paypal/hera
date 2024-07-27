@@ -36,16 +36,19 @@ const (
 )
 
 const (
-	Target             = string("target")
-	Endpoint           = string("target_ip_port")
-	TLS_version        = string("tls_version")
-	Application        = string("Application")
-	ShardId            = string("ShardId")
-	WorkerType         = string("WorkerType")
-	InstanceId         = string("InstanceId")
-	Datapoints         = string("datapoints")
-	otelSource         = string("otel")
-	OccWorkerParamName = string("occ_worker")
+	Target               = string("target")
+	Endpoint             = string("target_ip_port")
+	TLS_version          = string("tls_version")
+	ApplicationDimName   = string("application")
+	ShardId              = string("ShardId")
+	WorkerType           = string("WorkerType")
+	InstanceId           = string("InstanceId")
+	Datapoints           = string("datapoints")
+	OtelSourceName       = string("source")
+	otelSource           = string("otel")
+	OccWorkerParamName   = string("occ_worker")
+	HostDimensionName    = string("host")
+	ContainerHostDimName = string("container_host")
 )
 
 const OtelInstrumentationVersion string = "v1.0"
@@ -98,6 +101,8 @@ type StateLogMetrics struct {
 
 	//Statelog metrics configuration data
 	metricsConfig stateLogMetricsConfig
+
+	hostname string
 
 	meter metric.Meter
 
