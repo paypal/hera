@@ -23,9 +23,9 @@ func setup(cfg cfgFunc) error {
 	if appcfg["enable_otel"] == "true" {
 		err = mx.StartOTelAgent()
 	}
-	if err != nil {
-		return err
-	}
+	//if err != nil {
+	//	return err
+	//}
 	err = mx.StartServer()
 	return err
 }

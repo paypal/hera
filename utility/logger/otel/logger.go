@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/instrumentation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -116,13 +117,128 @@ func newMeterProvider(ctx context.Context) (*metric.MeterProvider, error) {
 		logger.GetLogger().Log(logger.Alert, "failed to initialize metric exporter, error %v", err)
 		return nil, err
 	}
-
+	metricViews := getStateLogMetricsViews()
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(getResourceInfo(config.OTelConfigData.PoolName)),
 		metric.WithReader(metric.NewPeriodicReader(metricExporter,
 			metric.WithInterval(time.Duration(config.OTelConfigData.ResolutionTimeInSec)*time.Second))),
+		metric.WithView(metricViews...),
 	)
 	return meterProvider, nil
+}
+
+func getStateLogMetricsViews() []metric.View {
+	initView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(InitConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	acptStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(AccptConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	waitStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(WaitConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	busyStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(BusyConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	schdStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(ScheduledConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	fnshStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(FinishedConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	quceStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(QuiescedConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	asgnStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(AssignedConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	idleStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(IdleConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	bklgStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(BacklogConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+
+	strdStateView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(StrdConnMetric),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
+		},
+	)
+	return []metric.View{initView, acptStateView, waitStateView, busyStateView, schdStateView,
+		fnshStateView, quceStateView, asgnStateView, idleStateView, bklgStateView, strdStateView}
 }
 
 // getMetricExporter Initialize metric exporter based protocol selected by user.

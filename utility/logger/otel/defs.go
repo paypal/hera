@@ -9,30 +9,19 @@ import (
 // Following Metric Names will get instrumented as part of StateLogMetrics
 const (
 	// Worker States
-	InitConnGuageMetric      = "init_connection.cnt"
-	AccptConnGuageMetric     = "accept_connection.cnt"
-	WaitConnGuageMetric      = "wait_connection.cnt"
-	BusyConnGuageMetric      = "busy_connection.cnt"
-	ScheduledConnGuageMetric = "scheduled_connection.cnt"
-	FinishedConnGuageMetric  = "finished_connection.cnt"
-	QuiescedConnGuageMetric  = "quiesced_connection.cnt"
+	InitConnMetric      = "init_connection"
+	AccptConnMetric     = "accept_connection"
+	WaitConnMetric      = "wait_connection"
+	BusyConnMetric      = "busy_connection"
+	ScheduledConnMetric = "scheduled_connection"
+	FinishedConnMetric  = "finished_connection"
+	QuiescedConnMetric  = "quiesced_connection"
 
 	// Connection States
-	AssignedConnGuageMetric = "assigned_connection.cnt"
-	IdleConnGuageMetric     = "idle_connection.cnt"
-	BacklogConnGuageMetric  = "backlog_connection.cnt"
-	StrdConnGuageMetric     = "stranded_connection.cnt"
-
-	InitMaxGuageMetric     = "init_connection.cnt.max"
-	AcceptMinGuageMetric   = "accept_connection.cnt.min"
-	WaitMaxGuageMetric     = "wait_connection.cnt.max"
-	BusyMaxGuageMetric     = "busy_connection.cnt.max"
-	SchdMaxGuageMetric     = "scheduled_connection.cnt.max"
-	QuiescedMaxGuageMetric = "quiesced_connection.cnt.max"
-
-	IdleMaxGuageMetric    = "idle_connection.cnt.max"
-	BacklogMaxGuageMetric = "backlog_connection.cnt.max"
-	StrdMaxGuageMetric    = "stranded_connection.cnt.max"
+	AssignedConnMetric = "assigned_connection"
+	IdleConnMetric     = "idle_connection"
+	BacklogConnMetric  = "backlog_connection"
+	StrdConnMetric     = "stranded_connection"
 )
 
 const (
@@ -50,6 +39,9 @@ const (
 	HostDimensionName    = string("host")
 	ContainerHostDimName = string("container_host")
 )
+
+var StatelogBucket = []float64{0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 160, 200}
+var ConnectionStateBucket = []float64{0, 25, 50, 75, 100, 150, 200, 300, 400, 500, 600, 700, 800, 1200, 2400, 4800, 9600, 19200, 39400, 65536}
 
 const OtelInstrumentationVersion string = "v1.0"
 
@@ -84,18 +76,6 @@ type (
 	ServerType int
 )
 
-// StateData Represents stats by a worker
-type StateData struct {
-	Name       string
-	Value      float64
-	Dimensions metric.MeasurementOption
-}
-
-type DataPoint struct {
-	attr metric.MeasurementOption
-	data int64
-}
-
 // StateLogMetrics state_log_metrics reports workers states
 type StateLogMetrics struct {
 
@@ -114,31 +94,17 @@ type StateLogMetrics struct {
 
 	stateLock sync.Mutex
 
-	registration metric.Registration
-
-	initState metric.Int64ObservableGauge
-	acptState metric.Int64ObservableGauge
-	waitState metric.Int64ObservableGauge
-	busyState metric.Int64ObservableGauge
-	schdState metric.Int64ObservableGauge
-	fnshState metric.Int64ObservableGauge
-	quceState metric.Int64ObservableGauge
-	asgnState metric.Int64ObservableGauge
-	idleState metric.Int64ObservableGauge
-	bklgState metric.Int64ObservableGauge
-	strdState metric.Int64ObservableGauge
-
-	initStateMax metric.Int64ObservableGauge
-	waitStateMax metric.Int64ObservableGauge
-	busyStateMax metric.Int64ObservableGauge
-	schdStateMax metric.Int64ObservableGauge
-	quceStateMax metric.Int64ObservableGauge
-
-	idleStateMax metric.Int64ObservableGauge
-	bklgStateMax metric.Int64ObservableGauge
-	strdStateMax metric.Int64ObservableGauge
-
-	acptStateMin metric.Int64ObservableGauge
+	initState metric.Int64Histogram
+	acptState metric.Int64Histogram
+	waitState metric.Int64Histogram
+	busyState metric.Int64Histogram
+	schdState metric.Int64Histogram
+	fnshState metric.Int64Histogram
+	quceState metric.Int64Histogram
+	asgnState metric.Int64Histogram
+	idleState metric.Int64Histogram
+	bklgState metric.Int64Histogram
+	strdState metric.Int64Histogram
 }
 
 // Object represents the workers states data for worker belongs to specific shardId and workperType with flat-map
