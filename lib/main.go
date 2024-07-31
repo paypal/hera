@@ -18,8 +18,11 @@
 package lib
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	otellogger "github.com/paypal/hera/utility/logger/otel"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -50,7 +53,7 @@ func Run() {
 
 	rand.Seed(time.Now().Unix())
 
-	err := InitConfig()
+	err := InitConfig(*namePtr)
 	if err != nil {
 		if logger.GetLogger().V(logger.Alert) {
 			logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
@@ -106,7 +109,24 @@ func Run() {
 	caltxn.SetCorrelationID("runtxn")
 	caltxn.Completed()
 
-	GetStateLog().SetStartTime(time.Now())
+	//Initialize OTEL
+	if otelconfig.OTelConfigData.Enabled {
+		shutdownFunc, err := otellogger.Init(context.Background())
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, fmt.Sprintf("failed to initialize OTEL, err: %v", err))
+			evt := cal.NewCalEvent("OTEL_INIT", *namePtr, "2", fmt.Sprintf("erro: %v", err))
+			evt.Completed()
+			if otelconfig.OTelConfigData.SkipCalStateLog {
+				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("OTEL initialization failed. Only the OTEL state-log has been enabled. It is not safe to start the server"))
+				FullShutdown()
+			}
+		}
+		GetStateLog().SetStartTime(time.Now())
+		defer otellogger.StopMetricCollection()  //Stop sending metrics data
+		defer shutdownFunc(context.Background()) //During exit from mux, this will takecare of OTEL providers clean-up
+	} else {
+		GetStateLog().SetStartTime(time.Now())
+	}
 
 	go func() {
 		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
