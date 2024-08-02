@@ -27,7 +27,7 @@ func initializeConsoleExporter() (*metric.MeterProvider, error) {
 		Enabled:                    true,
 		OtelMetricGRPC:             false,
 		OtelTraceGRPC:              false,
-		ResolutionTimeInSec:        3,
+		ResolutionTimeInSec:        6,
 		OTelErrorReportingInterval: 10,
 		PoolName:                   "occ-testapp",
 		MetricNamePrefix:           "pp.occ",
@@ -261,7 +261,7 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 	}
 }
 
-func TestOCCStatelogGenerator(t *testing.T) {
+func TestOCCStateLogGeneratorWithRandomValues(t *testing.T) {
 	cont, err := initializeConsoleExporter()
 	if err != nil {
 		t.Fail()
@@ -276,11 +276,11 @@ func TestOCCStatelogGenerator(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fatalf("TestOCCStatelogGenerator failed with error %v", err)
 	}
-	<-time.After(time.Second * time.Duration(10))
+	<-time.After(time.Second * time.Duration(30))
 }
 
 func dataGenerator() {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	waitTime := time.Second * 1
 
