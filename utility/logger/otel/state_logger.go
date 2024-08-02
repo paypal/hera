@@ -259,9 +259,6 @@ mainloop:
 				"so stop sending data and closing data channel")
 			close(stateLogMetrics.mStateDataChan)
 			break mainloop
-		case <-time.After(1000 * time.Millisecond):
-			logger.GetLogger().Log(logger.Info, "timeout on waiting for statelog metrics data")
-			continue mainloop
 		}
 	}
 }
@@ -274,7 +271,7 @@ func (stateLogMetrics *StateLogMetrics) sendMetricsDataToCollector(ctx context.C
 		logger.GetLogger().Log(logger.Info, fmt.Sprintf("publishing metric with calculated max value and aggregation of gauge for shardid-workertype-instanceId: %s using datapoints size: %d", key, aggStatesData[Datapoints]))
 		commonLabels := []attribute.KeyValue{
 			attribute.Int(ShardId, int(aggStatesData[ShardId])),
-			attribute.Int(WorkerType, int(aggStatesData[WorkerType])),
+			attribute.String(WorkerType, WorkerTypeMap[int(aggStatesData[WorkerType])]),
 			attribute.Int(InstanceId, int(aggStatesData[InstanceId])),
 			attribute.String(OccWorkerParamName, *stateLogTitle),
 			attribute.String(HostDimensionName, stateLogMetrics.hostname),
