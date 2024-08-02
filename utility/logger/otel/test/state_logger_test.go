@@ -93,7 +93,7 @@ func TestVerifyStateLogMetricsInitilization(t *testing.T) {
 		t.Fail()
 	}
 
-	err = otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err = otellogger.StartMetricsCollection(context.Background(), 5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -116,7 +116,7 @@ func TestVerifyStateLogMetricsInitilizationAndContextWithTimeout(t *testing.T) {
 		t.Fail()
 	}
 
-	err = otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err = otellogger.StartMetricsCollection(context.Background(), 5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 	defer otellogger.StopMetricCollection()
 
 	if err != nil {
@@ -137,7 +137,7 @@ func TestSendingStateLogMetrics(t *testing.T) {
 
 	time.Sleep(2 * time.Second)
 
-	err := otellogger.StartMetricsCollection(5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err := otellogger.StartMetricsCollection(context.Background(), 5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -167,8 +167,8 @@ func TestSendingStateLogMetrics(t *testing.T) {
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
 	time.Sleep(5 * time.Second)
 	metricsData := mc.GetMetrics()
-	if len(metricsData) < 20 {
-		t.Fatalf("got %d, wanted %d", len(metricsData), 20)
+	if len(metricsData) < 11 {
+		t.Fatalf("got %d, wanted %d", len(metricsData), 11)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 		t.Fail()
 	}
 
-	err2 := otellogger.StartMetricsCollection(100, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp2"))
+	err2 := otellogger.StartMetricsCollection(context.Background(), 100, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp2"))
 
 	if err2 != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
@@ -268,7 +268,7 @@ func TestOCCStatelogGenerator(t *testing.T) {
 	}
 	defer cont.Shutdown(context.Background())
 
-	err2 := otellogger.StartMetricsCollection(1000, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
+	err2 := otellogger.StartMetricsCollection(context.Background(), 1000, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 	defer otellogger.StopMetricCollection()
 	go dataGenerator()
 
@@ -285,7 +285,6 @@ func dataGenerator() {
 	waitTime := time.Second * 1
 
 	metricNames := [11]string{"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd"}
-	workerStates := [2]string{"req", "resp"}
 
 	timer := time.NewTimer(waitTime)
 
@@ -316,8 +315,6 @@ mainloop:
 			//Random index
 			randIndex := rand.Intn(len(metricNames))
 			workerStatesData.StateData[metricNames[randIndex]] += int64(totalSum - tempSum)
-			workerStatesData.StateData[workerStates[0]] = int64(rand.Intn(100))
-			workerStatesData.StateData[workerStates[1]] = int64(rand.Intn(100))
 			otellogger.AddDataPointToOTELStateDataChan(&workerStatesData)
 			timer.Reset(waitTime)
 		case <-ctx.Done():

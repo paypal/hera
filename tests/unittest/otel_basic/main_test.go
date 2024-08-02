@@ -28,9 +28,11 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["rac_sql_interval"] = "0"
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["enable_otel"] = "true"
-	appcfg["otel_resolution_time_in_sec"] = "1"
+	appcfg["otel_resolution_time_in_sec"] = "10"
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.max_connections"] = "3"
+	appcfg["cfg_from_tns"] = "false"
+	appcfg["num_standby_dbs"] = "0"
 	opscfg["opscfg.default.server.log_level"] = "5"
 	os.Setenv("AVAILABILITY_ZONE", "test-dev")
 	os.Setenv("ENVIRONMENT", "dev")
@@ -108,9 +110,9 @@ func TestOTELMetricsBasic(t *testing.T) {
 	if count < 1 {
 		t.Fatalf("OTEL event should contain application as hera-test")
 	}
-	initCount := testutil.RegexCountFile("\"name\":\"pp.occ.init_connection.cnt\"", logFilePath)
+	initCount := testutil.RegexCountFile("\"name\":\"pp.occ.init_connection\"", logFilePath)
 	if initCount < 1 {
-		t.Fatalf("OTEL event should contain metric name pp.occ.init_connection.cnt")
+		t.Fatalf("OTEL event should contain metric name pp.occ.init_connection")
 	}
 	tagsCount := testutil.RegexCountFile("{\"key\":\"InstanceId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"ShardId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"WorkerType\",\"value\":{\"intValue\":\"0\"}",
 		logFilePath)

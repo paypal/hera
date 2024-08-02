@@ -19,6 +19,7 @@ package lib
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	otel_logger "github.com/paypal/hera/utility/logger/otel"
@@ -571,7 +572,7 @@ func (sl *StateLog) init() error {
 
 	if otelconfig.OTelConfigData.Enabled {
 		// Initialize statelog_metrics to send metrics information currently we are ignoring registration object returned from this call
-		stateStartErr := otel_logger.StartMetricsCollection(totalWorkersCount,
+		stateStartErr := otel_logger.StartMetricsCollection(context.Background(), totalWorkersCount,
 			otel_logger.WithMetricProvider(otel.GetMeterProvider()),
 			otel_logger.WithAppName(otelconfig.OTelConfigData.PoolName))
 
