@@ -43,6 +43,13 @@ const (
 var StatelogBucket = []float64{0, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 160, 200}
 var ConnectionStateBucket = []float64{0, 25, 50, 75, 100, 150, 200, 300, 400, 500, 600, 700, 800, 1200, 2400, 4800, 9600, 19200, 39400, 65536}
 
+// WorkerTypeMap This map represents worker type configured in lib.HeraWorkerType variable. If any changes in worker type this definition need to get updated.
+var WorkerTypeMap = map[int]string{
+	0: "rw",
+	1: "ro",
+	2: "standby_ro",
+}
+
 const OtelInstrumentationVersion string = "v1.0"
 
 // DEFAULT_OTEL_COLLECTOR_PROTOCOL default OTEL configurations point to QA collector
