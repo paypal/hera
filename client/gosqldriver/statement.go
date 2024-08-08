@@ -33,12 +33,12 @@ import (
 
 // implements sql/driver Stmt interface and the newer StmtQueryContext and StmtExecContext interfaces
 type stmt struct {
-	hera           *heraConnection
+	hera           heraConnectionInterface
 	sql            string
 	fetchChunkSize []byte
 }
 
-func newStmt(hera *heraConnection, sql string) *stmt {
+func newStmt(hera heraConnectionInterface, sql string) *stmt {
 	st := &stmt{hera: hera, fetchChunkSize: []byte("0")}
 	// replace '?' with named parameters p1, p2, ...
 	var bf bytes.Buffer
@@ -57,7 +57,7 @@ func newStmt(hera *heraConnection, sql string) *stmt {
 	}
 	st.sql = bf.String()
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, hera.id, "final SQL:", st.sql)
+		logger.GetLogger().Log(logger.Debug, hera.getID(), "final SQL:", st.sql)
 	}
 	return st
 }
@@ -83,19 +83,19 @@ func (st *stmt) NumInput() int {
 // Exec executes a query that doesn't return rows, such as an INSERT or UPDATE.
 func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	sk := 0
-	if len(st.hera.shardKeyPayload) > 0 {
+	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
 	}
 	crid := 0
-	if st.hera.corrID != nil {
+	if st.hera.getCorrID() != nil {
 		crid = 1
 	}
 	binds := len(args)
 	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and CmdBindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
 	idx := 0
 	if crid == 1 {
-		nss[0] = st.hera.corrID
-		st.hera.corrID = nil
+		nss[0] = st.hera.getCorrID()
+		st.hera.setCorrID(nil)
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdPrepareV2, []byte(st.sql))
@@ -116,12 +116,12 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 			nss[idx] = netstring.NewNetstringFrom(common.CmdBindValue, []byte(val))
 		}
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
+			logger.GetLogger().Log(logger.Verbose, st.hera.getID(), "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
 		idx++
 	}
 	if sk == 1 {
-		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.shardKeyPayload)
+		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.getShardKeyPayload())
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
@@ -158,7 +158,7 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 		return nil, err
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, st.hera.id, "DML successfull, rows affected:", res.nRows)
+		logger.GetLogger().Log(logger.Debug, st.hera.getID(), "DML successfull, rows affected:", res.nRows)
 	}
 	return res, nil
 }
@@ -168,19 +168,19 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 	//TODO: refactor ExecContext / Exec to reuse code
 	//TODO: honor the context timeout and return when it is canceled
 	sk := 0
-	if len(st.hera.shardKeyPayload) > 0 {
+	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
 	}
 	crid := 0
-	if st.hera.corrID != nil {
+	if st.hera.getCorrID() != nil {
 		crid = 1
 	}
 	binds := len(args)
 	nss := make([]*netstring.Netstring, crid /*CmdClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/)
 	idx := 0
 	if crid == 1 {
-		nss[0] = st.hera.corrID
-		st.hera.corrID = nil
+		nss[0] = st.hera.getCorrID()
+		st.hera.setCorrID(nil)
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdPrepareV2, []byte(st.sql))
@@ -205,12 +205,12 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 			nss[idx] = netstring.NewNetstringFrom(common.CmdBindValue, []byte(val))
 		}
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
+			logger.GetLogger().Log(logger.Verbose, st.hera.getID(), "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
 		idx++
 	}
 	if sk == 1 {
-		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.shardKeyPayload)
+		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.getShardKeyPayload())
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
@@ -247,7 +247,7 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 		return nil, err
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, st.hera.id, "DML successfull, rows affected:", res.nRows)
+		logger.GetLogger().Log(logger.Debug, st.hera.getID(), "DML successfull, rows affected:", res.nRows)
 	}
 	return res, nil
 }
@@ -256,19 +256,19 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 // Query executes a query that may return rows, such as a SELECT.
 func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	sk := 0
-	if len(st.hera.shardKeyPayload) > 0 {
+	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
 	}
 	crid := 0
-	if st.hera.corrID != nil {
+	if st.hera.getCorrID() != nil {
 		crid = 1
 	}
 	binds := len(args)
 	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
 	idx := 0
 	if crid == 1 {
-		nss[0] = st.hera.corrID
-		st.hera.corrID = nil
+		nss[0] = st.hera.getCorrID()
+		st.hera.setCorrID(nil)
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdPrepareV2, []byte(st.sql))
@@ -289,12 +289,12 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 			nss[idx] = netstring.NewNetstringFrom(common.CmdBindValue, []byte(val))
 		}
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
+			logger.GetLogger().Log(logger.Verbose, st.hera.getID(), "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
 		idx++
 	}
 	if sk == 1 {
-		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.shardKeyPayload)
+		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.getShardKeyPayload())
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
@@ -317,7 +317,7 @@ Loop:
 			switch ns.Cmd {
 			case common.RcStillExecuting:
 				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, st.hera.id, " Still executing ...")
+					logger.GetLogger().Log(logger.Info, st.hera.getID(), " Still executing ...")
 				}
 				// continues the loop
 			case common.RcSQLError:
@@ -349,7 +349,7 @@ Loop:
 		return nil, err
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, st.hera.id, "Query successfull, num columns:", cols)
+		logger.GetLogger().Log(logger.Debug, st.hera.getID(), "Query successfull, num columns:", cols)
 	}
 	return newRows(st.hera, cols, st.fetchChunkSize)
 }
@@ -360,19 +360,19 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 	// TODO: refactor Query/QueryContext to reuse code
 	// TODO: honor the context timeout and return when it is canceled
 	sk := 0
-	if len(st.hera.shardKeyPayload) > 0 {
+	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
 	}
 	crid := 0
-	if st.hera.corrID != nil {
+	if st.hera.getCorrID() != nil {
 		crid = 1
 	}
 	binds := len(args)
 	nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
 	idx := 0
 	if crid == 1 {
-		nss[0] = st.hera.corrID
-		st.hera.corrID = nil
+		nss[0] = st.hera.getCorrID()
+		st.hera.setCorrID(nil)
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdPrepareV2, []byte(st.sql))
@@ -397,12 +397,12 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 			nss[idx] = netstring.NewNetstringFrom(common.CmdBindValue, []byte(val))
 		}
 		if logger.GetLogger().V(logger.Verbose) {
-			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
+			logger.GetLogger().Log(logger.Verbose, st.hera.getID(), "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
 		idx++
 	}
 	if sk == 1 {
-		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.shardKeyPayload)
+		nss[idx] = netstring.NewNetstringFrom(common.CmdShardKey, st.hera.getShardKeyPayload())
 		idx++
 	}
 	nss[idx] = netstring.NewNetstringFrom(common.CmdExecute, nil)
@@ -425,7 +425,7 @@ Loop:
 			switch ns.Cmd {
 			case common.RcStillExecuting:
 				if logger.GetLogger().V(logger.Info) {
-					logger.GetLogger().Log(logger.Info, st.hera.id, " Still executing ...")
+					logger.GetLogger().Log(logger.Info, st.hera.getID(), " Still executing ...")
 				}
 				// continues the loop
 			case common.RcSQLError:
@@ -457,7 +457,7 @@ Loop:
 		return nil, err
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, st.hera.id, "Query successfull, num columns:", cols)
+		logger.GetLogger().Log(logger.Debug, st.hera.getID(), "Query successfull, num columns:", cols)
 	}
 	return newRows(st.hera, cols, st.fetchChunkSize)
 }

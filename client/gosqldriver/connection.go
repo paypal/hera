@@ -32,6 +32,27 @@ import (
 
 var corrIDUnsetCmd = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
 
+type heraConnectionInterface interface {
+	Prepare(query string) (driver.Stmt, error)
+	Close() error
+	Begin() (driver.Tx, error)
+	exec(cmd int, payload []byte) error
+	execNs(ns *netstring.Netstring) error
+	getResponse() (*netstring.Netstring, error)
+	SetShardID(shard int) error
+	ResetShardID() error
+	GetNumShards() (int, error)
+	SetShardKeyPayload(payload string)
+	ResetShardKeyPayload()
+	SetCalCorrID(corrID string)
+	SetClientInfo(poolName string, host string) error
+	SetClientInfoWithPoolStack(poolName string, host string, poolStack string) error
+	getID() string
+	getCorrID() *netstring.Netstring
+	getShardKeyPayload() []byte
+	setCorrID(*netstring.Netstring)
+}
+
 type heraConnection struct {
 	id     string // used for logging
 	conn   net.Conn
@@ -39,7 +60,7 @@ type heraConnection struct {
 	// for the sharding extension
 	shardKeyPayload []byte
 	// correlation id
-	corrID *netstring.Netstring
+	corrID     *netstring.Netstring
 	clientinfo *netstring.Netstring
 }
 
@@ -51,7 +72,6 @@ func NewHeraConnection(conn net.Conn) driver.Conn {
 	}
 	return hera
 }
-
 
 // Prepare returns a prepared statement, bound to this connection.
 func (c *heraConnection) Prepare(query string) (driver.Stmt, error) {
@@ -177,66 +197,82 @@ func (c *heraConnection) SetCalCorrID(corrID string) {
 }
 
 // SetClientInfo actually sends it over to Hera server
-func (c *heraConnection) SetClientInfo(poolName string, host string)(error){
+func (c *heraConnection) SetClientInfo(poolName string, host string) error {
 	if len(poolName) <= 0 && len(host) <= 0 {
 		return nil
 	}
 
 	pid := os.Getpid()
 	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, Command: SetClientInfo,", pid, host, poolName)
-        c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
-                if logger.GetLogger().V(logger.Verbose) {
-                        logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
-                }
+	c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
+	}
 
-        _, err := c.conn.Write(c.clientinfo.Serialized)
-        if err != nil {
-                if logger.GetLogger().V(logger.Warning) {
-                        logger.GetLogger().Log(logger.Warning, "Failed to send client info")
-                }
-                return errors.New("Failed custom auth, failed to send client info")
-        }
-        ns, err := c.reader.ReadNext()
-        if err != nil {
-                if logger.GetLogger().V(logger.Warning) {
-                        logger.GetLogger().Log(logger.Warning, "Failed to read server info")
-                }
-                return errors.New("Failed to read server info")
-        }
-        if logger.GetLogger().V(logger.Debug) {
-                logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
-        }
+	_, err := c.conn.Write(c.clientinfo.Serialized)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to send client info")
+		}
+		return errors.New("Failed custom auth, failed to send client info")
+	}
+	ns, err := c.reader.ReadNext()
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+		}
+		return errors.New("Failed to read server info")
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
+	}
 	return nil
 }
 
-func (c *heraConnection) SetClientInfoWithPoolStack(poolName string, host string, poolStack string)(error){
+func (c *heraConnection) SetClientInfoWithPoolStack(poolName string, host string, poolStack string) error {
 	if len(poolName) <= 0 && len(host) <= 0 && len(poolStack) <= 0 {
 		return nil
 	}
 
 	pid := os.Getpid()
 	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, PoolStack: %s, Command: SetClientInfo,", pid, host, poolName, poolStack)
-        c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
-                if logger.GetLogger().V(logger.Verbose) {
-                        logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
-                }
+	c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
+	}
 
-        _, err := c.conn.Write(c.clientinfo.Serialized)
-        if err != nil {
-                if logger.GetLogger().V(logger.Warning) {
-                        logger.GetLogger().Log(logger.Warning, "Failed to send client info")
-                }
-                return errors.New("Failed custom auth, failed to send client info")
-        }
-        ns, err := c.reader.ReadNext()
-        if err != nil {
-                if logger.GetLogger().V(logger.Warning) {
-                        logger.GetLogger().Log(logger.Warning, "Failed to read server info")
-                }
-                return errors.New("Failed to read server info")
-        }
-        if logger.GetLogger().V(logger.Debug) {
-                logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
-        }
+	_, err := c.conn.Write(c.clientinfo.Serialized)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to send client info")
+		}
+		return errors.New("Failed custom auth, failed to send client info")
+	}
+	ns, err := c.reader.ReadNext()
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+		}
+		return errors.New("Failed to read server info")
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
+	}
 	return nil
+}
+
+func (c *heraConnection) getID() string {
+	return c.id
+}
+
+func (c *heraConnection) getCorrID() *netstring.Netstring {
+	return c.corrID
+}
+
+func (c *heraConnection) getShardKeyPayload() []byte {
+	return c.shardKeyPayload
+}
+
+func (c *heraConnection) setCorrID(newCorrID *netstring.Netstring) {
+	c.corrID = newCorrID
 }
