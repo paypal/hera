@@ -12,8 +12,9 @@ import (
 
 type mockHeraConnection struct {
 	heraConnection
-	responses []netstring.Netstring
-	execErr   error
+	responses    []netstring.Netstring
+	execErr      error
+	finishCalled bool
 }
 
 func (m *mockHeraConnection) Prepare(query string) (driver.Stmt, error) {

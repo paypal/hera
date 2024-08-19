@@ -3,6 +3,7 @@ package gosqldriver
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"testing"
 
 	"github.com/paypal/hera/common"
@@ -19,6 +20,10 @@ func (m *mockHeraConnection) setCorrID(corrID *netstring.Netstring) {
 
 func (m *mockHeraConnection) getShardKeyPayload() []byte {
 	return make([]byte, 1)
+}
+
+func (m *mockHeraConnection) finish() {
+	m.finishCalled = true
 }
 
 func TestNewStmt(t *testing.T) {
@@ -571,6 +576,27 @@ func TestStmtQueryContext(t *testing.T) {
 			expectedError: "Unknown code: 999, data: Unknown code",
 			expectedCols:  0,
 		},
+		{
+			name: "QueryContext with cancelled context",
+			args: []driver.NamedValue{{Ordinal: 1, Value: 1}},
+			setupMock: func(mock *mockHeraConnection) {
+				mock.responses = []netstring.Netstring{
+					{Cmd: common.RcValue, Payload: []byte("2")},
+				}
+			},
+			cancelCtx:     true,
+			expectedError: "context canceled",
+			expectedCols:  0,
+		},
+		{
+			name: "QueryContext with execNs failure",
+			args: []driver.NamedValue{{Ordinal: 1, Value: 1}},
+			setupMock: func(mock *mockHeraConnection) {
+				mock.execErr = errors.New("mock execNs error")
+			},
+			expectedError: "mock execNs error",
+			expectedCols:  0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -596,6 +622,9 @@ func TestStmtQueryContext(t *testing.T) {
 			if tt.expectedError != "" {
 				if err == nil || err.Error() != tt.expectedError {
 					t.Fatalf("expected error %v, got %v", tt.expectedError, err)
+				}
+				if mockHera.execErr != nil && !mockHera.finishCalled {
+					t.Fatalf("expected finish() to be called, but it was not")
 				}
 				return
 			}

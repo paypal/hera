@@ -19,6 +19,7 @@
 package gosqldriver
 
 import (
+	"context"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -51,6 +52,10 @@ type heraConnectionInterface interface {
 	getCorrID() *netstring.Netstring
 	getShardKeyPayload() []byte
 	setCorrID(*netstring.Netstring)
+	startWatcher()
+	finish()
+	cancel(err error)
+	watchCancel(ctx context.Context) error
 }
 
 type heraConnection struct {
@@ -62,6 +67,12 @@ type heraConnection struct {
 	// correlation id
 	corrID     *netstring.Netstring
 	clientinfo *netstring.Netstring
+
+	// Context support
+	watching bool
+	watcher  chan<- context.Context
+	finished chan<- struct{}
+	closech  chan struct{}
 }
 
 // NewHeraConnection creates a structure implementing a driver.Con interface
@@ -70,7 +81,77 @@ func NewHeraConnection(conn net.Conn) driver.Conn {
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, hera.id, "create driver connection")
 	}
+
+	hera.startWatcher()
+
 	return hera
+}
+
+func (c *heraConnection) startWatcher() {
+	watcher := make(chan context.Context, 1)
+	c.watcher = watcher
+	finished := make(chan struct{})
+	c.finished = finished
+	go func() {
+		for {
+			var ctx context.Context
+			select {
+			case ctx = <-watcher:
+			case <-c.closech:
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				c.cancel(ctx.Err())
+			case <-finished:
+			case <-c.closech:
+				return
+			}
+		}
+	}()
+}
+
+func (c *heraConnection) finish() {
+	if !c.watching || c.finished == nil {
+		return
+	}
+	select {
+	case c.finished <- struct{}{}:
+		c.watching = false
+	case <-c.closech:
+	}
+}
+
+func (c *heraConnection) cancel(err error) {
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, c.id, "ctx error:", err)
+	}
+	c.Close()
+}
+
+func (c *heraConnection) watchCancel(ctx context.Context) error {
+	if c.watching {
+		// Reach here if canceled, the connection is already invalid
+		c.Close()
+		return nil
+	}
+	// When ctx is already cancelled, don't watch it.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// When ctx is not cancellable, don't watch it.
+	if ctx.Done() == nil {
+		return nil
+	}
+
+	if c.watcher == nil {
+		return nil
+	}
+
+	c.watching = true
+	c.watcher <- ctx
+	return nil
 }
 
 // Prepare returns a prepared statement, bound to this connection.
