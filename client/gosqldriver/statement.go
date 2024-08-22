@@ -112,6 +112,11 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 // Implement driver.StmtExecContext method to execute a DML
 func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	//TODO: honor the context timeout and return when it is canceled
+	if err := st.hera.watchCancel(ctx); err != nil {
+		fmt.Println("=== reach here 1 ====")
+		return nil, err
+	}
+
 	sk := 0
 	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
@@ -127,6 +132,8 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 	cmd := netstring.NewNetstringEmbedded(nss)
 	err = st.hera.execNs(cmd)
 	if err != nil {
+		fmt.Println("=== reach here 2 ====")
+		st.hera.finish()
 		return nil, err
 	}
 

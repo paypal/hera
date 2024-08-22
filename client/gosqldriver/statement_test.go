@@ -295,6 +295,27 @@ func TestStmtExecContext(t *testing.T) {
 			expectedError: "Unknown code: 999, data: Unknown code",
 			expectedRows:  0,
 		},
+		{
+			name: "ExecContext with cancelled context",
+			args: []driver.NamedValue{{Ordinal: 1, Value: 1}},
+			setupMock: func(mock *mockHeraConnection) {
+				mock.responses = []netstring.Netstring{
+					{Cmd: common.RcValue, Payload: []byte("2")},
+				}
+			},
+			cancelCtx:     true,
+			expectedError: "context canceled",
+			expectedRows:  0,
+		},
+		{
+			name: "ExecContext with execNs failure",
+			args: []driver.NamedValue{{Ordinal: 1, Value: 1}},
+			setupMock: func(mock *mockHeraConnection) {
+				mock.execErr = errors.New("mock execNs error")
+			},
+			expectedError: "mock execNs error",
+			expectedRows:  0,
+		},
 	}
 
 	for _, tt := range tests {
