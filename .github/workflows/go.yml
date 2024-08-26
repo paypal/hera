@@ -41,7 +41,7 @@ jobs:
           - "4318:4318" #HTTP port
         volumes:
           - ./otel_config.yaml:/etc/otel/config.yaml
-          - $HOME/otel_logs:/var/log/otel
+          - "$HOME/otel_logs":"/var/log/otel"
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
