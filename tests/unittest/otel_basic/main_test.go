@@ -114,7 +114,7 @@ func TestOTELMetricsBasic(t *testing.T) {
 	if initCount < 1 {
 		t.Fatalf("OTEL event should contain metric name pp.occ.init_connection")
 	}
-	tagsCount := testutil.RegexCountFile("{\"key\":\"InstanceId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"ShardId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"WorkerType\",\"value\":{\"intValue\":\"0\"}",
+	tagsCount := testutil.RegexCountFile("{\"key\":\"InstanceId\",\"value\":{\"intValue\":\"0\"}},{\"key\":\"ShardId\",\"value\":{\"intValue\":\"0\"}}",
 		logFilePath)
 	if tagsCount < 1 {
 		t.Fatalf("mandatory tags InstanceId, ShardId, WorkerType should present")

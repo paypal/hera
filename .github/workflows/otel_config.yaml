@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  logging:
+    loglevel: debug
+  file:
+    path: /var/log/otel/otel_collector.log
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: []
+      exporters: [logging, file]
+
+    metrics:
+      receivers: [otlp]
+      processors: []
+      exporters: [logging, file]
