@@ -493,7 +493,8 @@ func (m *mux) StopOTelAgent() error {
 
 func generateConfigData() error {
 	workingDir, _ := os.Getwd()
-	otelLogsDir = filepath.Join(workingDir, OTEL_LOG_DIR)
+	homeDir, _ := os.UserHomeDir()
+	otelLogsDir = filepath.Join(homeDir, OTEL_LOG_DIR)
 	_, err := os.Stat(otelLogsDir)
 	if !os.IsNotExist(err) {
 		os.RemoveAll(otelLogsDir)
