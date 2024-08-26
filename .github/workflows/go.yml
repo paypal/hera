@@ -15,7 +15,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.18.2
+          go-version: 1.20.14
       - name: Install GO Modules
         run: |
           go mod tidy
@@ -35,7 +35,6 @@ jobs:
         ports:
           - 3306:3306
       otel_basic-collector:
-        container_name: otel_basic-collector
         image: otel/opentelemetry-collector-contrib:latest
         ports:
           - "4317:4317"  #gRPC port
@@ -49,7 +48,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: 1.18.2
+          go-version: 1.20.14
       - name: Install GO Modules
         run: |
           go mod tidy
