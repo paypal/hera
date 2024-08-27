@@ -46,10 +46,6 @@ jobs:
           go mod download github.com/godror/godror
       - name: Build worker
         run: go install github.com/paypal/hera/worker/mysqlworker
-      - name: Install Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io
       - name: Install Docker Compose
         run: |
           sudo apt-get update

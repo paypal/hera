@@ -29,7 +29,7 @@ func TestPoolDempotency(t *testing.T) {
 	var useheratxt = false
 	var err error
 	if useheratxt {
-		err = InitConfig()
+		err = InitConfig("occ-test")
 		if err != nil {
 			t.Errorf("config initialization failure %s", err.Error())
 			return
