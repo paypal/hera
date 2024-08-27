@@ -38,7 +38,7 @@ services:
       - "4318:4318" #HTTP port
     volumes:
       - ./otel_config.yaml:/etc/otel/config.yaml
-      - ${HOME}/otel_logs:/var/log/otel
+      - ./otel_logs:/var/log/otel
 
     command: ["--config", "/etc/otel/config.yaml"]
 `

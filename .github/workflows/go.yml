@@ -34,14 +34,6 @@ jobs:
           MYSQL_DATABASE: heratestdb
         ports:
           - 3306:3306
-      otel_basic-collector:
-        image: otel/opentelemetry-collector-contrib:latest
-        ports:
-          - "4317:4317"  #gRPC port
-          - "4318:4318" #HTTP port
-        volumes:
-          - ./otel_config.yaml:/etc/otel/config.yaml
-          - ${{ github.workspace }}/otel_logs:/var/log/otel
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -54,6 +46,17 @@ jobs:
           go mod download github.com/godror/godror
       - name: Build worker
         run: go install github.com/paypal/hera/worker/mysqlworker
+      - name: Install Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Verify Docker Compose Installation
+        run: docker-compose --version
       - name: System Test
         run: |
           export GOPATH="/home/runner/go"
