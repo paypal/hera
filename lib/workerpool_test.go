@@ -19,6 +19,7 @@ package lib
 
 import (
 	"encoding/hex"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"os"
 	"sync"
 	"testing"
@@ -36,6 +37,7 @@ func TestPoolDempotency(t *testing.T) {
 		}
 	} else {
 		gAppConfig = &Config{BacklogTimeoutMsec: 1, LifoScheduler: true, numWorkersCh: make(chan int, 1)}
+		otelconfig.OTelConfigData = &otelconfig.OTelConfig{}
 		gOpsConfig = &OpsConfig{numWorkers: 3}
 		gAppConfig.numWorkersCh <- int(gOpsConfig.numWorkers)
 	}
