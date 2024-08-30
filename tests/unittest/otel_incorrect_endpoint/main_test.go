@@ -105,7 +105,7 @@ func TestOTELMetricsIncorrectEndPoint(t *testing.T) {
 		t.Fatalf("otel publishing error should present in log because of in-correct OTEL port number")
 	}
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	calPublishingErrors := testutil.RegexCountFile("failed to send metrics", "cal.log")
 	if calPublishingErrors < 1 {
 		t.Fatalf("otel publishing error should present in CAL log because of in-correct OTEL port number")

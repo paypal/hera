@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,6 +104,9 @@ type StateLog struct {
 	// title printed in workertype column (leftmost).
 	//
 	mTypeTitles [](map[HeraWorkerType]([]string))
+
+	//OTEL statelog occ-worker dimension titles
+	workerDimensionTitle map[string]string
 	//
 	// header row (state)
 	//
@@ -479,6 +483,7 @@ func (sl *StateLog) init() error {
 	sl.mWorkerStates = make([]map[HeraWorkerType][][]*WorkerStateInfo, sl.maxShardSize)
 	sl.mConnStates = make([]map[HeraWorkerType][]*ConnStateInfo, sl.maxShardSize)
 	sl.mTypeTitles = make([]map[HeraWorkerType][]string, sl.maxShardSize)
+	sl.workerDimensionTitle = make(map[string]string)
 	sl.mLastReqCnt = make([]map[HeraWorkerType][]int64, sl.maxShardSize)
 	sl.mLastRspCnt = make([]map[HeraWorkerType][]int64, sl.maxShardSize)
 	//
@@ -558,6 +563,7 @@ func (sl *StateLog) init() error {
 				if shardEnabled {
 					sl.mTypeTitles[s][t][i] += suffix
 				}
+				sl.workerDimensionTitle[sl.mTypeTitles[s][t][i]] = strings.Replace(sl.mTypeTitles[s][t][i], GetConfig().StateLogPrefix, otelconfig.OTelConfigData.PoolName, 1)
 			}
 		}
 	}
@@ -767,7 +773,7 @@ func (sl *StateLog) genReport() {
 				}
 				// Initialize statedata object
 				workerStatesData := otel_logger.WorkersStateData{
-					StateTitle: sl.mTypeTitles[s][HeraWorkerType(t)][n],
+					StateTitle: sl.workerDimensionTitle[sl.mTypeTitles[s][HeraWorkerType(t)][n]],
 					ShardId:    int(s),
 					WorkerType: int(t),
 					InstanceId: int(n),
