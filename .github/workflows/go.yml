@@ -50,11 +50,9 @@ jobs:
         run: go install github.com/paypal/hera/worker/mysqlworker
       - name: Setup docker
         uses: docker-practice/actions-setup-docker@master
-        timeout-minutes: 12
-            - run: |
-                set -x
-                
-                docker version
+      - name: Check docker version
+        run: |   
+              docker version
       - name: Install Docker Compose
         run: |
           sudo apt-get update
