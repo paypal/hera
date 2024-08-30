@@ -46,8 +46,6 @@ jobs:
           go mod download github.com/godror/godror
       - name: Give Full Permissions to Work Directory
         run: sudo chmod -R 777 /home/runner/work/
-      - name: Give Full Permissions to GO Path Directory
-        run: sudo chmod -R 777 /home/runner/go
       - name: Build worker
         run: go install github.com/paypal/hera/worker/mysqlworker
       - name: Install Docker Compose
