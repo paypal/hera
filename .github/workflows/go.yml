@@ -48,6 +48,13 @@ jobs:
         run: sudo chmod -R 777 /home/runner/work/
       - name: Build worker
         run: go install github.com/paypal/hera/worker/mysqlworker
+      - name: Setup docker
+        uses: docker-practice/actions-setup-docker@master
+        timeout-minutes: 12
+            - run: |
+                set -x
+                
+                docker version
       - name: Install Docker Compose
         run: |
           sudo apt-get update
@@ -59,5 +66,4 @@ jobs:
         run: |
           export GOPATH="/home/runner/go"
           echo $GOPATH
-          echo $(pwd)
           tests/unittest/testall.sh
