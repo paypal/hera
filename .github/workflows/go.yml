@@ -59,4 +59,5 @@ jobs:
         run: |
           export GOPATH="/home/runner/go"
           echo $GOPATH
+          echo $(pwd)
           tests/unittest/testall.sh
