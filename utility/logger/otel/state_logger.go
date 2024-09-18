@@ -83,14 +83,14 @@ func StartMetricsCollection(ctx context.Context, totalWorkersCount int, opt ...S
 		metricsStateLogger = &StateLogMetrics{
 			stateLogMeter:  stateLogMeter,
 			hostname:       hostName,
-			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*4), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			doneCh:         make(chan struct{}),
 		}
 
 		totalConnectionStateDataLogger = &TotalConnectionsGaugeData{
 			stateLogMeter:        stateLogMeter,
 			hostname:             hostName,
-			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*4), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			stopPublish:          make(chan struct{}),
 		}
 		err = registerMetrics(metricsStateLogger, totalConnectionStateDataLogger)
@@ -150,10 +150,9 @@ func AddDataPointToOTELStateDataChan(dataPoint *WorkersStateData) {
 	select {
 	case metricsStateLogger.mStateDataChan <- dataPoint:
 		return
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Alert, "timeout occurred while adding record to stats data channel")
-	default:
-		logger.GetLogger().Log(logger.Alert, "metricsStateLogger.mStateData channel closed or full while sending data")
+		return
 	}
 }
 
@@ -167,10 +166,10 @@ func AddDataPointToTotalConnectionsDataChannel(totalConnectionData *GaugeMetricD
 	select {
 	case totalConnectionStateDataLogger.totalConnDataChannel <- totalConnectionData:
 		return
-	case <-time.After(time.Millisecond * 50):
+	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Alert, "timeout occurred while adding guage data record to totalConnDataChannel channel")
-	default:
-		logger.GetLogger().Log(logger.Alert, "totalConnectionStateDataLogger.totalConnDataChannel channel closed or full while sending data")
+		return
+
 	}
 }
 
