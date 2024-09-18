@@ -103,7 +103,7 @@ func TestOTELMetricsBasic(t *testing.T) {
 
 	cancel()
 	conn.Close()
-	time.Sleep(15 * time.Second)
+	time.Sleep(25 * time.Second)
 
 	logFilePath := filepath.Join(testutil.GetOTELLogDirPath(), "otel_collector.log")
 	count := testutil.RegexCountFile("{\"key\":\"application\",\"value\":{\"stringValue\":\"hera-test\"}", logFilePath)

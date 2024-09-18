@@ -151,7 +151,7 @@ func AddDataPointToOTELStateDataChan(dataPoint *WorkersStateData) {
 	case metricsStateLogger.mStateDataChan <- dataPoint:
 		return
 	case <-time.After(time.Second * 1):
-		logger.GetLogger().Log(logger.Alert, "timeout occurred while adding record to stats data channel")
+		logger.GetLogger().Log(logger.Info, "timeout occurred while adding record to stats data channel")
 		return
 	}
 }
@@ -167,9 +167,8 @@ func AddDataPointToTotalConnectionsDataChannel(totalConnectionData *GaugeMetricD
 	case totalConnectionStateDataLogger.totalConnDataChannel <- totalConnectionData:
 		return
 	case <-time.After(time.Second * 1):
-		logger.GetLogger().Log(logger.Alert, "timeout occurred while adding guage data record to totalConnDataChannel channel")
+		logger.GetLogger().Log(logger.Info, "timeout occurred while adding guage data record to totalConnDataChannel channel")
 		return
-
 	}
 }
 
