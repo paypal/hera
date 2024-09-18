@@ -138,6 +138,9 @@ type StateLog struct {
 	// start time since epoch in ns
 	//
 	mServerStartTime int64
+
+	//worker pool configurations
+	workerPoolCfg []map[HeraWorkerType]*WorkerPoolCfg
 }
 
 // StateEventType is an event published by proxy when state changes.
@@ -475,7 +478,7 @@ func (sl *StateLog) init() error {
 	if GetWorkerBrokerInstance() == nil {
 		return errors.New("broker not initialized")
 	}
-	workerpoolcfg := GetWorkerBrokerInstance().GetWorkerPoolCfgs()
+	sl.workerPoolCfg = GetWorkerBrokerInstance().GetWorkerPoolCfgs()
 
 	//
 	// allocate array for each shard
@@ -503,8 +506,8 @@ func (sl *StateLog) init() error {
 		// for each workertype, initialize two dimension array
 		//
 		for t := 0; t < int(wtypeTotalCount); t++ {
-			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
-			workerCnt := workerpoolcfg[s][HeraWorkerType(t)].maxWorkerCnt
+			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
+			workerCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt
 			totalWorkersCount += workerCnt
 			sl.mWorkerStates[s][HeraWorkerType(t)] = make([][]*WorkerStateInfo, instCnt)
 			sl.mConnStates[s][HeraWorkerType(t)] = make([]*ConnStateInfo, instCnt)
@@ -553,7 +556,7 @@ func (sl *StateLog) init() error {
 	for s := 0; s < sl.maxShardSize; s++ {
 		for t := wtypeRW; t < wtypeTotalCount; t++ {
 			var suffix = ".sh" + strconv.Itoa(s)
-			instCnt := workerpoolcfg[s][HeraWorkerType(t)].instCnt
+			instCnt := sl.workerPoolCfg[s][HeraWorkerType(t)].instCnt
 
 			for i := 0; i < instCnt; i++ {
 				sl.mTypeTitles[s][t][i] = typeTitlePrefix[t]
@@ -771,13 +774,17 @@ func (sl *StateLog) genReport() {
 				if workerCnt == 0 {
 					continue
 				}
+
+				workerStateInfoData := otel_logger.WorkerStateInfo{
+					StateTitle: sl.workerDimensionTitle[sl.mTypeTitles[s][HeraWorkerType(t)][n]],
+					ShardId:    s,
+					WorkerType: t,
+					InstanceId: n,
+				}
 				// Initialize statedata object
 				workerStatesData := otel_logger.WorkersStateData{
-					StateTitle: sl.workerDimensionTitle[sl.mTypeTitles[s][HeraWorkerType(t)][n]],
-					ShardId:    int(s),
-					WorkerType: int(t),
-					InstanceId: int(n),
-					StateData:  make(map[string]int64),
+					WorkerStateInfo: &workerStateInfoData,
+					StateData:       make(map[string]int64),
 				}
 
 				//
@@ -828,9 +835,17 @@ func (sl *StateLog) genReport() {
 						workerStatesData.StateData[StateNames[i]] = int64(stateCnt[i])
 					}
 					//Adding req and response metrics to OTEL
-					workerStatesData.StateData["req"] = int64(reqCnt - sl.mLastReqCnt[s][HeraWorkerType(t)][n])
-					workerStatesData.StateData["resp"] = int64(respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n])
+					workerStatesData.StateData["req"] = reqCnt - sl.mLastReqCnt[s][HeraWorkerType(t)][n]
+					workerStatesData.StateData["resp"] = respCnt - sl.mLastRspCnt[s][HeraWorkerType(t)][n]
+
+					//Total workers
+					workerStatesData.StateData["totalConnections"] = int64(sl.workerPoolCfg[s][HeraWorkerType(t)].maxWorkerCnt)
+					totalConectionData := otel_logger.GaugeMetricData{
+						WorkerStateInfo: &workerStateInfoData,
+						StateData:       workerStatesData.StateData["totalConnections"],
+					}
 					otel_logger.AddDataPointToOTELStateDataChan(&workerStatesData)
+					otel_logger.AddDataPointToTotalConnectionsDataChannel(&totalConectionData)
 				} else {
 					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))

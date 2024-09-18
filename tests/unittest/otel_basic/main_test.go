@@ -104,7 +104,7 @@ func TestOTELMetricsBasic(t *testing.T) {
 	cancel()
 	conn.Close()
 	time.Sleep(15 * time.Second)
-	//Read OTEL log file for metrics validation
+
 	logFilePath := filepath.Join(testutil.GetOTELLogDirPath(), "otel_collector.log")
 	count := testutil.RegexCountFile("{\"key\":\"application\",\"value\":{\"stringValue\":\"hera-test\"}", logFilePath)
 	if count < 1 {
@@ -128,5 +128,9 @@ func TestOTELMetricsBasic(t *testing.T) {
 		t.Fatalf("az configured as test-dev and its value should present in otel metric dimension")
 	}
 
+	totalConnMetricCount := testutil.RegexCountFile("\"name\":\"pp.occ.total_connections\"(.*)\"asInt\":\"3\"", logFilePath)
+	if totalConnMetricCount < 1 {
+		t.Fatalf("total connections gauge metric should present in otel metric")
+	}
 	logger.GetLogger().Log(logger.Debug, "TestOTELMetricsBasic done  -------------------------------------------------------------")
 }

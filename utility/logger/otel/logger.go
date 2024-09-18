@@ -58,7 +58,7 @@ func initializeOTelSDK(ctx context.Context) (shutdown func(ctx context.Context) 
 	errorDataMap := make(map[string]*OTelErrorData) //Initialize the map after process it.
 	gErrorDataMap.Store(errorDataMap)
 
-	//Setup meter provider
+	//Setup stateLogMeter provider
 	meterProvider, err := newMeterProvider(ctx)
 	otel.SetMeterProvider(meterProvider)
 	if err != nil {
@@ -205,8 +205,18 @@ func getStateLogMetricsViews() []metric.View {
 			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 32, MaxScale: 20},
 		},
 	)
+
+	freePercentageView := metric.NewView(
+		metric.Instrument{
+			Name:  config.OTelConfigData.PopulateMetricNamePrefix(freePercentage),
+			Scope: instrumentation.Scope{Name: StateLogMeterName},
+		},
+		metric.Stream{
+			Aggregation: metric.AggregationBase2ExponentialHistogram{MaxSize: 10, MaxScale: 10},
+		},
+	)
 	return []metric.View{initView, acptStateView, waitStateView, busyStateView, schdStateView,
-		fnshStateView, quceStateView, asgnStateView, idleStateView, bklgStateView, strdStateView}
+		fnshStateView, quceStateView, asgnStateView, idleStateView, bklgStateView, strdStateView, freePercentageView}
 }
 
 // getMetricExporter Initialize metric exporter based protocol selected by user.

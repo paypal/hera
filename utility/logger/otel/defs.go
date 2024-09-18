@@ -17,6 +17,12 @@ const (
 	FinishedConnMetric  = "finished_connection"
 	QuiescedConnMetric  = "quiesced_connection"
 
+	//free percentage
+	freePercentage = "free_percentage"
+
+	//total connections
+	totalConnections = "total_connections"
+
 	// Connection States
 	AssignedConnMetric = "assigned_connection"
 	IdleConnMetric     = "idle_connection"
@@ -71,27 +77,50 @@ type Tags struct {
 	TagValue string
 }
 
-type WorkersStateData struct {
+type WorkerStateInfo struct {
 	StateTitle string
 	ShardId    int
 	WorkerType int
 	InstanceId int
-	StateData  map[string]int64
+}
+
+type WorkersStateData struct {
+	*WorkerStateInfo
+	StateData map[string]int64
+}
+
+type GaugeMetricData struct {
+	*WorkerStateInfo
+	StateData int64
 }
 
 type (
 	ServerType int
 )
 
-// StateLogMetrics state_log_metrics reports workers states
-type StateLogMetrics struct {
+type TotalConnectionsGaugeData struct {
 
-	//Statelog metrics configuration data
-	metricsConfig stateLogMetricsConfig
+	//Metric type for total connection data
+	totalConnections metric.Int64ObservableGauge
 
 	hostname string
 
-	meter metric.Meter
+	stateLogMeter metric.Meter
+
+	//Data channel
+	totalConnDataChannel chan *GaugeMetricData
+
+	registration metric.Registration
+
+	//Channel to close sending data
+	stopPublish chan struct{}
+}
+
+// StateLogMetrics state_log_metrics reports workers states
+type StateLogMetrics struct {
+	hostname string
+
+	stateLogMeter metric.Meter
 
 	//Channel to receive statelog data
 	mStateDataChan chan *WorkersStateData
@@ -112,6 +141,8 @@ type StateLogMetrics struct {
 	idleState metric.Int64Histogram
 	bklgState metric.Int64Histogram
 	strdState metric.Int64Histogram
+
+	freePercentage metric.Float64Histogram
 }
 
 // Object represents the workers states data for worker belongs to specific shardId and workperType with flat-map

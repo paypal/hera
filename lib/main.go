@@ -39,6 +39,9 @@ func Run() {
 	signal.Ignore(syscall.SIGPIPE)
 	mux_process_id := syscall.Getpid()
 
+	// Defer release resource in case of any abnormal exit of for application
+	defer handlePanicAndReleaseResource(mux_process_id)
+
 	namePtr := flag.String("name", "", "module name in v$session table")
 	flag.Parse()
 
@@ -211,9 +214,6 @@ func Run() {
 	defer func() {
 		cal.ReleaseCxtResource()
 	}()
-
-	// Defer release resource in case of any abnormal exit of for application
-	defer handlePanicAndReleaseResource(mux_process_id)
 
 	<-GetWorkerBrokerInstance().Stopped()
 }

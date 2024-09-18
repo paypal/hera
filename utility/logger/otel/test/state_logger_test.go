@@ -27,7 +27,7 @@ func initializeConsoleExporter() (*metric.MeterProvider, error) {
 		Enabled:                    true,
 		OtelMetricGRPC:             false,
 		OtelTraceGRPC:              false,
-		ResolutionTimeInSec:        6,
+		ResolutionTimeInSec:        2,
 		OTelErrorReportingInterval: 10,
 		PoolName:                   "occ-testapp",
 		MetricNamePrefix:           "pp.occ",
@@ -65,8 +65,8 @@ func initializeCustomOTelExporter(t *testing.T) func(ctx context.Context) error 
 		Enabled:                    true,
 		OtelMetricGRPC:             false,
 		OtelTraceGRPC:              false,
-		ResolutionTimeInSec:        3,
-		OTelErrorReportingInterval: 10,
+		ResolutionTimeInSec:        2,
+		OTelErrorReportingInterval: 2,
 		PoolName:                   "occ-testapp",
 		MetricNamePrefix:           "pp.occ",
 		MetricsURLPath:             DefaultMetricsPath,
@@ -99,8 +99,8 @@ func TestVerifyStateLogMetricsInitilization(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
 	}
+	defer otellogger.StopMetricCollection()
 	time.Sleep(15 * time.Second)
-	otellogger.StopMetricCollection()
 }
 
 func TestVerifyStateLogMetricsInitilizationAndContextWithTimeout(t *testing.T) {
@@ -118,7 +118,7 @@ func TestVerifyStateLogMetricsInitilizationAndContextWithTimeout(t *testing.T) {
 
 	err = otellogger.StartMetricsCollection(context.Background(), 5, otellogger.WithMetricProvider(otel.GetMeterProvider()), otellogger.WithAppName("occ-testapp"))
 	defer otellogger.StopMetricCollection()
-
+	time.Sleep(2 * time.Second)
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
@@ -143,32 +143,44 @@ func TestSendingStateLogMetrics(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
 	}
+	defer otellogger.StopMetricCollection()
+
 	//"init", "acpt", "wait", "busy", "schd", "fnsh", "quce", "asgn", "idle", "bklg", "strd", "cls"}
 	var stateData = map[string]int64{
-		"init": 6,
-		"acpt": 10,
-		"wait": 5,
-		"busy": 2,
-		"idle": 5,
-		"bklg": 0,
-		"req":  5,
-		"resp": 5,
+		"init":             6,
+		"acpt":             10,
+		"wait":             5,
+		"busy":             2,
+		"idle":             5,
+		"bklg":             0,
+		"req":              5,
+		"resp":             5,
+		"fnsh":             10,
+		"totalConnections": 48,
 	}
-	workersStateData := otellogger.WorkersStateData{
+	workerStateInfo := otellogger.WorkerStateInfo{
+		StateTitle: "rw",
 		ShardId:    1,
 		WorkerType: 1,
 		InstanceId: 0,
-		StateData:  stateData,
+	}
+	workersStateData := otellogger.WorkersStateData{
+		WorkerStateInfo: &workerStateInfo,
+		StateData:       stateData,
+	}
+	totalConData := otellogger.GaugeMetricData{
+		WorkerStateInfo: &workerStateInfo,
+		StateData:       38,
 	}
 	otellogger.AddDataPointToOTELStateDataChan(&workersStateData)
-
-	defer otellogger.StopMetricCollection() //Clean channel
+	otellogger.AddDataPointToTotalConnectionsDataChannel(&totalConData)
 
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
-	time.Sleep(5 * time.Second)
-	metricsData := mc.GetMetrics()
-	if len(metricsData) < 11 {
-		t.Fatalf("got %d, wanted %d", len(metricsData), 11)
+	time.Sleep(10 * time.Second)
+	metricsData := mc.metricsStorage.GetMetrics()
+	logger.GetLogger().Log(logger.Info, "total metrics count is: ", len(metricsData))
+	if len(metricsData) < 13 {
+		t.Fatalf("got %d, wanted %d", len(metricsData), 13)
 	}
 }
 
@@ -184,78 +196,115 @@ func TestSendingStateLogMetricsConsoleExporter(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fail()
 	}
-
+	defer otellogger.StopMetricCollection()
 	var stateData = map[string]int64{
-		"init": 0,
-		"acpt": 15,
-		"wait": 10,
-		"busy": 4,
-		"idle": 7,
-		"bklg": 0,
+		"init":             0,
+		"acpt":             15,
+		"wait":             10,
+		"busy":             4,
+		"idle":             7,
+		"bklg":             0,
+		"fnsh":             10,
+		"totalConnections": 46,
 	}
 
 	var stateData2 = map[string]int64{
-		"init": 2,
-		"acpt": 15,
-		"wait": 10,
-		"busy": 4,
-		"idle": 8,
-		"bklg": 0,
+		"init":             3,
+		"acpt":             15,
+		"wait":             10,
+		"busy":             4,
+		"idle":             8,
+		"bklg":             0,
+		"fnsh":             10,
+		"totalConnections": 50,
 	}
-	workersStateData := otellogger.WorkersStateData{
+	workerStateInfo1 := otellogger.WorkerStateInfo{
+		StateTitle: "rw",
 		ShardId:    0,
 		WorkerType: 0,
 		InstanceId: 0,
-		StateData:  stateData,
 	}
 
-	workersStateData2 := otellogger.WorkersStateData{
+	workerStateInfo2 := otellogger.WorkerStateInfo{
+		StateTitle: "rw",
 		ShardId:    2,
 		WorkerType: 0,
 		InstanceId: 0,
-		StateData:  stateData2,
+	}
+	workersStateData := otellogger.WorkersStateData{
+		WorkerStateInfo: &workerStateInfo1,
+		StateData:       stateData,
+	}
+
+	workersStateData2 := otellogger.WorkersStateData{
+		WorkerStateInfo: &workerStateInfo2,
+		StateData:       stateData2,
+	}
+
+	totalWorkersStateData := otellogger.GaugeMetricData{
+		WorkerStateInfo: &workerStateInfo1,
+		StateData:       36,
+	}
+
+	totalWorkersStateData2 := otellogger.GaugeMetricData{
+		WorkerStateInfo: &workerStateInfo2,
+		StateData:       40,
 	}
 
 	otellogger.AddDataPointToOTELStateDataChan(&workersStateData)
+	otellogger.AddDataPointToTotalConnectionsDataChannel(&totalWorkersStateData)
 	time.Sleep(150 * time.Millisecond)
 	otellogger.AddDataPointToOTELStateDataChan(&workersStateData2)
+	otellogger.AddDataPointToTotalConnectionsDataChannel(&totalWorkersStateData2)
 	logger.GetLogger().Log(logger.Info, "Data Sent successfully for instrumentation")
 	time.Sleep(2 * time.Second)
 
 	var stateData3 = map[string]int64{
-		"init": 0,
-		"acpt": 1,
-		"wait": 10,
-		"busy": 4,
-		"idle": 17,
-		"bklg": 0,
+		"init":             0,
+		"acpt":             1,
+		"wait":             10,
+		"busy":             4,
+		"idle":             17,
+		"bklg":             0,
+		"fnsh":             10,
+		"totalConnections": 42,
 	}
 
 	var stateData4 = map[string]int64{
-		"init": 2,
-		"acpt": 0,
-		"wait": 10,
-		"busy": 4,
-		"idle": 8,
-		"bklg": 5,
+		"init":             2,
+		"acpt":             0,
+		"wait":             10,
+		"busy":             4,
+		"idle":             8,
+		"bklg":             5,
+		"fnsh":             8,
+		"totalConnections": 37,
 	}
+
 	workersStateData3 := otellogger.WorkersStateData{
-		ShardId:    0,
-		WorkerType: 0,
-		InstanceId: 0,
-		StateData:  stateData3,
+		WorkerStateInfo: &workerStateInfo1,
+		StateData:       stateData3,
 	}
 
 	workersStateData4 := otellogger.WorkersStateData{
-		ShardId:    2,
-		WorkerType: 0,
-		InstanceId: 0,
-		StateData:  stateData4,
+		WorkerStateInfo: &workerStateInfo2,
+		StateData:       stateData4,
+	}
+	totalWorkersStateData3 := otellogger.GaugeMetricData{
+		WorkerStateInfo: &workerStateInfo1,
+		StateData:       38,
+	}
+
+	totalWorkersStateData4 := otellogger.GaugeMetricData{
+		WorkerStateInfo: &workerStateInfo2,
+		StateData:       29,
 	}
 	otellogger.AddDataPointToOTELStateDataChan(&workersStateData3)
+	otellogger.AddDataPointToTotalConnectionsDataChannel(&totalWorkersStateData3)
 	time.Sleep(150 * time.Millisecond)
 	otellogger.AddDataPointToOTELStateDataChan(&workersStateData4)
-	otellogger.StopMetricCollection()
+	otellogger.AddDataPointToTotalConnectionsDataChannel(&totalWorkersStateData4)
+	time.Sleep(2 * time.Second)
 	if err3 := cont.Shutdown(context.Background()); err3 != nil {
 		logger.GetLogger().Log(logger.Info, "failed to stop the metric controller:", err3)
 	}
@@ -276,7 +325,7 @@ func TestOCCStateLogGeneratorWithRandomValues(t *testing.T) {
 		logger.GetLogger().Log(logger.Alert, "Failed to initialize Metric Collection service")
 		t.Fatalf("TestOCCStatelogGenerator failed with error %v", err)
 	}
-	<-time.After(time.Second * time.Duration(30))
+	<-time.After(time.Second * time.Duration(60))
 }
 
 func dataGenerator() {
@@ -295,11 +344,15 @@ mainloop:
 		select {
 		case <-timer.C:
 			// Initialize statedata object
-			workerStatesData := otellogger.WorkersStateData{
+			workerStateInfo1 := otellogger.WorkerStateInfo{
+				StateTitle: "rw",
 				ShardId:    0,
-				WorkerType: 1,
+				WorkerType: 0,
 				InstanceId: 0,
-				StateData:  make(map[string]int64),
+			}
+			workerStatesData := otellogger.WorkersStateData{
+				WorkerStateInfo: &workerStateInfo1,
+				StateData:       make(map[string]int64),
 			}
 			var numberofMetrics int = 11
 			var totalSum int = 100
@@ -312,10 +365,16 @@ mainloop:
 				workerStatesData.StateData[metricNames[index]] = int64(value)
 				tempSum += value
 			}
+			workerStatesData.StateData["totalConnections"] = 100
+			totalWorkersStateData := otellogger.GaugeMetricData{
+				WorkerStateInfo: &workerStateInfo1,
+				StateData:       100,
+			}
 			//Random index
 			randIndex := rand.Intn(len(metricNames))
 			workerStatesData.StateData[metricNames[randIndex]] += int64(totalSum - tempSum)
 			otellogger.AddDataPointToOTELStateDataChan(&workerStatesData)
+			otellogger.AddDataPointToTotalConnectionsDataChannel(&totalWorkersStateData)
 			timer.Reset(waitTime)
 		case <-ctx.Done():
 			logger.GetLogger().Log(logger.Info, "Timedout, so context closed")
