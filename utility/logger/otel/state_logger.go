@@ -84,14 +84,14 @@ func StartMetricsCollection(ctx context.Context, totalWorkersCount int, opt ...S
 		metricsStateLogger = &StateLogMetrics{
 			stateLogMeter:  stateLogMeter,
 			hostname:       hostName,
-			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*5), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			doneCh:         make(chan struct{}),
 		}
 
 		totalConnectionStateDataLogger = &TotalConnectionsGaugeData{
 			stateLogMeter:        stateLogMeter,
 			hostname:             hostName,
-			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*20), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*2), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			stopPublish:          make(chan struct{}),
 		}
 		err = registerMetrics(metricsStateLogger, totalConnectionStateDataLogger)
@@ -331,6 +331,9 @@ mainloop:
 				"so stop sending data and closing data channel")
 			close(stateLogMetrics.mStateDataChan)
 			break mainloop
+		case <-ctx.Done():
+			logger.GetLogger().Log(logger.Info, "parent context has been closed for metric poll, so exiting loop")
+			break mainloop
 		}
 	}
 }
@@ -382,11 +385,11 @@ func (totalConnectionGauge *TotalConnectionsGaugeData) registerCallbackForTotalC
 				case totalConnData, dataPresent := <-totalConnectionGauge.totalConnDataChannel:
 					if !dataPresent {
 						logger.GetLogger().Log(logger.Info, "totalConnection gauge data channel 'totalConnDataChannel' has been closed.")
+						break totalConLoop
 					} else {
 						keyName := fmt.Sprintf("%d-%d-%d", totalConnData.ShardId, totalConnData.WorkerType, totalConnData.InstanceId)
 						finalDataMap[keyName] = totalConnData
 					}
-					break totalConLoop
 				case <-totalConnectionGauge.stopPublish:
 					logger.GetLogger().Log(logger.Alert, "received stopped signal for processing statelog total workers metric. "+
 						"so stop sending data to totalConnectionGauge.totalConnDataChannel and closing data channel")
@@ -398,13 +401,16 @@ func (totalConnectionGauge *TotalConnectionsGaugeData) registerCallbackForTotalC
 					}
 					break totalConLoop
 				case <-ctx.Done():
-					logger.GetLogger().Log(logger.Alert, "parent context has been canceled")
+					logger.GetLogger().Log(logger.Info, "context closed so exiting from totalConnDataChannel data loop")
+					break totalConLoop
+				default:
+					logger.GetLogger().Log(logger.Info, "totalConnDataChannel channel is empty")
 					break totalConLoop
 				}
 			}
 			if len(finalDataMap) > 0 {
 				for key, dataPoint := range finalDataMap {
-					logger.GetLogger().Log(logger.Debug, fmt.Sprintf("publishing total connection gauge for key: %s, worker type: %s with datapoints value: %d", key, dataPoint.StateTitle, dataPoint.StateData))
+					logger.GetLogger().Log(logger.Info, fmt.Sprintf("publishing total connection gauge for key: %s, worker type: %s with datapoints value: %d", key, dataPoint.StateTitle, dataPoint.StateData))
 					commonLabels := []attribute.KeyValue{
 						attribute.Int(ShardId, dataPoint.ShardId),
 						attribute.Int(WorkerType, dataPoint.WorkerType),
