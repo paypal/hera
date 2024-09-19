@@ -844,8 +844,8 @@ func (sl *StateLog) genReport() {
 						WorkerStateInfo: &workerStateInfoData,
 						StateData:       workerStatesData.StateData["totalConnections"],
 					}
-					otel_logger.AddDataPointToOTELStateDataChan(&workerStatesData)
-					otel_logger.AddDataPointToTotalConnectionsDataChannel(&totalConectionData)
+					go otel_logger.AddDataPointToOTELStateDataChan(&workerStatesData)
+					go otel_logger.AddDataPointToTotalConnectionsDataChannel(&totalConectionData)
 				} else {
 					for i := 0; i < (MaxWorkerState + MaxConnState - 1); i++ {
 						buf.WriteString(fmt.Sprintf("%6d", stateCnt[i]))

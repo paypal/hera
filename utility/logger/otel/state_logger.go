@@ -3,6 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
+	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
 	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"go.opentelemetry.io/otel"
@@ -83,14 +84,14 @@ func StartMetricsCollection(ctx context.Context, totalWorkersCount int, opt ...S
 		metricsStateLogger = &StateLogMetrics{
 			stateLogMeter:  stateLogMeter,
 			hostname:       hostName,
-			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*4), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			mStateDataChan: make(chan *WorkersStateData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*5), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			doneCh:         make(chan struct{}),
 		}
 
 		totalConnectionStateDataLogger = &TotalConnectionsGaugeData{
 			stateLogMeter:        stateLogMeter,
 			hostname:             hostName,
-			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*4), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
+			totalConnDataChannel: make(chan *GaugeMetricData, totalWorkersCount*otelconfig.OTelConfigData.ResolutionTimeInSec*20), //currently OTEL polling interval hardcoded as 10. Size of bufferred channel = totalWorkersCount * pollingInterval * 2,
 			stopPublish:          make(chan struct{}),
 		}
 		err = registerMetrics(metricsStateLogger, totalConnectionStateDataLogger)
@@ -152,6 +153,9 @@ func AddDataPointToOTELStateDataChan(dataPoint *WorkersStateData) {
 		return
 	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Info, "timeout occurred while adding record to stats data channel")
+		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "timeout occurred while adding record to mStateDataChan channel")
+		event.AddDataInt("loggedTime", time.Now().Unix())
+		event.Completed()
 		return
 	}
 }
@@ -168,6 +172,9 @@ func AddDataPointToTotalConnectionsDataChannel(totalConnectionData *GaugeMetricD
 		return
 	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Info, "timeout occurred while adding guage data record to totalConnDataChannel channel")
+		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "timeout occurred while adding guage data record to totalConnDataChannel channel")
+		event.AddDataInt("loggedTime", time.Now().Unix())
+		event.Completed()
 		return
 	}
 }
