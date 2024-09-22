@@ -69,20 +69,28 @@ type heraConnection struct {
 	clientinfo *netstring.Netstring
 
 	// Context support
-	watching bool
-	watcher  chan<- context.Context
-	finished chan<- struct{}
-	closech  chan struct{}
+	watching  bool
+	watcher   chan<- context.Context
+	finished  chan<- struct{}
+	closech   chan struct{}
+	cancelled atomicError // set non-nil if conn is canceled
+	closed    atomicBool  // set when conn is closed, before closech is closed
 }
 
 // NewHeraConnection creates a structure implementing a driver.Con interface
 func NewHeraConnection(conn net.Conn) driver.Conn {
-	hera := &heraConnection{conn: conn, id: conn.RemoteAddr().String(), reader: netstring.NewNetstringReader(conn), corrID: corrIDUnsetCmd}
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, hera.id, "create driver connection")
+	hera := &heraConnection{conn: conn,
+		id:      conn.RemoteAddr().String(),
+		reader:  netstring.NewNetstringReader(conn),
+		corrID:  corrIDUnsetCmd,
+		closech: make(chan struct{}),
 	}
 
 	hera.startWatcher()
+
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, hera.id, "create driver connection")
+	}
 
 	return hera
 }
@@ -112,6 +120,8 @@ func (c *heraConnection) startWatcher() {
 	}()
 }
 
+// finish is called when the query has succeeded.
+
 func (c *heraConnection) finish() {
 	if !c.watching || c.finished == nil {
 		return
@@ -127,13 +137,14 @@ func (c *heraConnection) cancel(err error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, c.id, "ctx error:", err)
 	}
-	c.Close()
+	c.cancelled.Set(err)
+	c.cleanup()
 }
 
 func (c *heraConnection) watchCancel(ctx context.Context) error {
 	if c.watching {
-		// Reach here if canceled, the connection is already invalid
-		c.Close()
+		// Reach here if cancelled, the connection is already invalid
+		c.cleanup()
 		return nil
 	}
 	// When ctx is already cancelled, don't watch it.
@@ -151,6 +162,37 @@ func (c *heraConnection) watchCancel(ctx context.Context) error {
 
 	c.watching = true
 	c.watcher <- ctx
+	return nil
+}
+
+// Closes the network connection and unsets internal variables. Do not call this
+// function after successfully authentication, call Close instead. This function
+// is called before auth or on auth failure because HERA will have already
+// closed the network connection.
+func (c *heraConnection) cleanup() {
+	if c.closed.Swap(true) {
+		return
+	}
+
+	// Makes cleanup idempotent
+	close(c.closech)
+	if c.conn == nil {
+		return
+	}
+	c.finish()
+	if err := c.conn.Close(); err != nil {
+		logger.GetLogger().Log(logger.Alert, err)
+	}
+}
+
+// error
+func (c *heraConnection) error() error {
+	if c.closed.Load() {
+		if err := c.cancelled.Value(); err != nil {
+			return err
+		}
+		return ErrInvalidConn
+	}
 	return nil
 }
 
@@ -183,16 +225,28 @@ func (c *heraConnection) Begin() (driver.Tx, error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, c.id, "begin txn")
 	}
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return nil, driver.ErrBadConn
+	}
 	return &tx{hera: c}, nil
 }
 
 // internal function to execute commands
 func (c *heraConnection) exec(cmd int, payload []byte) error {
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return driver.ErrBadConn
+	}
 	return c.execNs(netstring.NewNetstringFrom(cmd, payload))
 }
 
 // internal function to execute commands
 func (c *heraConnection) execNs(ns *netstring.Netstring) error {
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return driver.ErrBadConn
+	}
 	if logger.GetLogger().V(logger.Verbose) {
 		payload := string(ns.Payload)
 		if len(payload) > 1000 {
@@ -206,6 +260,10 @@ func (c *heraConnection) execNs(ns *netstring.Netstring) error {
 
 // returns the next message from the connection
 func (c *heraConnection) getResponse() (*netstring.Netstring, error) {
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return nil, driver.ErrBadConn
+	}
 	ns, err := c.reader.ReadNext()
 	if err != nil {
 		if logger.GetLogger().V(logger.Warning) {
@@ -283,6 +341,11 @@ func (c *heraConnection) SetClientInfo(poolName string, host string) error {
 		return nil
 	}
 
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return driver.ErrBadConn
+	}
+
 	pid := os.Getpid()
 	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, Command: SetClientInfo,", pid, host, poolName)
 	c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
@@ -313,6 +376,11 @@ func (c *heraConnection) SetClientInfo(poolName string, host string) error {
 func (c *heraConnection) SetClientInfoWithPoolStack(poolName string, host string, poolStack string) error {
 	if len(poolName) <= 0 && len(host) <= 0 && len(poolStack) <= 0 {
 		return nil
+	}
+
+	if c.closed.Load() {
+		logger.GetLogger().Log(logger.Alert, ErrInvalidConn)
+		return driver.ErrBadConn
 	}
 
 	pid := os.Getpid()

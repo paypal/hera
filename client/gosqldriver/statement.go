@@ -82,6 +82,7 @@ func (st *stmt) NumInput() int {
 // Implements driver.Stmt.
 // Exec executes a query that doesn't return rows, such as an INSERT or UPDATE.
 func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
+	defer st.hera.finish()
 	sk := 0
 	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
@@ -113,9 +114,9 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	//TODO: honor the context timeout and return when it is canceled
 	if err := st.hera.watchCancel(ctx); err != nil {
-		fmt.Println("=== reach here 1 ====")
 		return nil, err
 	}
+	defer st.hera.finish()
 
 	sk := 0
 	if len(st.hera.getShardKeyPayload()) > 0 {
@@ -132,8 +133,6 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 	cmd := netstring.NewNetstringEmbedded(nss)
 	err = st.hera.execNs(cmd)
 	if err != nil {
-		fmt.Println("=== reach here 2 ====")
-		st.hera.finish()
 		return nil, err
 	}
 
@@ -151,6 +150,7 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 // Implements driver.Stmt.
 // Query executes a query that may return rows, such as a SELECT.
 func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
+	defer st.hera.finish()
 	sk := 0
 	if len(st.hera.getShardKeyPayload()) > 0 {
 		sk = 1
@@ -188,6 +188,7 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 	if err := st.hera.watchCancel(ctx); err != nil {
 		return nil, err
 	}
+	defer st.hera.finish()
 
 	sk := 0
 	if len(st.hera.getShardKeyPayload()) > 0 {
@@ -204,7 +205,6 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 	cmd := netstring.NewNetstringEmbedded(nss)
 	err = st.hera.execNs(cmd)
 	if err != nil {
-		st.hera.finish()
 		return nil, err
 	}
 
