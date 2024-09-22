@@ -151,7 +151,7 @@ func InitQueryBindBlocker(modName string) {
 }
 
 func loadBlockQueryBind(db *sql.DB) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(GetConfig().ManagementQueriesTimeoutInUs)*time.Microsecond)
 	defer cancel()
 	conn, err := db.Conn(ctx)
 	if err != nil {

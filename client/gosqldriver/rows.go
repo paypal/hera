@@ -32,7 +32,7 @@ import (
 // similar to JDBC's result set
 // Rows is an iterator over an executed query's results.
 type rows struct {
-	hera           *heraConnection
+	hera           heraConnectionInterface
 	vals           []driver.Value
 	cols           int
 	currentRow     int
@@ -41,7 +41,7 @@ type rows struct {
 }
 
 // TODO: fetch chunk size
-func newRows(hera *heraConnection, cols int, fetchChunkSize []byte) (*rows, error) {
+func newRows(hera heraConnectionInterface, cols int, fetchChunkSize []byte) (*rows, error) {
 	rs := &rows{hera: hera, cols: cols, currentRow: 0, fetchChunkSize: fetchChunkSize}
 	err := rs.fetchResults()
 	if err != nil {
@@ -63,7 +63,7 @@ func (r *rows) fetchResults() error {
 			return nil
 		case common.RcNoMoreData:
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, r.hera.id, "Rows: cols = ", r.cols, ", numValues =", len(r.vals))
+				logger.GetLogger().Log(logger.Verbose, r.hera.getID(), "Rows: cols = ", r.cols, ", numValues =", len(r.vals))
 			}
 			r.completed = true
 			return nil
