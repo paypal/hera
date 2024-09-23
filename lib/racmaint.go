@@ -67,6 +67,7 @@ func InitRacMaint(cmdLineModuleName string) {
 }
 
 // racMaintMain wakes up every n seconds (configured in "rac_sql_interval") and reads the table
+//
 //	[ManagementTablePrefix]_maint table to see if maintenance is requested
 func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 	if logger.GetLogger().V(logger.Debug) {
@@ -109,8 +110,8 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 }
 
 /*
-	racMaint is the main function for RAC maintenance processing, being called regularly.
-	When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
+racMaint is the main function for RAC maintenance processing, being called regularly.
+When maintenance is planned, it calls workerpool.RacMaint to start the actuall processing
 */
 func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLineModuleName string, prev map[racCfgKey]racCfg) {
 	//
@@ -220,12 +221,12 @@ func racMaint(ctx context.Context, shard int, db *sql.DB, racSQL string, cmdLine
 					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, shard)
 				}
 				if err == nil {
-					go workerpool.RacMaint(racReq)
+					workerpool.RacMaint(racReq)
 				}
 				if GetConfig().ReadonlyPct > 0 {
-					workerpool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, shard)
+					workerpool, err = GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, shard)
 					if err == nil {
-						go workerpool.RacMaint(racReq)
+						workerpool.RacMaint(racReq)
 					}
 				}
 				prev[cfgKey] = row

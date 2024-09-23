@@ -233,8 +233,10 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 // GetWorker gets the active worker if available. backlog with timeout if not.
 //
 // @param sqlhash to check for soft eviction against a blacklist of slow queries.
-//        if getworker needs to exam the incoming sql, there does not seem to be another elegant
-//        way to do this except to pass in the sqlhash as a parameter.
+//
+//	if getworker needs to exam the incoming sql, there does not seem to be another elegant
+//	way to do this except to pass in the sqlhash as a parameter.
+//
 // @param timeoutMs[0] timeout in milliseconds. default to adaptive queue timeout.
 func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
 	if logger.GetLogger().V(logger.Debug) {
