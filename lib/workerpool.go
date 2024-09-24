@@ -716,7 +716,7 @@ func (pool *WorkerPool) RacMaint(racReq racAct) {
 			}
 
 			if logger.GetLogger().V(logger.Verbose) {
-				logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, window, pool.currentSize)
+				logger.GetLogger().Log(logger.Verbose, "Rac maint activating, worker", i, pool.workers[i].pid, "exittime=", pool.workers[i].exitTime, now, window, pool.currentSize, "rac.req timestamp=", racReq.tm)
 			}
 			//Trigger individual event for worker
 			evt := cal.NewCalEvent("RAC_ID", fmt.Sprintf("%d", racReq.instID), cal.TransOK, "")

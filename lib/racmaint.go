@@ -61,7 +61,8 @@ func InitRacMaint(cmdLineModuleName string) {
 	interval := GetConfig().RacMaintReloadInterval
 	if interval > 0 {
 		for i := 0; i < GetConfig().NumOfShards; i++ {
-			go racMaintMain(i, interval, cmdLineModuleName)
+			shardIndex := i //Address the behavior called variable capture.
+			go racMaintMain(shardIndex, interval, cmdLineModuleName)
 		}
 	}
 }

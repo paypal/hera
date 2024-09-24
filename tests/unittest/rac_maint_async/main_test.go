@@ -114,5 +114,9 @@ func TestRacMaintWithRandomStatusChangeInAsync(t *testing.T) {
 		t.Fatalf("ram maint status 'U' should not skip with invalid-status event")
 	}
 
+	if testutil.RegexCountFile("RAC_ID", "cal.log") < 20 {
+		t.Fatalf("ram maint should trigger for all workers once.")
+	}
+
 	logger.GetLogger().Log(logger.Debug, "TestRacMaintWithRandomStatusChangeInAsync done  -------------------------------------------------------------")
 }
