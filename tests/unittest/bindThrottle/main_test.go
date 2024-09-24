@@ -205,7 +205,7 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 func TestBindThrottle(t *testing.T) {
 	// we would like to clear hera.log, but even if we try, lots of messages still go there
 	logger.GetLogger().Log(logger.Debug, "BindThrottle +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
-	err := partialBadLoad(0.10)
+	err := partialBadLoad(0.07)
 	if err != nil && err != NormCliErr() {
 		t.Fatalf("main step function returned err %s", err.Error())
 	}
