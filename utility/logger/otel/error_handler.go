@@ -71,7 +71,7 @@ func (handler OTelErrorHandler) processOTelErrorsMap() {
 // logOTelErrorCalEvent It takes of logging OTEL
 func (handler OTelErrorHandler) logOTelErrorCalEvent(errorDataMap map[string]*OTelErrorData) {
 	for _, errorData := range errorDataMap {
-		event := cal.NewCalEvent("OTEL", "CONNECTION", "2", fmt.Sprintf("%v", errorData.err))
+		event := cal.NewCalEvent("OTEL", "METRIC_PUBLISH", "1", fmt.Sprintf("msg=%v", errorData.err))
 		event.AddDataInt("occurredTime", errorData.occurredTime)
 		event.AddDataInt("loggedTime", time.Now().Unix())
 		event.Completed()

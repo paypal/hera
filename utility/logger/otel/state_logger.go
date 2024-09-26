@@ -15,6 +15,7 @@ import (
 )
 
 const defaultAppName string = "occ"
+const oTelCallbackRegistrationRetryCount int = 3 //Max retry configuration for registering callback function
 
 // This lock prevents a race between batch observer and instrument registration
 var registerStateMetrics sync.Once
@@ -98,15 +99,29 @@ func StartMetricsCollection(ctx context.Context, totalWorkersCount int, opt ...S
 		if err != nil {
 			logger.GetLogger().Log(logger.Alert, "Failed to register state metrics collector", err)
 		} else {
-			err = totalConnectionStateDataLogger.registerCallbackForTotalConnectionsData()
-			if err != nil {
-				logger.GetLogger().Log(logger.Alert, "Failed to register callback for totalConnectionStateDataLogger gauge metric", err)
+			for retryCount := 0; retryCount < oTelCallbackRegistrationRetryCount; retryCount++ {
+				err = totalConnectionStateDataLogger.registerCallbackForTotalConnectionsData()
+				if err != nil {
+					logger.GetLogger().Log(logger.Alert, "Failed to register callback for totalConnectionStateDataLogger gauge metric: ", err, "number of retries: ", retryCount)
+				} else {
+					logger.GetLogger().Log(logger.Info, "registered callback for totalConnectionStateDataLogger gauge metrics")
+					break
+				}
 			}
 			if err == nil {
 				go metricsStateLogger.startStateLogMetricsPoll(ctx) //Goroutine to poll HERA states data
 			}
 		}
 	})
+	if err != nil {
+		calEvent := cal.NewCalEvent("OTEL", "METRIC_REGISTRATION", "1", fmt.Sprintf("msg=failed register statelog metrics, error: %v", err))
+		calEvent.AddDataInt("loggedTime", time.Now().Unix())
+		calEvent.Completed()
+	} else {
+		calEvent := cal.NewCalEvent("OTEL", "METRIC_REGISTRATION", "0", "msg=state-log metrics registration success")
+		calEvent.AddDataInt("loggedTime", time.Now().Unix())
+		calEvent.Completed()
+	}
 	return err
 }
 
@@ -153,7 +168,7 @@ func AddDataPointToOTELStateDataChan(dataPoint *WorkersStateData) {
 		return
 	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Info, "timeout occurred while adding record to stats data channel")
-		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "timeout occurred while adding record to mStateDataChan channel")
+		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "msg=timeout occurred while adding record to mStateDataChan channel")
 		event.AddDataInt("loggedTime", time.Now().Unix())
 		event.Completed()
 		return
@@ -172,7 +187,7 @@ func AddDataPointToTotalConnectionsDataChannel(totalConnectionData *GaugeMetricD
 		return
 	case <-time.After(time.Second * 1):
 		logger.GetLogger().Log(logger.Info, "timeout occurred while adding guage data record to totalConnDataChannel channel")
-		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "timeout occurred while adding guage data record to totalConnDataChannel channel")
+		event := cal.NewCalEvent("OTEL", "DATA_TIMEOUT", "1", "msg=timeout occurred while adding guage data record to totalConnDataChannel channel")
 		event.AddDataInt("loggedTime", time.Now().Unix())
 		event.Completed()
 		return

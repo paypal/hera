@@ -586,7 +586,11 @@ func (sl *StateLog) init() error {
 			otel_logger.WithAppName(otelconfig.OTelConfigData.PoolName))
 
 		if stateStartErr != nil {
-			logger.GetLogger().Log(logger.Alert, "failed to start metric collection agent for statelogs", stateStartErr)
+			logger.GetLogger().Log(logger.Alert, "failed to start metric collection agent in statelogs", stateStartErr)
+			event := cal.NewCalEvent("OTEL", "STATELOG_INIT", "1", fmt.Sprintf("msg=%v", stateStartErr.Error()))
+			event.AddDataInt("loggedTime", time.Now().Unix())
+			event.Completed()
+			return stateStartErr //In case OTEL integration enabled if OTEL initialization failed then we need to fail startup
 		}
 	}
 	//
