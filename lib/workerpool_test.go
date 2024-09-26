@@ -19,6 +19,7 @@ package lib
 
 import (
 	"encoding/hex"
+	otelconfig "github.com/paypal/hera/utility/logger/otel/config"
 	"os"
 	"sync"
 	"testing"
@@ -29,13 +30,14 @@ func TestPoolDempotency(t *testing.T) {
 	var useheratxt = false
 	var err error
 	if useheratxt {
-		err = InitConfig()
+		err = InitConfig("occ-test")
 		if err != nil {
 			t.Errorf("config initialization failure %s", err.Error())
 			return
 		}
 	} else {
 		gAppConfig = &Config{BacklogTimeoutMsec: 1, LifoScheduler: true, numWorkersCh: make(chan int, 1)}
+		otelconfig.OTelConfigData = &otelconfig.OTelConfig{}
 		gOpsConfig = &OpsConfig{numWorkers: 3}
 		gAppConfig.numWorkersCh <- int(gOpsConfig.numWorkers)
 	}
