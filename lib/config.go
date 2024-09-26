@@ -31,6 +31,11 @@ import (
 	"sync/atomic"
 )
 
+const (
+	mux_config_cal_name           = "OCC_CONFIG"
+	oracle_worker_config_cal_name = "OCC_ORACLE_WORKER_CONFIG"
+)
+
 // The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
@@ -181,6 +186,14 @@ type Config struct {
 
 	// Max desired percentage of healthy workers for the worker pool
 	MaxDesiredHealthyWorkerPct int
+
+	// Oracle Worker Configs
+	EnableCache            bool
+	EnableHeartBeat        bool
+	EnableQueryReplaceNL   bool
+	EnableBindHashLogging  bool
+	EnableSessionVariables bool
+	UseNonBlocking         bool
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -232,7 +245,6 @@ func InitConfig(poolName string) error {
 	} else {
 		currentDir = currentDir + "/"
 	}
-
 	filename := currentDir + "hera.txt"
 
 	cdb, err := config.NewTxtConfig(filename)
@@ -310,6 +322,7 @@ func InitConfig(poolName string) error {
 	}
 
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
+
 	gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
 	gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
 	if gAppConfig.EnableSharding == false || gAppConfig.UseShardMap == false {
@@ -367,6 +380,14 @@ func InitConfig(poolName string) error {
 	}
 	// TODO:
 	gAppConfig.NumStdbyDbs = 1
+
+	// Fetch Oracle worker configurations.. The defaults must be same between oracle worker and here for accurate logging.
+	gAppConfig.EnableCache = cdb.GetOrDefaultBool("enable_cache", false)
+	gAppConfig.EnableHeartBeat = cdb.GetOrDefaultBool("enable_heart_beat", false)
+	gAppConfig.EnableQueryReplaceNL = cdb.GetOrDefaultBool("enable_query_replace_nl", true)
+	gAppConfig.EnableBindHashLogging = cdb.GetOrDefaultBool("enable_bind_hash_logging", false)
+	gAppConfig.EnableSessionVariables = cdb.GetOrDefaultBool("enable_session_variables", false)
+	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_non_blocking", false)
 
 	var numWorkers int
 	numWorkers = 6
@@ -544,17 +565,15 @@ func LogOccConfigs() {
 			"hostname_prefix":                gAppConfig.HostnamePrefix,
 			"sharding_cross_keys_err":        gAppConfig.ShardingCrossKeysErr,
 			//"enable_sql_rewrite", // not found anywhere?
-			"sharding_algo":                    gAppConfig.ShardingAlgoHash,
-			"cfg_from_tns_override_num_shards": gAppConfig.CfgFromTnsOverrideNumShards,
+			"sharding_algo": gAppConfig.ShardingAlgoHash,
 		},
 		"TAF": {
-			"enable_taf":                gAppConfig.EnableTAF,
-			"cfg_from_tns_override_taf": gAppConfig.CfgFromTnsOverrideTaf,
-			"testing_enable_dml_taf":    gAppConfig.TestingEnableDMLTaf,
-			"taf_timeout_ms":            gAppConfig.TAFTimeoutMs,
-			"taf_bin_duration":          gAppConfig.TAFBinDuration,
-			"taf_allow_slow_every_x":    gAppConfig.TAFAllowSlowEveryX,
-			"taf_normally_slow_count":   gAppConfig.TAFNormallySlowCount,
+			"enable_taf":              gAppConfig.EnableTAF,
+			"testing_enable_dml_taf":  gAppConfig.TestingEnableDMLTaf,
+			"taf_timeout_ms":          gAppConfig.TAFTimeoutMs,
+			"taf_bin_duration":        gAppConfig.TAFBinDuration,
+			"taf_allow_slow_every_x":  gAppConfig.TAFAllowSlowEveryX,
+			"taf_normally_slow_count": gAppConfig.TAFNormallySlowCount,
 		},
 		"BIND-EVICTION": {
 			"child.executable": gAppConfig.ChildExecutable,
@@ -595,24 +614,42 @@ func LogOccConfigs() {
 			"max_desire_healthy_worker_pct":        gAppConfig.MaxDesiredHealthyWorkerPct,
 		},
 		"R-W-SPLIT": {
-			"readonly_children_pct":          gAppConfig.ReadonlyPct,
-			"cfg_from_tns_override_rw_split": gAppConfig.CfgFromTnsOverrideRWSplit,
+			"readonly_children_pct": gAppConfig.ReadonlyPct,
 		},
 		"RAC": {
 			"management_table_prefix": gAppConfig.ManagementTablePrefix,
 			"rac_sql_interval":        gAppConfig.RacMaintReloadInterval,
 			"rac_restart_window":      gAppConfig.RacRestartWindow,
 		},
-		"NO-CATEGORY": {
+		"GENERAL-CONFIGURATIONS": {
 			"database_type":   gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
-			"cfg_from_tns":    gAppConfig.CfgFromTns,
 			"log_level":       gOpsConfig.logLevel,
 			"high_load_pct":   gAppConfig.HighLoadPct,
 			"init_limit_pct":  gAppConfig.InitLimitPct,
 			"num_standby_dbs": gAppConfig.NumStdbyDbs,
 		},
+		"ENABLE_CFG_FROM_TNS": {
+			"cfg_from_tns":                     gAppConfig.CfgFromTns,
+			"cfg_from_tns_override_num_shards": gAppConfig.CfgFromTnsOverrideNumShards,
+			"cfg_from_tns_override_taf":        gAppConfig.CfgFromTnsOverrideTaf,
+			"cfg_from_tns_override_rw_split":   gAppConfig.CfgFromTnsOverrideRWSplit,
+		},
+		"STATEMENT-CACHE": {
+			"enable_cache":            gAppConfig.EnableCache,
+			"enable_heart_beat":       gAppConfig.EnableHeartBeat,
+			"enable_query_replace_nl": gAppConfig.EnableQueryReplaceNL,
+		},
+		"SESSION-VARIABLES": {
+			"enable_session_variables": gAppConfig.EnableSessionVariables,
+		},
+		"BIND-HASH-LOGGING": {
+			"enable_bind_hash_logging": gAppConfig.EnableBindHashLogging,
+		},
+		"KEEP-ALIVE": {
+			"use_non_blocking": gAppConfig.UseNonBlocking,
+		},
 	}
-
+	calName := mux_config_cal_name
 	for feature, configs := range whiteListConfigs {
 		switch feature {
 		case "BACKLOG":
@@ -643,17 +680,45 @@ func LogOccConfigs() {
 			if gAppConfig.ReadonlyPct == 0 {
 				continue
 			}
-		case "SOFT-EVICTION", "BIND-EVICTION":
+		case "SATURATION-RECOVERY", "BIND-EVICTION":
 			if GetSatRecoverThrottleRate() <= 0 {
+				continue
+			}
+		case "SOFT-EVICTION":
+			if GetSatRecoverThrottleRate() <= 0 && gAppConfig.SoftEvictionProbability <= 0 {
 				continue
 			}
 		case "MANUAL-RATE-LIMITER":
 			if !gAppConfig.EnableQueryBindBlocker {
 				continue
 			}
+		case "ENABLE_CFG_FROM_TNS":
+			if !gAppConfig.CfgFromTns {
+				continue
+			}
+		case "STATEMENT-CACHE":
+			if !gAppConfig.EnableCache {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "SESSION-VARIABLES":
+			if !gAppConfig.EnableSessionVariables {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "BIND-HASH-LOGGING":
+			if !gAppConfig.EnableBindHashLogging {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "KEEP-ALIVE":
+			if !gAppConfig.UseNonBlocking {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
 		}
 
-		evt := cal.NewCalEvent("OCC_CONFIG", fmt.Sprintf(feature), cal.TransOK, "")
+		evt := cal.NewCalEvent(calName, fmt.Sprintf(feature), cal.TransOK, "")
 		for cfg, val := range configs {
 			s := fmt.Sprintf("%v", val)
 			evt.AddDataStr(cfg, s)
