@@ -75,6 +75,7 @@ func (crd *Coordinator) getShardRec(key0 interface{}) *ShardMapRecord {
 			keyNum := key0.(uint64)
 			//keyNum, ok := key0.(uint64)
 			for i := 0; i < 8; i++ {
+				//In this case, keyNum & 0xFF extracts the least significant 8 bits (one byte) from the keyNum variable.
 				bytes[i] = byte(keyNum & 0xFF)
 				keyNum >>= 8
 			}
@@ -203,6 +204,7 @@ func (crd *Coordinator) computeLogicalShards() {
 			break
 		}
 		// filter only the numeric part of the ShardValue
+		//Based on shard-key type, cast value to specific type.
 		var key interface{}
 		if GetConfig().ShardKeyValueTypeIsString {
 			key = rec
@@ -290,6 +292,25 @@ func (crd *Coordinator) isShardKey(bind string) bool {
 	return true
 }
 
+//Compare bind-name with scuttle ID column name from configuration. This doesn't consider multiple ScutttleID present
+//via IN CLAUSE as part of request. This implementation provided based on assumption that request will have
+// single bind value for scuttle_id column.
+func (crd *Coordinator) isScuttleID(bindName string) bool {
+	if len(bindName) == 0 {
+		return false
+	}
+	if bindName[0] == ':' {
+		bindName = bindName[1:]
+	}
+	bindName = strings.ToLower(bindName)
+	scuttleIDColumn := strings.ToLower(GetConfig().ScuttleColName)
+
+	if scuttleIDColumn == bindName {
+		return true
+	}
+	return false
+}
+
 // PreprocessSharding is doing shard info calculation and validation checks (by calling verifyValidShard)
 // before determining if the current request should continue, returning nil error if the request should be allowed.
 // If error is not nil, the second parameter says if the coordinator should hangup the client connection.
@@ -314,12 +335,14 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 	}
 
 	sz := len(requests)
+	var scuttleID int = -1 //Default value if request has bindname without bind value
+	scuttleColumnPresent := false
 	autodisc := false /* ShardKey can overwrite the autodiscovery */
 	for i := 0; i < sz; i++ {
 		if requests[i].Cmd == common.CmdPrepare {
-			lowerSql := strings.ToLower(string(requests[i].Payload))
-			scuttle_idx := strings.LastIndex(lowerSql, strings.ToLower(GetConfig().ScuttleColName))
-			if scuttle_idx < 0 || scuttle_idx > strings.Index(lowerSql, " from ") {
+			lowerSQL := strings.ToLower(string(requests[i].Payload))
+			scuttleIdx := strings.LastIndex(lowerSQL, strings.ToLower(GetConfig().ScuttleColName))
+			if scuttleIdx < 0 || scuttleIdx > strings.Index(lowerSQL, " from ") {
 				continue
 			}
 			evt := cal.NewCalEvent(EvtTypeSharding, "RM_SCUTTLE_ID_FETCH_COL", cal.TransOK, "")
@@ -328,6 +351,27 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 			ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrNoScuttleIdPredicate.Error()))
 			crd.respond(ns.Serialized)
 			return true, ErrNoScuttleIdPredicate
+		}
+		//Capture ScuttleID column data in-case if it provided as part of query.
+		if (requests[i].Cmd == common.CmdBindName) && crd.isScuttleID(string(requests[i].Payload)) {
+			//To avoid repeated binds for scuttleId column
+			if !scuttleColumnPresent {
+				scuttleColumnPresent = true
+				if i < (sz - 1) {
+					if requests[i+1].Cmd == common.CmdBindNum && requests[i+2].Cmd == common.CmdBindValueMaxSize {
+						scuttleID, _ = strconv.Atoi(string(requests[i+3].Payload))
+					} else if requests[i+1].Cmd == common.CmdBindValue {
+						scuttleID, _ = strconv.Atoi(string(requests[i+1].Payload))
+					} else {
+						if logger.GetLogger().V(logger.Verbose) {
+							logger.GetLogger().Log(logger.Verbose, crd.id, fmt.Sprintf("Bind value for scuttleID column: %s not present in Query.", GetConfig().ScuttleColName))
+						}
+						evt := cal.NewCalEvent(EvtTypeSharding, EvtNameBadScuttleId, cal.TransOK, fmt.Sprintf("Bind value for scuttleID column: %s not present in Query.", GetConfig().ScuttleColName))
+						evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+						evt.Completed()
+					}
+				}
+			}
 		}
 		if (requests[i].Cmd == common.CmdBindName) && crd.isShardKey(string(requests[i].Payload)) {
 			if crd.shard.sessionShardID != -1 {
@@ -370,7 +414,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 					evt := cal.NewCalEvent(EvtTypeSharding, EvtNameShardIDAndKey, cal.TransOK, "")
 					evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
 					evt.Completed()
-					return true, errors.New("Unsupported both HERA_SET_SHARD_ID and ShardKey")
+					return true, errors.New("unsupported both HERA_SET_SHARD_ID and ShardKey")
 				}
 
 				key, vals := crd.parseShardKey(requests[i].Payload)
@@ -440,6 +484,14 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 				logger.GetLogger().Log(logger.Verbose, logmsg)
 			}
 		}
+
+		//This will handle scuttleID verification as part of this it compares scuttleID value with bucket value in shardRec
+		if scuttleColumnPresent {
+			hangup, err := crd.verifyScuttleID(scuttleID)
+			if err != nil {
+				return hangup, err
+			}
+		}
 	}
 
 	if (len(crd.shard.shardValues) == 0) && (crd.shard.sessionShardID == -1) {
@@ -456,6 +508,7 @@ func (crd *Coordinator) PreprocessSharding(requests []*netstring.Netstring) (boo
 		}
 	}
 
+	//Verify whether shard information is valid or not
 	hangup, err := crd.verifyValidShard()
 	if err != nil {
 		return hangup, err
@@ -591,4 +644,21 @@ func (crd *Coordinator) verifyXShard(oldShardValues []string, oldShardID int, ol
 		}
 	}
 	return nil
+}
+
+//This validates the scuttleId provided as part of request command matching with scuttleID computed from shardKey.
+//If both are not matching then it throws scuttle ID mismatch
+func (crd *Coordinator) verifyScuttleID(scuttleID int) (bool, error) {
+	if scuttleID != crd.shard.shardRecs[0].bin {
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, fmt.Sprintf("ScuttleID comparison failed, scuttleID: %d captured from request didn't match with computed value: %d using shardKey: %s", scuttleID, crd.shard.shardRecs[0].bin, crd.shard.shardValues[0]))
+		}
+		evt := cal.NewCalEvent(EvtTypeSharding, EvtNameScuttleIdMismatch, cal.TransOK, "")
+		evt.AddDataInt("sql", int64(uint32(crd.sqlhash)))
+		evt.Completed()
+		ns := netstring.NewNetstringFrom(common.RcError, []byte(ErrScuttleIDMismatch.Error()))
+		crd.respond(ns.Serialized)
+		return true /*don't hangup*/, ErrScuttleIDMismatch
+	}
+	return false, nil
 }

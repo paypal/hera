@@ -7,9 +7,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/lib"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,6 +154,7 @@ func RunDML(dml string) error {
 func RegexCount(regex string) int {
 	return RegexCountFile(regex, "hera.log")
 }
+
 func RegexCountFile(regex string, filename string) int {
 	time.Sleep(10 * time.Millisecond)
 	fa, err := regexp.Compile(regex)
@@ -185,10 +188,47 @@ func RegexCountFile(regex string, filename string) int {
 	return count
 }
 
+func ComputeScuttleId(shardKey interface{}, maxScuttles string) (uint64, error) {
+	maxScuttlesVal, _ := strconv.ParseUint(maxScuttles, 10, 64)
+	logger.GetLogger().Log(logger.Info, fmt.Sprintf("ComputeScuttleId: Max scuttles value: %d", maxScuttlesVal))
+	switch keyType := shardKey.(type) {
+	case string:
+		keyStr := shardKey.(string)
+		//keyStr, ok := key0.(string)
+		key := uint64(lib.Murmur3([]byte(keyStr)))
+		return key % maxScuttlesVal, nil
+	case int:
+		bytes := make([]byte, 8)
+		keyNum, _ := shardKey.(int)
+		keyNumValue := uint64(keyNum)
+		for i := 0; i < 8; i++ {
+			bytes[i] = byte(keyNumValue & 0xFF)
+			keyNumValue >>= 8
+		}
+		key := uint64(lib.Murmur3(bytes))
+		return key % maxScuttlesVal, nil
+	case int64:
+		bytes := make([]byte, 8)
+		keyNum := shardKey.(uint64)
+		//keyNum, ok := key0.(uint64)
+		for i := 0; i < 8; i++ {
+			bytes[i] = byte(keyNum & 0xFF)
+			keyNum >>= 8
+		}
+		key := uint64(lib.Murmur3(bytes))
+		return key % maxScuttlesVal, nil
+	default:
+		logger.GetLogger().Log(logger.Info, fmt.Sprintf("Provided incorrect shardkey type: %v for tests for shard-key: %v", keyType, shardKey))
+		return 0, errors.New(fmt.Sprintf("Provided incorrect shardkey type: %v for tests for shard-key: %v", keyType, shardKey))
+	}
+	return 0, errors.New(fmt.Sprintf("Failed to compute scuttle ID for shardKey: %v", shardKey))
+}
+
 func Fatal(msg ...interface{}) {
 	fmt.Println(msg...)
 	os.Exit(2)
 }
+
 func Fatalf(str string, msg ...interface{}) {
 	fmt.Printf(str, msg...)
 	os.Exit(1)
