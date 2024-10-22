@@ -652,9 +652,10 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 	xShardRead := false
 
 	// check bind throttle
-	GetBindEvict().lock.Lock()
-	_, ok := GetBindEvict().BindThrottle[uint32(crd.sqlhash)]
-	GetBindEvict().lock.Unlock()
+	bindEvict := GetBindEvict()
+	bindEvict.lock.Lock()
+	_, ok := bindEvict.BindThrottle[uint32(crd.sqlhash)]
+	bindEvict.lock.Unlock()
 	if ok {
 		wType := wtypeRW
 		cfg := GetNumWorkers(crd.shard.shardID)
@@ -686,7 +687,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
-		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
+		needBlock, throttleEntry := bindEvict.ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
