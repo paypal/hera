@@ -20,16 +20,21 @@ package lib
 import (
 	"errors"
 	"fmt"
+	"github.com/paypal/hera/cal"
+	"github.com/paypal/hera/config"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-
-	"github.com/paypal/hera/config"
-	"github.com/paypal/hera/utility/logger"
 )
 
-//The Config contains all the static configuration
+const (
+	mux_config_cal_name           = "OCC_CONFIG"
+	oracle_worker_config_cal_name = "OCC_ORACLE_WORKER_CONFIG"
+)
+
+// The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
 	KeyFile         string // leave blank for no SSL
@@ -73,6 +78,9 @@ type Config struct {
 	// config_reload_time_ms(30 * 1000)
 	//
 	ConfigReloadTimeMs int
+	//
+	//
+	ConfigLoggingReloadTimeHours int
 	// custom_auth_timeout(1000)
 	CustomAuthTimeoutMs int
 	// time_skew_threshold_warn(2)
@@ -80,11 +88,11 @@ type Config struct {
 	// time_skew_threshold_error(15)
 	TimeSkewThresholdErrorSec int
 	// max_stranded_time_interval(2000)
-	StrandedWorkerTimeoutMs int
+	StrandedWorkerTimeoutMs         int
 	HighLoadStrandedWorkerTimeoutMs int
-	HighLoadSkipInitiateRecoverPct int
-	HighLoadPct int
-	InitLimitPct int
+	HighLoadSkipInitiateRecoverPct  int
+	HighLoadPct                     int
+	InitLimitPct                    int
 
 	// the worker scheduler policy
 	LifoScheduler bool
@@ -110,7 +118,7 @@ type Config struct {
 	HostnamePrefix       map[string]string
 	ShardingCrossKeysErr bool
 
-	CfgFromTns					bool
+	CfgFromTns                  bool
 	CfgFromTnsOverrideNumShards int // -1 no-override
 	CfgFromTnsOverrideTaf       int // -1 no-override, 0 override-false, 1 override-true
 	CfgFromTnsOverrideRWSplit   int // -1 no-override, readChildPct
@@ -156,8 +164,8 @@ type Config struct {
 	// when numWorkers changes, it will write to this channel, for worker manager to update
 	numWorkersCh chan int
 
-	EnableConnLimitCheck bool
-	EnableQueryBindBlocker bool
+	EnableConnLimitCheck         bool
+	EnableQueryBindBlocker       bool
 	QueryBindBlockerMinSqlPrefix int
 
 	// taf testing
@@ -169,13 +177,21 @@ type Config struct {
 	EnableDanglingWorkerRecovery bool
 
 	GoStatsInterval int
-	RandomStartMs int
+	RandomStartMs   int
 
 	// The max number of database connections to be established per second
 	MaxDbConnectsPerSec int
 
 	// Max desired percentage of healthy workers for the worker pool
 	MaxDesiredHealthyWorkerPct int
+
+	// Oracle Worker Configs
+	EnableCache            bool
+	EnableHeartBeat        bool
+	EnableQueryReplaceNL   bool
+	EnableBindHashLogging  bool
+	EnableSessionVariables bool
+	UseNonBlocking         bool
 }
 
 // The OpsConfig contains the configuration that can be modified during run time
@@ -227,7 +243,6 @@ func InitConfig() error {
 	} else {
 		currentDir = currentDir + "/"
 	}
-
 	filename := currentDir + "hera.txt"
 
 	cdb, err := config.NewTxtConfig(filename)
@@ -268,15 +283,15 @@ func InitConfig() error {
 	}
 
 	gAppConfig.ConfigReloadTimeMs = cdb.GetOrDefaultInt("config_reload_time_ms", 30*1000)
+	gAppConfig.ConfigLoggingReloadTimeHours = cdb.GetOrDefaultInt("config_logging_reload_time_hours", 24)
 	gAppConfig.CustomAuthTimeoutMs = cdb.GetOrDefaultInt("custom_auth_timeout", 1000)
 	gAppConfig.TimeSkewThresholdWarnSec = cdb.GetOrDefaultInt("time_skew_threshold_warn", 2)
 	gAppConfig.TimeSkewThresholdErrorSec = cdb.GetOrDefaultInt("time_skew_threshold_error", 15)
 	gAppConfig.StrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("max_stranded_time_interval", 2000)
 	gAppConfig.HighLoadStrandedWorkerTimeoutMs = cdb.GetOrDefaultInt("high_load_max_stranded_time_interval", 600111)
 	gAppConfig.HighLoadSkipInitiateRecoverPct = cdb.GetOrDefaultInt("high_load_skip_initiate_recover_pct", 80)
-	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130) // >100 disabled
+	gAppConfig.HighLoadPct = cdb.GetOrDefaultInt("high_load_pct", 130)   // >100 disabled
 	gAppConfig.InitLimitPct = cdb.GetOrDefaultInt("init_limit_pct", 125) // >100 disabled
-
 
 	gAppConfig.StateLogInterval = cdb.GetOrDefaultInt("state_log_interval", 1)
 	if gAppConfig.StateLogInterval <= 0 {
@@ -300,11 +315,12 @@ func InitConfig() error {
 			gAppConfig.ChildExecutable = "postgresworker"
 		}
 	} else {
-	// db type is not supported
+		// db type is not supported
 		return errors.New("database type must be either Oracle or MySQL")
 	}
 
 	gAppConfig.EnableSharding = cdb.GetOrDefaultBool("enable_sharding", false)
+
 	gAppConfig.UseShardMap = cdb.GetOrDefaultBool("use_shardmap", true)
 	gAppConfig.NumOfShards = cdb.GetOrDefaultInt("num_shards", 1)
 	if gAppConfig.EnableSharding == false || gAppConfig.UseShardMap == false {
@@ -362,6 +378,14 @@ func InitConfig() error {
 	}
 	// TODO:
 	gAppConfig.NumStdbyDbs = 1
+
+	// Fetch Oracle worker configurations.. The defaults must be same between oracle worker and here for accurate logging.
+	gAppConfig.EnableCache = cdb.GetOrDefaultBool("enable_cache", false)
+	gAppConfig.EnableHeartBeat = cdb.GetOrDefaultBool("enable_heart_beat", false)
+	gAppConfig.EnableQueryReplaceNL = cdb.GetOrDefaultBool("enable_query_replace_nl", true)
+	gAppConfig.EnableBindHashLogging = cdb.GetOrDefaultBool("enable_bind_hash_logging", false)
+	gAppConfig.EnableSessionVariables = cdb.GetOrDefaultBool("enable_session_variables", false)
+	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_non_blocking", false)
 
 	var numWorkers int
 	numWorkers = 6
@@ -425,9 +449,8 @@ func InitConfig() error {
 	fmt.Sscanf(cdb.GetOrDefaultString("bind_eviction_decr_per_sec", "10.0"),
 		"%f", &gAppConfig.BindEvictionDecrPerSec)
 
-	gAppConfig.SkipEvictRegex= cdb.GetOrDefaultString("skip_eviction_host_prefix","")
-	gAppConfig.EvictRegex= cdb.GetOrDefaultString("eviction_host_prefix", "")
-
+	gAppConfig.SkipEvictRegex = cdb.GetOrDefaultString("skip_eviction_host_prefix", "")
+	gAppConfig.EvictRegex = cdb.GetOrDefaultString("eviction_host_prefix", "")
 
 	gAppConfig.BouncerEnabled = cdb.GetOrDefaultBool("bouncer_enabled", true)
 	gAppConfig.BouncerStartupDelay = cdb.GetOrDefaultInt("bouncer_startup_delay", 10)
@@ -464,6 +487,197 @@ func InitConfig() error {
 	}
 
 	return nil
+}
+
+func LogOccConfigs() {
+	whiteListConfigs := map[string]map[string]interface{}{
+		"BACKLOG": {
+			"backlog_pct":             gAppConfig.BacklogPct,
+			"request_backlog_timeout": gAppConfig.BacklogTimeoutMsec,
+			"short_backlog_timeout":   gAppConfig.ShortBacklogTimeoutMsec,
+		},
+		"BOUNCER": {
+			"bouncer_enabled":          gAppConfig.BouncerEnabled,
+			"bouncer_startup_delay":    gAppConfig.BouncerStartupDelay,
+			"bouncer_poll_interval_ms": gAppConfig.BouncerPollInterval,
+		},
+		"PROFILE": {
+			"enable_profile":      gAppConfig.EnableProfile,
+			"profile_http_port":   gAppConfig.ProfileHTTPPort,
+			"profile_telnet_port": gAppConfig.ProfileTelnetPort,
+		},
+		"SHARDING": {
+			"enable_sharding":                gAppConfig.EnableSharding,
+			"use_shardmap":                   gAppConfig.UseShardMap,
+			"num_shards":                     gAppConfig.NumOfShards,
+			"shard_key_name":                 gAppConfig.ShardKeyName,
+			"max_scuttle":                    gAppConfig.MaxScuttleBuckets,
+			"scuttle_col_name":               gAppConfig.ScuttleColName,
+			"shard_key_value_type_is_string": gAppConfig.ShardKeyValueTypeIsString,
+			"enable_whitelist_test":          gAppConfig.EnableWhitelistTest,
+			"whitelist_children":             gAppConfig.NumWhitelistChildren,
+			"sharding_postfix":               gAppConfig.ShardingPostfix,
+			"sharding_cfg_reload_interval":   gAppConfig.ShardingCfgReloadInterval,
+			"hostname_prefix":                gAppConfig.HostnamePrefix,
+			"sharding_cross_keys_err":        gAppConfig.ShardingCrossKeysErr,
+			//"enable_sql_rewrite", // not found anywhere?
+			"sharding_algo": gAppConfig.ShardingAlgoHash,
+		},
+		"TAF": {
+			"enable_taf":              gAppConfig.EnableTAF,
+			"testing_enable_dml_taf":  gAppConfig.TestingEnableDMLTaf,
+			"taf_timeout_ms":          gAppConfig.TAFTimeoutMs,
+			"taf_bin_duration":        gAppConfig.TAFBinDuration,
+			"taf_allow_slow_every_x":  gAppConfig.TAFAllowSlowEveryX,
+			"taf_normally_slow_count": gAppConfig.TAFNormallySlowCount,
+		},
+		"BIND-EVICTION": {
+			"child.executable": gAppConfig.ChildExecutable,
+			//"enable_bind_hash_logging" FOUND FOR SOME OCCs ONLY IN occ.def
+			"bind_eviction_threshold_pct":       gAppConfig.BindEvictionThresholdPct,
+			"bind_eviction_decr_per_sec":        gAppConfig.BindEvictionDecrPerSec,
+			"bind_eviction_target_conn_pct":     gAppConfig.BindEvictionTargetConnPct,
+			"bind_eviction_max_throttle":        gAppConfig.BindEvictionMaxThrottle,
+			"bind_eviction_names":               gAppConfig.BindEvictionNames,
+			"skip_eviction_host_prefix":         gAppConfig.SkipEvictRegex,
+			"eviction_host_prefix":              gAppConfig.EvictRegex,
+			"query_bind_blocker_min_sql_prefix": gAppConfig.QueryBindBlockerMinSqlPrefix,
+			"enable_connlimit_check":            gAppConfig.EnableConnLimitCheck,
+		},
+		"MANUAL-RATE-LIMITER": {
+			"enable_query_bind_blocker": gAppConfig.EnableQueryBindBlocker,
+		},
+		"SATURATION-RECOVERY": {
+			"saturation_recover_threshold":     GetSatRecoverThresholdMs(),
+			"saturation_recover_throttle_rate": GetSatRecoverThrottleRate(),
+		},
+		"SOFT-EVICTION": {
+			"soft_eviction_effective_time": gAppConfig.SoftEvictionEffectiveTimeMs,
+			"soft_eviction_probability":    gAppConfig.SoftEvictionProbability,
+		},
+		"WORKER-CONFIGURATIONS": {
+			"lifespan_check_interval": gAppConfig.lifeSpanCheckInterval,
+			"lifo_scheduler_enabled":  gAppConfig.LifoScheduler,
+			//"num_workers_per_proxy",  // only present in occ.def for some occs
+			//"max_clients_per_worker", // only present in occ.def for some occs
+			"max_stranded_time_interval":           gAppConfig.StrandedWorkerTimeoutMs,
+			"high_load_max_stranded_time_interval": gAppConfig.HighLoadStrandedWorkerTimeoutMs,
+			"high_load_skip_initiate_recover_pct":  gAppConfig.HighLoadSkipInitiateRecoverPct,
+			"enable_danglingworker_recovery":       gAppConfig.EnableDanglingWorkerRecovery,
+			"max_db_connects_per_sec":              gAppConfig.MaxDbConnectsPerSec,
+			"max_lifespan_per_child":               GetMaxLifespanPerChild(),
+			"max_requests_per_child":               GetMaxRequestsPerChild(),
+			"max_desire_healthy_worker_pct":        gAppConfig.MaxDesiredHealthyWorkerPct,
+		},
+		"R-W-SPLIT": {
+			"readonly_children_pct": gAppConfig.ReadonlyPct,
+		},
+		"RAC": {
+			"management_table_prefix": gAppConfig.ManagementTablePrefix,
+			"rac_sql_interval":        gAppConfig.RacMaintReloadInterval,
+			"rac_restart_window":      gAppConfig.RacRestartWindow,
+		},
+		"GENERAL-CONFIGURATIONS": {
+			"database_type":   gAppConfig.DatabaseType, //	Oracle = 0; MySQL=1; POSTGRES=2
+			"log_level":       gOpsConfig.logLevel,
+			"high_load_pct":   gAppConfig.HighLoadPct,
+			"init_limit_pct":  gAppConfig.InitLimitPct,
+			"num_standby_dbs": gAppConfig.NumStdbyDbs,
+		},
+		"ENABLE_CFG_FROM_TNS": {
+			"cfg_from_tns":                     gAppConfig.CfgFromTns,
+			"cfg_from_tns_override_num_shards": gAppConfig.CfgFromTnsOverrideNumShards,
+			"cfg_from_tns_override_taf":        gAppConfig.CfgFromTnsOverrideTaf,
+			"cfg_from_tns_override_rw_split":   gAppConfig.CfgFromTnsOverrideRWSplit,
+		},
+		"STATEMENT-CACHE": {
+			"enable_cache":            gAppConfig.EnableCache,
+			"enable_heart_beat":       gAppConfig.EnableHeartBeat,
+			"enable_query_replace_nl": gAppConfig.EnableQueryReplaceNL,
+		},
+		"SESSION-VARIABLES": {
+			"enable_session_variables": gAppConfig.EnableSessionVariables,
+		},
+		"BIND-HASH-LOGGING": {
+			"enable_bind_hash_logging": gAppConfig.EnableBindHashLogging,
+		},
+		"KEEP-ALIVE": {
+			"use_non_blocking": gAppConfig.UseNonBlocking,
+		},
+	}
+	calName := mux_config_cal_name
+	for feature, configs := range whiteListConfigs {
+		switch feature {
+		case "BACKLOG":
+			if gAppConfig.BacklogPct == 0 {
+				continue
+			}
+		case "BOUNCER":
+			if !gAppConfig.BouncerEnabled {
+				continue
+			}
+		case "PROFILE":
+			if !gAppConfig.EnableProfile {
+				continue
+			}
+		case "SHARDING":
+			if !gAppConfig.EnableSharding {
+				continue
+			}
+		case "TAF":
+			if !gAppConfig.EnableTAF {
+				continue
+			}
+		case "R-W-SPLIT":
+			if gAppConfig.ReadonlyPct == 0 {
+				continue
+			}
+		case "SATURATION-RECOVERY", "BIND-EVICTION":
+			if GetSatRecoverThrottleRate() <= 0 {
+				continue
+			}
+		case "SOFT-EVICTION":
+			if GetSatRecoverThrottleRate() <= 0 && gAppConfig.SoftEvictionProbability <= 0 {
+				continue
+			}
+		case "MANUAL-RATE-LIMITER":
+			if !gAppConfig.EnableQueryBindBlocker {
+				continue
+			}
+		case "ENABLE_CFG_FROM_TNS":
+			if !gAppConfig.CfgFromTns {
+				continue
+			}
+		case "STATEMENT-CACHE":
+			if !gAppConfig.EnableCache {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "SESSION-VARIABLES":
+			if !gAppConfig.EnableSessionVariables {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "BIND-HASH-LOGGING":
+			if !gAppConfig.EnableBindHashLogging {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		case "KEEP-ALIVE":
+			if !gAppConfig.UseNonBlocking {
+				continue
+			}
+			calName = oracle_worker_config_cal_name
+		}
+
+		evt := cal.NewCalEvent(calName, fmt.Sprintf(feature), cal.TransOK, "")
+		for cfg, val := range configs {
+			s := fmt.Sprintf("%v", val)
+			evt.AddDataStr(cfg, s)
+		}
+		evt.Completed()
+	}
+
 }
 
 // CheckOpsConfigChange checks if the ops config file needs to be reloaded and reloads it if necessary.

@@ -31,14 +31,13 @@ import (
 	"github.com/paypal/hera/utility/logger"
 )
 
-
 type QueryBindBlockerEntry struct {
-	Herasqlhash uint32
-    Herasqltext string // prefix since some sql is too long
-	Bindvarname string // prefix for in clause
+	Herasqlhash  uint32
+	Herasqltext  string // prefix since some sql is too long
+	Bindvarname  string // prefix for in clause
 	Bindvarvalue string // when set to "BLOCKALLVALUES" should block all sqltext queries
-	Blockperc int
-	Heramodule string
+	Blockperc    int
+	Heramodule   string
 }
 
 type QueryBindBlockerCfg struct {
@@ -48,7 +47,10 @@ type QueryBindBlockerCfg struct {
 	// check by sqltext prefix (delay to end)
 }
 
-func (cfg * QueryBindBlockerCfg) IsBlocked(sqltext string, bindPairs []string) (bool,string) {
+var lastLoggingTime time.Time
+var defaultQBBTableMissingErrorLoggingInterval = 2 * time.Hour
+
+func (cfg *QueryBindBlockerCfg) IsBlocked(sqltext string, bindPairs []string) (bool, string) {
 	sqlhash := uint32(utility.GetSQLHash(sqltext))
 	if logger.GetLogger().V(logger.Verbose) {
 		logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("query bind blocker sqlhash and text %d %s", sqlhash, sqltext))
@@ -70,7 +72,7 @@ func (cfg * QueryBindBlockerCfg) IsBlocked(sqltext string, bindPairs []string) (
 		byBindValue, ok := byBindName[bindPairs[i]]
 		if !ok {
 			// strip numeric suffix to try to match
-			withoutNumSuffix := regexp.MustCompile("[_0-9]*$").ReplaceAllString(bindPairs[i],"")
+			withoutNumSuffix := regexp.MustCompile("[_0-9]*$").ReplaceAllString(bindPairs[i], "")
 			byBindValue, ok = byBindName[withoutNumSuffix]
 			if !ok {
 				continue
@@ -118,28 +120,27 @@ func (cfg * QueryBindBlockerCfg) IsBlocked(sqltext string, bindPairs []string) (
 var g_module string
 var gQueryBindBlockerCfg atomic.Value
 
-func GetQueryBindBlockerCfg() (*QueryBindBlockerCfg) {
-    cfg := gQueryBindBlockerCfg.Load()
-    if cfg == nil {
-        return nil
-    }
-    return cfg.(*QueryBindBlockerCfg)
+func GetQueryBindBlockerCfg() *QueryBindBlockerCfg {
+	cfg := gQueryBindBlockerCfg.Load()
+	if cfg == nil {
+		return nil
+	}
+	return cfg.(*QueryBindBlockerCfg)
 }
-
 
 func InitQueryBindBlocker(modName string) {
 	g_module = modName
 
-    db, err := sql.Open("heraloop", fmt.Sprintf("0:0:0"))
-    if err != nil {
+	db, err := sql.Open("heraloop", fmt.Sprintf("0:0:0"))
+	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Loading query bind blocker - conn err ", err)
-        return
-    }
-    db.SetMaxIdleConns(0)
-
+		return
+	}
+	db.SetMaxIdleConns(0)
 	go func() {
-		time.Sleep(4*time.Second)
+		time.Sleep(4 * time.Second)
 		logger.GetLogger().Log(logger.Info, "Loading query bind blocker - initial")
+
 		loadBlockQueryBind(db)
 		c := time.Tick(11 * time.Second)
 		for now := range c {
@@ -152,11 +153,12 @@ func InitQueryBindBlocker(modName string) {
 func loadBlockQueryBind(db *sql.DB) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Millisecond)
 	defer cancel()
-	conn, err := db.Conn(ctx);
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		logger.GetLogger().Log(logger.Alert, "Error (conn) loading query bind blocker:", err)
 		return
 	}
+
 	defer conn.Close()
 	q := fmt.Sprintf("SELECT /*queryBindBlocker*/ %ssqlhash, %ssqltext, bindvarname, bindvarvalue, blockperc, %smodule FROM %s_rate_limiter where %smodule='%s'", GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, g_module)
 	logger.GetLogger().Log(logger.Info, "Loading query bind blocker meta-sql "+q)
@@ -167,12 +169,18 @@ func loadBlockQueryBind(db *sql.DB) {
 	}
 	rows, err := stmt.QueryContext(ctx)
 	if err != nil {
-		logger.GetLogger().Log(logger.Alert, "Error (query) loading query bind blocker:", err)
-		return
+		if lastLoggingTime.IsZero() || time.Since(lastLoggingTime) > defaultQBBTableMissingErrorLoggingInterval {
+			//In case table missing log alert event for every 2 hour
+			logger.GetLogger().Log(logger.Alert, "Error (query) loading query bind blocker:", err)
+			lastLoggingTime = time.Now()
+			return
+		} else {
+			return
+		}
 	}
 	defer rows.Close()
 
-	cfgLoad := QueryBindBlockerCfg{BySqlHash:make(map[uint32]map[string]map[string][]QueryBindBlockerEntry)}
+	cfgLoad := QueryBindBlockerCfg{BySqlHash: make(map[uint32]map[string]map[string][]QueryBindBlockerEntry)}
 
 	rowCount := 0
 	for rows.Next() {
@@ -182,9 +190,9 @@ func loadBlockQueryBind(db *sql.DB) {
 			logger.GetLogger().Log(logger.Alert, "Error (row scan) loading query bind blocker:", err)
 			continue
 		}
-	
+
 		if len(entry.Herasqltext) < GetConfig().QueryBindBlockerMinSqlPrefix {
-			logger.GetLogger().Log(logger.Alert, "Error (row scan) loading query bind blocker - sqltext must be ", GetConfig().QueryBindBlockerMinSqlPrefix," bytes or more - sqlhash:", entry.Herasqlhash)
+			logger.GetLogger().Log(logger.Alert, "Error (row scan) loading query bind blocker - sqltext must be ", GetConfig().QueryBindBlockerMinSqlPrefix, " bytes or more - sqlhash:", entry.Herasqlhash)
 			continue
 		}
 		rowCount++
@@ -200,7 +208,7 @@ func loadBlockQueryBind(db *sql.DB) {
 		}
 		bindVal, ok := bindName[entry.Bindvarvalue]
 		if !ok {
-			bindVal = make([]QueryBindBlockerEntry,0)
+			bindVal = make([]QueryBindBlockerEntry, 0)
 			bindName[entry.Bindvarvalue] = bindVal
 		}
 		bindName[entry.Bindvarvalue] = append(bindName[entry.Bindvarvalue], entry)
