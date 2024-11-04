@@ -95,7 +95,7 @@ func racMaintMain(shard int, interval int, cmdLineModuleName string) {
 		tempKey.module = ""
 		prev[tempKey] = racRow
 	}
-	racSQL := fmt.Sprintf("/*shard=%d*/ SELECT inst_id, UPPER(status), status_time, UPPER(module) "+
+	racSQL := fmt.Sprintf("/*heraMgmt.racMaintShard=%d*/ SELECT inst_id, UPPER(status), status_time, UPPER(module) "+
 		"FROM %s_maint "+
 		"WHERE UPPER(machine) = ? and "+
 		"UPPER(module) in ( ?, ? ) "+ //IN ( UPPER(sys_context('USERENV', 'MODULE')), UPPER(sys_context('USERENV', 'MODULE') || '_TAF' ) ) "+
