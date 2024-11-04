@@ -41,7 +41,7 @@ type Config struct {
 	NumStdbyDbs        int
 	InitialMaxChildren int
 	ReadonlyPct        int
-	TafPct 	   int
+	TafChildrenPct 	   int
 	//
 	// backlog
 	//
@@ -393,7 +393,7 @@ func InitConfig() error {
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
-	gAppConfig.TafPct = cdb.GetOrDefaultInt("taf_children_pct", 100)
+	gAppConfig.TafChildrenPct = cdb.GetOrDefaultInt("taf_children_pct", 100)
 	gAppConfig.InitialMaxChildren = numWorkers
 	if gAppConfig.EnableWhitelistTest {
 		if gAppConfig.NumWhitelistChildren < 2 {
@@ -644,15 +644,19 @@ func GetNumRWorkers(shard int) int {
 
 // GetNumStdByWorkers gets the number of workers for the "StdBy" pool
 func GetNumStdByWorkers(shard int) int {
-	numWhiteList := GetWhiteListChildCount(shard)
-	if numWhiteList > 0 {
-		return numWhiteList
+	num := GetNumWWorkers(shard)
+	// TafChildrenPct should not be greater than 100.
+	if gAppConfig.TafChildrenPct > 100 {
+		return num
 	}
-	num := GetNumWorkers(shard)
-	if gAppConfig.TafPct > 0 {
-		num = num * gAppConfig.TafPct / 100
-		if num == 0 {
+	if gAppConfig.EnableTAF && gAppConfig.TafChildrenPct < 100 {
+		if gAppConfig.TafChildrenPct < 0 {
 			num = 1
+		} else {
+			num = num * gAppConfig.TafChildrenPct / 100
+			if num == 0 {
+				num = 1
+			}
 		}
 	}
 	return num
