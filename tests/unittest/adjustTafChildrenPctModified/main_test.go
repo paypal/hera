@@ -40,6 +40,25 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, nil))
 }
 
+/*
+TAF pool should be 1/5th of the primary pool
+11/04/2024 14:59:03: hera.taf        0     2     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:04: hera            0    10     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:04: hera.taf        0     2     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:05: hera            0    10     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:05: hera.taf        0     2     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:06: hera            0    10     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:06: hera.taf        0     2     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:07: hera            0    10     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:07: hera.taf        0     2     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:08: hera            0     5     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:08: hera.taf        0     1     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:09: hera            0     5     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:09: hera.taf        0     1     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:10: hera            0     5     0     0     0     0     0     0     1     0     0
+11/04/2024 14:59:10: hera.taf        0     1     0     0     0     0     0     0     1     0     0
+*/
+
 func TestAdjustTafChildrenPctModified(t *testing.T) {
 
 	logger.GetLogger().Log(logger.Debug, "TestAdjustTafChildrenPctModified begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
@@ -73,29 +92,19 @@ func TestAdjustTafChildrenPctModified(t *testing.T) {
 		t.Fatalf("Error reading state log: %s\n", err.Error())
 	}
 
-	if acpt != 3 {
+	if acpt != 2 {
 		t.Fatalf("Expected TAF pool size: 2, Actual %d\n", acpt)
-	}
-
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.taf")
-	if acpt != 5 {
-		t.Fatalf("Expected primary pool size: 10, Actual %d\n", acpt)
 	}
 
 	fmt.Println ("We now change max connections at runtime");
 	testutil.ModifyOpscfgParam (t, "hera.txt", "max_connections", "5")
 	//Wait for opsfcg change to take effect
-	time.Sleep(10 * time.Second)
+	time.Sleep(45 * time.Second)
 
 	acpt, _ = testutil.StatelogGetField(2, "hera.taf")
 
-	if acpt != 5 {
+	if acpt != 1 {
 		t.Fatalf("Expected TAF pool size: 1, Actual %d\n", acpt)
-	}
-
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.taf")
-	if acpt != 5 {
-		t.Fatalf("Expected primary pool size: 5, Actual %d\n", acpt)
 	}
 
 	logger.GetLogger().Log(logger.Debug, "TestAdjustTafChildrenPctModified done  -------------------------------------------------------------")

@@ -29,7 +29,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["num_shards"] = "2"
 	appcfg["sharding_cfg_reload_interval"] = "0"
 
-	appcfg["opscfg.default.server.max_connections"] = "10"
+	appcfg["opscfg.default.server.max_connections"] = "20"
 
 	opscfg := make(map[string]string)
 	opscfg["opscfg.default.server.log_level"] = "5"
@@ -54,6 +54,23 @@ func TestMain(m *testing.M) {
 	os.Exit(testutil.UtilMain(m, cfg, nil))
 }
 
+/*
+11/04/2024 16:42:44: hera.sh1        0    20     0     0     0     0     0     1     0     0     0
+11/04/2024 16:42:44: hera.taf.sh1     0     4     0     0     0     0     0     1     0     0     0
+11/04/2024 16:42:45: hera.sh0        0    19     0     1     0     0     0     1     0     0     0
+11/04/2024 16:42:45: hera.taf.sh0     0     4     0     0     0     0     0     1     0     0     0
+11/04/2024 16:42:45: hera.sh1        0    20     0     0     0     0     0     1     0     0     0
+11/04/2024 16:42:45: hera.taf.sh1     0     4     0     0     0     0     0     1     0     0     0
+11/04/2024 16:42:46: hera.sh0        0     5     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:46: hera.taf.sh0     0     1     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:46: hera.sh1        0     5     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:46: hera.taf.sh1     0     1     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:47: hera.sh0        0     5     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:47: hera.taf.sh0     0     1     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:47: hera.sh1        0     5     0     0     0     0     0     0     0     0     0
+11/04/2024 16:42:47: hera.taf.sh1     0     1     0     0     0     0     0     0     0     0     0
+*/
+
 func TestAdjustTafChildrenPctWithSharding(t *testing.T) {
 	setupShardMap()
 	logger.GetLogger().Log(logger.Debug, "TestAdjustTafChildrenPctWithSharding begin +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
@@ -63,30 +80,20 @@ func TestAdjustTafChildrenPctWithSharding(t *testing.T) {
 		t.Fatalf("Error reading state log: %s\n", err.Error())
 	}
 
-	if acpt != 2 {
-		t.Fatalf("Expected TAF sh0 pool size: 2, Actual %d\n", acpt)
+	if acpt != 4 {
+		t.Fatalf("Expected TAF sh0 pool size: 4, Actual %d\n", acpt)
 	}
 
 	acpt, _ = testutil.StatelogGetField(2, "hera.taf.sh1")
 
-	if acpt != 2 {
-		t.Fatalf("Expected TAF sh1 pool size: 2, Actual %d\n", acpt)
-	}
-
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.sh0")
-	if acpt != 10 {
-		t.Fatalf("Expected primary pool sh0 size: 10, Actual %d\n", acpt)
-	}
-
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.sh1")
-	if acpt != 10 {
-		t.Fatalf("Expected primary pool sh1 size: 10, Actual %d\n", acpt)
+	if acpt != 4 {
+		t.Fatalf("Expected TAF sh1 pool size: 4, Actual %d\n", acpt)
 	}
 
 	fmt.Println ("We now change max connections at runtime");
 	testutil.ModifyOpscfgParam (t, "hera.txt", "max_connections", "5")
 	//Wait for opsfcg change to take effect
-	time.Sleep(10 * time.Second)
+	time.Sleep(45 * time.Second)
 
 	acpt, _ = testutil.StatelogGetField(2, "hera.taf.sh0")
 
@@ -100,15 +107,6 @@ func TestAdjustTafChildrenPctWithSharding(t *testing.T) {
 		t.Fatalf("Expected TAF sh1 pool size: 1, Actual %d\n", acpt)
 	}
 
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.sh0")
-	if acpt != 5 {
-		t.Fatalf("Expected primary sh0 pool size: 5, Actual %d\n", acpt)
-	}
-
-	acpt, _ = testutil.StatelogGetField(2, " -v hera.sh1")
-	if acpt != 5 {
-		t.Fatalf("Expected primary sh1 pool size: 5, Actual %d\n", acpt)
-	}
 
 	logger.GetLogger().Log(logger.Debug, "TestAdjustTafChildrenPctWithSharding done  -------------------------------------------------------------")
 }

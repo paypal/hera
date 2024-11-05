@@ -25,14 +25,14 @@ var (
 func StatelogGetField(pos int, pattern ...string) (int, error) {
 	cmd := "/usr/bin/tail -n 1 state.log"
 	if len(pattern) > 0 {
-		cmd = fmt.Sprintf("/usr/bin/tail -n 1 state.log | grep '%s'", pattern[0])
-		// fmt.Println("cmd:", cmd)
+		cmd = fmt.Sprintf("/usr/bin/tac state.log | grep -m 1 -w '%s'", pattern[0])
+		fmt.Println("cmd:", cmd)
 	}
 	out, err := exec.Command("/bin/bash", "-c", cmd).Output()
 	if err != nil {
 		return -1, err
 	}
-	if len(out) != 99 {
+	if len(out) < 99 {
 		return -1, INCOMPLETE
 	}
 	c := 27 + 6*pos
