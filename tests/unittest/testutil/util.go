@@ -7,10 +7,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/paypal/hera/utility/logger"
@@ -20,12 +22,17 @@ var (
 	INCOMPLETE = errors.New("Incomplete row")
 )
 
-func StatelogGetField(pos int) (int, error) {
-	out, err := exec.Command("/bin/bash", "-c", "/usr/bin/tail -n 1 state.log").Output()
+func StatelogGetField(pos int, pattern ...string) (int, error) {
+	cmd := "/usr/bin/tail -n 1 state.log"
+	if len(pattern) > 0 {
+		cmd = fmt.Sprintf("/usr/bin/tac state.log | grep -m 1 -w '%s'", pattern[0])
+		fmt.Println("cmd:", cmd)
+	}
+	out, err := exec.Command("/bin/bash", "-c", cmd).Output()
 	if err != nil {
 		return -1, err
 	}
-	if len(out) != 99 {
+	if len(out) < 99 {
 		return -1, INCOMPLETE
 	}
 	c := 27 + 6*pos
@@ -215,4 +222,25 @@ func ClearLogsData() {
 		return
 	}
 	defer calLogFile.Close()
+}
+
+func ModifyOpscfgParam (t *testing.T, logfile string, opscfg_param string, opscfg_value string) {
+	//Read file
+	data, err := ioutil.ReadFile(runFolder + "/" + logfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	//Modify the opcfg value
+	for i, line := range lines {
+		if strings.Contains(line, opscfg_param) {
+			lines[i] = "opscfg.default.server." + opscfg_param + "=" + opscfg_value
+		}
+	}
+	output := strings.Join(lines, "\n")
+	// write to file
+	err = ioutil.WriteFile(runFolder + "/" + logfile, []byte(output), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
