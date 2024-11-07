@@ -76,7 +76,7 @@ func GetWLCfg() *WLCfg {
 func getSQL() string {
 	// TODO: add hostname in the comment
 	if len(GetConfig().ShardingPostfix) != 0 {
-		return fmt.Sprintf("SELECT scuttle_id, shard_id, read_status, write_status from %s_shard_map_%s where status = 'Y'", GetConfig().ManagementTablePrefix, GetConfig().ShardingPostfix)
+		return fmt.Sprintf("SELECT /*heraMgmt.Sharding*/ scuttle_id, shard_id, read_status, write_status from %s_shard_map_%s where status = 'Y'", GetConfig().ManagementTablePrefix, GetConfig().ShardingPostfix)
 	}
 	//TODO: is this still needed?
 	slowf := fmt.Sprintf("slow.%d", os.Getpid())
@@ -86,7 +86,7 @@ func getSQL() string {
 		n, err := f.Read(buf[:63])
 		if err == nil {
 			buf[n] = 0
-			sql := fmt.Sprintf("SELECT scuttle_id + usleep(%s) - %s, shard_id, read_status, write_status from %s_shard_map where status = 'Y'", string(buf), string(buf), GetConfig().ManagementTablePrefix)
+			sql := fmt.Sprintf("SELECT /*heraMgmt.Sharding*/ scuttle_id + usleep(%s) - %s, shard_id, read_status, write_status from %s_shard_map where status = 'Y'", string(buf), string(buf), GetConfig().ManagementTablePrefix)
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "slow shard map query ", sql)
 			}
@@ -94,7 +94,7 @@ func getSQL() string {
 		}
 	}
 	// if we get here, it means it can't get the slow query
-	return fmt.Sprintf("SELECT scuttle_id, shard_id, read_status, write_status from %s_shard_map where status = 'Y'", GetConfig().ManagementTablePrefix)
+	return fmt.Sprintf("SELECT /*heraMgmt.Sharding*/ scuttle_id, shard_id, read_status, write_status from %s_shard_map where status = 'Y'", GetConfig().ManagementTablePrefix)
 }
 
 /*

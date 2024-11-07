@@ -160,7 +160,7 @@ func loadBlockQueryBind(db *sql.DB) {
 	}
 
 	defer conn.Close()
-	q := fmt.Sprintf("SELECT /*queryBindBlocker*/ %ssqlhash, %ssqltext, bindvarname, bindvarvalue, blockperc, %smodule FROM %s_rate_limiter where %smodule='%s'", GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, g_module)
+	q := fmt.Sprintf("SELECT /*heraMgmt.QueryBindBlocker*/ %ssqlhash, %ssqltext, bindvarname, bindvarvalue, blockperc, %smodule FROM %s_rate_limiter where %smodule='%s'", GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().StateLogPrefix, GetConfig().ManagementTablePrefix, GetConfig().StateLogPrefix, g_module)
 	logger.GetLogger().Log(logger.Info, "Loading query bind blocker meta-sql "+q)
 	stmt, err := conn.PrepareContext(ctx, q)
 	if err != nil {
