@@ -1,5 +1,5 @@
 overall=0
-for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover)'`
+for d in `ls -F tests/unittest | grep /$ | sed -e "s,/,," | egrep -v '(mysql_recycle|log_checker_initdb|testutil|rac_maint|mysql_direct|failover|otel_basic|otel_incorrect_endpoint|otel_sharding|otel_with_skip_cal)'`
 do 
     echo ==== $d
     pushd tests/unittest/$d 
