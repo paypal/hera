@@ -116,7 +116,7 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 func (pool *WorkerPool) spawnWorker(wid int) error {
 	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
-	worker.setState(wsSchd)
+	worker.setState(wsSchd, false)
 	millis := rand.Intn(GetConfig().RandomStartMs)
 	if logger.GetLogger().V(logger.Alert) {
 		logger.GetLogger().Log(logger.Alert, wid, "randomized start ms", millis)
@@ -495,7 +495,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		worker.DrainResponseChannel(time.Microsecond * 10)
 	}
 
-	worker.setState(wsAcpt)
+	worker.setState(wsAcpt, true)
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
 		go func(w *WorkerClient) {
 			if logger.GetLogger().V(logger.Info) {
