@@ -54,6 +54,17 @@ const (
 	MaxWorkerState                  = 7
 )
 
+var validStateTransitionMap map[HeraWorkerStatus][]HeraWorkerStatus = map[HeraWorkerStatus][]HeraWorkerStatus{
+	wsUnset: {wsSchd, wsInit},
+	wsSchd:  {wsInit, wsUnset},
+	wsInit:  {wsSchd, wsAcpt, wsUnset},
+	wsAcpt:  {wsBusy},
+	wsBusy:  {wsWait, wsQuce, wsFnsh},
+	wsWait:  {wsQuce, wsFnsh},
+	wsFnsh:  {wsAcpt},
+	wsQuce:  {wsInit, wsFnsh}, //Forceful termination target state "wsInit", Graceful termination "wsFnsh"
+}
+
 const bfChannelSize = 30
 
 // workerMsg is used to communicate with the coordinator, it contains the control message metadata plus the actual payload
