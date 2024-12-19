@@ -21,20 +21,21 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
-	"net"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync/atomic"
-	"syscall"
-	"time"
-
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"math/rand"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 // HeraWorkerStatus defines the posible states the worker can be in
@@ -153,6 +154,9 @@ type WorkerClient struct {
 
 	// Throtle workers lifecycle
 	thr Throttler
+
+	//mutex lock to update state from single go-routine
+	stateLock sync.Mutex
 }
 
 type strandedCalInfo struct {
@@ -633,11 +637,11 @@ type WorkerClientRecoverParam struct {
 func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam WorkerClientRecoverParam, info *strandedCalInfo, param ...int) {
 	if atomic.CompareAndSwapInt32(&worker.isUnderRecovery, 0, 1) {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "begin recover worker: ", worker.pid)
+			logger.GetLogger().Log(logger.Debug, "begin recover worker Id: ", worker.ID, " process Id: ", worker.pid)
 		}
 	} else {
 		if logger.GetLogger().V(logger.Debug) {
-			logger.GetLogger().Log(logger.Debug, "worker already underrecovery: ", worker.pid)
+			logger.GetLogger().Log(logger.Debug, "worker already underrecovery: ", worker.ID, " process Id: ", worker.pid)
 		}
 		//
 		// defer will not be called.
@@ -665,6 +669,9 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 		return
 	}
 	priorWorkerStatus := worker.Status
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, fmt.Sprintf("about to recover worker Id: %d, worker process Id: %d as part of reconvery process, setting worker state to Quece", worker.ID, worker.pid))
+	}
 	worker.setState(wsQuce)
 	killparam := common.StrandedClientClose
 	if len(param) > 0 {
@@ -677,8 +684,12 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 		case <-workerRecoverTimeout:
 			worker.thr.CanRun()
 			worker.setState(wsInit) // Set the worker state to INIT when we decide to Terminate the worker
+			GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: worker.Status})
 			worker.Terminate()
 			worker.callogStranded("RECYCLED", info)
+			if logger.GetLogger().V(logger.Debug) {
+				logger.GetLogger().Log(logger.Debug, fmt.Sprintf("worker Id: %d and process: %d recovered as part of workerRecoverTimeout set status to INIT", worker.ID, worker.pid))
+			}
 			return
 		case msg, ok := <-worker.channel():
 			if !ok {
@@ -716,6 +727,9 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 					worker.callogStranded("RECOVERED", info)
 
 					worker.setState(wsFnsh)
+					if logger.GetLogger().V(logger.Debug) {
+						logger.GetLogger().Log(logger.Debug, fmt.Sprintf("worker Id: %d, worker process: %d recovered as part of message from channel set status to FINSH", worker.ID, worker.pid))
+					}
 					p.ReturnWorker(worker, ticket)
 					//
 					// donot set state to ACPT since worker could already be picked up by another
@@ -966,16 +980,19 @@ func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error
 
 // setState updates the worker state
 func (worker *WorkerClient) setState(status HeraWorkerStatus) {
-	if worker.Status == status {
+	currentStatus := worker.Status
+	if currentStatus == status {
 		return
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "worker pid=", worker.pid, " changing status from", worker.Status, "to", status)
+	if worker.isUnderRecovery == 1 && (status == wsWait || status == wsBusy) {
+		logger.GetLogger().Log(logger.Warning, "worker : ", worker.ID, "processId: ", worker.pid, " seeing invalid state transition from ", currentStatus, " to ", status)
+		if logger.GetLogger().V(logger.Debug) {
+			worker.printCallStack()
+		}
+		return
 	}
-
-	// TODO: sync atomic set
+	//This checks whether state transition is valid or not
 	worker.Status = status
-
 	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
 }
 
@@ -1001,4 +1018,28 @@ func (worker *WorkerClient) isProcessRunning() bool {
 		return false
 	}
 	return true
+}
+
+func (worker *WorkerClient) printCallStack() {
+	// Define a large enough buffer to capture the stack.
+	const depth = 64
+	pcs := make([]uintptr, depth)
+
+	// Collect the stack trace.
+	n := runtime.Callers(2, pcs) // Skip the first 2 callers (runtime and printCallStack itself).
+	frames := runtime.CallersFrames(pcs[:n])
+	indent := 0
+	// Iterate through the frames and print function names and line numbers.
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("worker Id= %d Process Id= %d Call Stack:", worker.ID, worker.pid))
+	for {
+		frame, more := frames.Next()
+		builder.WriteString(fmt.Sprintf("%s - %s\n", strings.Repeat("  ", indent), frame.Function))
+		builder.WriteString(fmt.Sprintf("%s  at %s:%d\n", strings.Repeat("  ", indent), frame.File, frame.Line))
+		indent++
+		if !more {
+			break
+		}
+	}
+	logger.GetLogger().Log(logger.Debug, builder.String())
 }

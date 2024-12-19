@@ -76,6 +76,13 @@ func TestPoolDempotency(t *testing.T) {
 	wd := NewWorker(3, wtypeRW, 0, 0, "cloc", nil)
 	we := NewWorker(4, wtypeRW, 0, 0, "cloc", nil)
 	wf := NewWorker(5, wtypeRW, 0, 0, "cloc", nil)
+	wa.setState(wsInit)
+	wb.setState(wsInit)
+	wc.setState(wsInit)
+	wd.setState(wsInit)
+	we.setState(wsInit)
+	wf.setState(wsInit)
+
 	wa.setState(wsAcpt)
 	wb.setState(wsAcpt)
 	wc.setState(wsAcpt)
