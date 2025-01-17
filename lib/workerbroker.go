@@ -19,12 +19,12 @@ package lib
 
 import (
 	"errors"
+	"github.com/paypal/hera/utility/logger"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
-
-	"github.com/paypal/hera/utility/logger"
+	"time"
 )
 
 // HeraWorkerType defines the possible worker type
@@ -291,7 +291,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 							if errors.Is(err, syscall.ECHILD) {
 								break
 							} else {
-								logger.GetLogger().Log(logger.Verbose, "error in wait signal: ", err)
+								logger.GetLogger().Log(logger.Warning, "error in wait signal: ", err)
 							}
 						}
 					}
@@ -327,6 +327,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 										logger.GetLogger().Log(logger.Debug, "worker (id=", workerclient.ID, "pid=", workerclient.pid, ") received signal. transits from state ", workerclient.Status, " to terminated.")
 									}
 									workerclient.setState(wsUnset) // Set the state to UNSET to make sure worker does not stay in FNSH state so long
+									time.Sleep(5 * time.Second)
 									pool.RestartWorker(workerclient)
 								}
 							} else {

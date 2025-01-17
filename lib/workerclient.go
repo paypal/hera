@@ -148,7 +148,7 @@ type WorkerClient struct {
 	rqId uint32
 
 	//
-	// under recovery. 0: no; 1: yes. use atomic.CompareAndSwapInt32 to check state.
+	// under recovery. 0: no; 1: yes. use atomic.CompareAndSwapInt32 to check state and use atomic.LoadInt32 to read state
 	//
 	isUnderRecovery int32
 
@@ -204,7 +204,7 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 	}
 	// TODO
 	worker.racID = -1
-	worker.isUnderRecovery = 0
+	atomic.CompareAndSwapInt32(&worker.isUnderRecovery, 1, 0)
 	if worker.ctrlCh != nil {
 		close(worker.ctrlCh)
 	}
@@ -214,6 +214,7 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 	// msg. if adaptiveqmgr blocks on a non-buffered channel, there is a deadlock when return worker
 	//
 	worker.ctrlCh = make(chan *workerMsg, 5)
+
 	return worker
 }
 
@@ -590,7 +591,7 @@ func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior Hera
 			param = common.StrandedSkipBreakHiLoad
 		}
 	} else {
-		rv = time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+		rv = time.After(time.Millisecond * 100000)
 	}
 	buff := []byte{byte(param), byte((worker.rqId & 0xFF000000) >> 24), byte((worker.rqId & 0x00FF0000) >> 16),
 		byte((worker.rqId & 0x0000FF00) >> 8), byte((worker.rqId & 0x000000FF))}
@@ -643,9 +644,6 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 		if logger.GetLogger().V(logger.Debug) {
 			logger.GetLogger().Log(logger.Debug, "worker already underrecovery: ", worker.ID, " process Id: ", worker.pid)
 		}
-		//
-		// defer will not be called.
-		//
 		return
 	}
 	defer func() {
@@ -725,7 +723,6 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 						logger.GetLogger().Log(logger.Info, "stranded conn recovered", worker.Type, worker.pid)
 					}
 					worker.callogStranded("RECOVERED", info)
-
 					worker.setState(wsFnsh)
 					if logger.GetLogger().V(logger.Debug) {
 						logger.GetLogger().Log(logger.Debug, fmt.Sprintf("worker Id: %d, worker process: %d recovered as part of message from channel set status to FINSH", worker.ID, worker.pid))
@@ -918,7 +915,7 @@ func (worker *WorkerClient) doRead() {
 				worker.setState(wsWait)
 			}
 			if eor != common.EORMoreIncomingRequests {
-				worker.outCh <- &workerMsg{data: payload, eor: true, free: (eor == common.EORFree), inTransaction: ((eor == common.EORInTransaction) || (eor == common.EORInCursorInTransaction)), rqId: rqId}
+				worker.outCh <- &workerMsg{data: payload, eor: true, free: (eor == common.EORFree), inTransaction: ((eor == common.EORInTransaction) || (eor == common.EORInCursorInTransaction)), rqId: uint32(rqId)}
 				payload = nil
 			} else {
 				// buffer data to avoid race condition
@@ -955,8 +952,13 @@ func (worker *WorkerClient) doRead() {
 
 // Write sends a message to the worker
 func (worker *WorkerClient) Write(ns *netstring.Netstring, nsCount uint16) error {
+	if atomic.LoadInt32(&worker.isUnderRecovery) == 1 {
+		if logger.GetLogger().V(logger.Alert) {
+			logger.GetLogger().Log(logger.Alert, "workerclient write error: worker is under recovery.")
+		}
+		return ErrWorkerFail
+	}
 	worker.setState(wsBusy)
-
 	worker.rqId += uint32(nsCount)
 
 	//
@@ -984,7 +986,7 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 	if currentStatus == status {
 		return
 	}
-	if worker.isUnderRecovery == 1 && (status == wsWait || status == wsBusy) {
+	if atomic.LoadInt32(&worker.isUnderRecovery) == 1 && (status == wsWait || status == wsBusy) {
 		logger.GetLogger().Log(logger.Warning, "worker : ", worker.ID, "processId: ", worker.pid, " seeing invalid state transition from ", currentStatus, " to ", status)
 		if logger.GetLogger().V(logger.Debug) {
 			worker.printCallStack()
