@@ -193,7 +193,6 @@ func (pool *WorkerPool) RestartWorker(worker *WorkerClient) (err error) {
 	}
 	pool.activeQ.Remove(worker)
 	pool.poolCond.L.Unlock()
-	time.Sleep(time.Millisecond * 3000)
 	go pool.spawnWorker(worker.ID)
 	return nil
 }
