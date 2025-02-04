@@ -79,8 +79,8 @@ func IsPidRunning(pid int) (isRunning bool) {
 }
 
 /*
-1st return value: the number
-2nd return value: the number of digits
+	1st return value: the number
+	2nd return value: the number of digits
 */
 func atoi(bf []byte) (int, int) {
 	sz := len(bf)
@@ -96,8 +96,8 @@ func atoi(bf []byte) (int, int) {
 }
 
 /*
-1st return value: the number
-2nd return value: the number of digits
+	1st return value: the number
+	2nd return value: the number of digits
 */
 func atoui(str string) (uint64, int) {
 	sz := len(str)
@@ -163,14 +163,4 @@ func ExtractSQLHash(request *netstring.Netstring) (uint32, bool) {
 		}
 	}
 	return 0, false
-}
-
-// Contains This is utility method to check whether value present in list or not
-func Contains[T comparable](slice []T, value T) bool {
-	for _, val := range slice {
-		if val == value {
-			return true
-		}
-	}
-	return false
 }
