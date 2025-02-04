@@ -701,6 +701,10 @@ func (worker *WorkerClient) Recover(p *WorkerPool, ticket string, recovParam Wor
 			if logger.GetLogger().V(logger.Debug) {
 				logger.GetLogger().Log(logger.Debug, fmt.Sprintf("worker Id: %d and process: %d recovered as part of workerRecoverTimeout set status to INIT", worker.ID, worker.pid))
 			}
+			err := p.RestartWorker(worker)
+			if err != nil {
+				logger.GetLogger().Log(logger.Alert, fmt.Sprintf("worker: %d failed to restart worker process", worker.ID))
+			}
 			return
 		case msg, ok := <-worker.channel():
 			if !ok {
