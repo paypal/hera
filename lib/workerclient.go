@@ -61,7 +61,7 @@ var validStateTransitionMap map[HeraWorkerStatus][]HeraWorkerStatus = map[HeraWo
 	wsAcpt:  {wsBusy},
 	wsBusy:  {wsWait, wsQuce, wsFnsh},
 	wsWait:  {wsQuce, wsFnsh},
-	wsFnsh:  {wsAcpt, wsSchd},
+	wsFnsh:  {wsAcpt},
 	wsQuce:  {wsInit, wsFnsh}, //Forceful termination target state "wsInit", Graceful termination "wsFnsh"
 }
 
