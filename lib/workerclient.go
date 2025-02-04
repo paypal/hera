@@ -54,6 +54,17 @@ const (
 	MaxWorkerState                  = 7
 )
 
+var validStateTransitionMap map[HeraWorkerStatus][]HeraWorkerStatus = map[HeraWorkerStatus][]HeraWorkerStatus{
+	wsUnset: {wsSchd, wsInit},
+	wsSchd:  {wsInit, wsUnset},
+	wsInit:  {wsSchd, wsAcpt, wsUnset},
+	wsAcpt:  {wsBusy},
+	wsBusy:  {wsWait, wsQuce, wsFnsh},
+	wsWait:  {wsQuce, wsFnsh},
+	wsFnsh:  {wsAcpt, wsSchd},
+	wsQuce:  {wsInit, wsFnsh}, //Forceful termination target state "wsInit", Graceful termination "wsFnsh"
+}
+
 const bfChannelSize = 30
 
 // workerMsg is used to communicate with the coordinator, it contains the control message metadata plus the actual payload
@@ -984,16 +995,19 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 	if currentStatus == status {
 		return
 	}
-	if worker.isUnderRecovery == 1 && (status == wsWait || status == wsBusy) {
+	//This checks whether state transition is valid or not
+	if Contains(validStateTransitionMap[currentStatus], status) {
+		worker.stateLock.Lock()
+		worker.Status = status
+		worker.stateLock.Unlock()
+		GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
+	} else {
 		logger.GetLogger().Log(logger.Warning, "worker : ", worker.ID, "processId: ", worker.pid, " seeing invalid state transition from ", currentStatus, " to ", status)
 		if logger.GetLogger().V(logger.Debug) {
 			worker.printCallStack()
 		}
-		return
 	}
-	//This checks whether state transition is valid or not
-	worker.Status = status
-	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
+
 }
 
 // Channel returns the worker out channel
