@@ -591,7 +591,7 @@ func (worker *WorkerClient) initiateRecover(param int, p *WorkerPool, prior Hera
 			param = common.StrandedSkipBreakHiLoad
 		}
 	} else {
-		rv = time.After(time.Millisecond * time.Duration(GetConfig().StrandedWorkerTimeoutMs))
+		rv = time.After(time.Millisecond * 100000)
 	}
 	buff := []byte{byte(param), byte((worker.rqId & 0xFF000000) >> 24), byte((worker.rqId & 0x00FF0000) >> 16),
 		byte((worker.rqId & 0x0000FF00) >> 8), byte((worker.rqId & 0x000000FF))}
