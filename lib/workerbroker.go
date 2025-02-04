@@ -64,7 +64,7 @@ type WorkerBroker struct {
 	// and restart the stopped workers.
 	//
 	pidworkermap map[int32]*WorkerClient
-	lock         sync.Mutex
+	lock sync.Mutex
 
 	//
 	// loaded from cfg once and used later.
@@ -204,9 +204,7 @@ func (broker *WorkerBroker) GetWorkerPoolCfgs() (pCfgs []map[HeraWorkerType]*Wor
 
 // GetWorkerPool get the worker pool object for the type and id
 // ids holds optional paramenters.
-//
-//	ids[0] == instance id; ids[1] == shard id.
-//
+//   ids[0] == instance id; ids[1] == shard id.
 // if a particular id is not set, it defaults to 0.
 // TODO: interchange sid <--> instId since instId is not yet used
 func (broker *WorkerBroker) GetWorkerPool(wType HeraWorkerType, ids ...int) (workerbroker *WorkerPool, err error) {
@@ -318,7 +316,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 								if logger.GetLogger().V(logger.Debug) {
 									logger.GetLogger().Log(logger.Debug, "worker (pid=", workerclient.pid, ") received signal. transits from state ", workerclient.Status, " to terminated.")
 								}
-								workerclient.setState(wsUnset, true) // Set the state to UNSET to make sure worker does not stay in FNSH state so long
+								workerclient.setState(wsUnset) // Set the state to UNSET to make sure worker does not stay in FNSH state so long
 								pool.RestartWorker(workerclient)
 							}
 						} else {
@@ -367,8 +365,8 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 }
 
 /*
-resizePool calls workerpool.Resize to resize a worker pool when the dynamic configuration of
-the number of workers changed
+	resizePool calls workerpool.Resize to resize a worker pool when the dynamic configuration of
+	the number of workers changed
 */
 func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, shardID int) {
 	broker.poolCfgs[0][wType].maxWorkerCnt = maxWorkers
@@ -383,7 +381,7 @@ func (broker *WorkerBroker) resizePool(wType HeraWorkerType, maxWorkers int, sha
 }
 
 /*
-changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
+	changeMaxWorkers is called when the dynamic config changed, it calls resizePool() for all the pools
 */
 func (broker *WorkerBroker) changeMaxWorkers() {
 	wW := GetNumWWorkers(0)

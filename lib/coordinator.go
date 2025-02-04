@@ -831,7 +831,6 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		// donot return a stranded worker. recover inserts a good worker back to pool.
 		//
 		if err == ErrSaturationKill {
-			logger.GetLogger().Log(logger.Info, "trigger recovery as part of ErrSaturationKill")
 			go worker.Recover(workerpool, ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String(), nameSuffix: "_SATURATION_RECOVERED"}, common.StrandedSaturationRecover)
 		} else {
 			go worker.Recover(workerpool, ticket, WorkerClientRecoverParam{allowSkipOciBreak: true}, &strandedCalInfo{raddr: crd.conn.RemoteAddr().String(), laddr: crd.conn.LocalAddr().String()})
@@ -926,7 +925,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			// The worker is in ACPT state.
 			// It will not finish recovery because of ACPT. The worker will never get back into the pool.
 			// Just marking the state as FNSH and dispatchRequest will return the worker back to the pool.
-			worker.setState(wsFnsh, false)
+			worker.setState(wsFnsh)
 			return false, ErrReqParseFail
 		}
 		cnt := 1
