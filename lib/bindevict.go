@@ -54,9 +54,9 @@ func GetBindEvict() *BindEvict {
 	}
 	return cfg.(*BindEvict)
 }
-func (this *BindEvict) Copy() *BindEvict {
-	out := BindEvict{BindThrottle: make(map[uint32]map[string]*BindThrottle)}
-	for k, v := range this.BindThrottle {
+func (bindEvict *BindEvict) Copy() *BindEvict {
+	out := BindEvict{BindThrottle:make(map[uint32]map[string]*BindThrottle)}
+	for k,v := range bindEvict.BindThrottle {
 		out.BindThrottle[k] = v
 	}
 	return &out
@@ -85,25 +85,6 @@ func (entry *BindThrottle) decrAllowEveryX(y int) {
 		return
 	}
 	entry.AllowEveryX = 0
-	GetBindEvict().lock.Lock()
-	defer GetBindEvict().lock.Unlock()
-	// delete entry
-	if len(GetBindEvict().BindThrottle[entry.Sqlhash]) == 1 {
-		updateCopy := GetBindEvict().Copy()
-		delete(updateCopy.BindThrottle, entry.Sqlhash)
-		gBindEvict.Store(updateCopy)
-	} else {
-		// copy everything except bindKV (skipping it is deleting it)
-		bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
-		updateCopy := make(map[string]*BindThrottle)
-		for k, v := range GetBindEvict().BindThrottle[entry.Sqlhash] {
-			if k == bindKV {
-				continue
-			}
-			updateCopy[k] = v
-		}
-		GetBindEvict().BindThrottle[entry.Sqlhash] = updateCopy
-	}
 }
 func (entry *BindThrottle) incrAllowEveryX() {
 	if logger.GetLogger().V(logger.Warning) {
@@ -116,10 +97,32 @@ func (entry *BindThrottle) incrAllowEveryX() {
 	}
 }
 
-func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
-	GetBindEvict().lock.Lock()
-	sqlBinds := GetBindEvict().BindThrottle[sqlhash]
-	GetBindEvict().lock.Unlock()
+func (bindEvict *BindEvict) updateThrottle(entry *BindThrottle) {
+	// delete entry
+	if len(bindEvict.BindThrottle[entry.Sqlhash]) == 1 {
+		updateCopy := bindEvict.Copy()
+		delete(updateCopy.BindThrottle, entry.Sqlhash)
+		gBindEvict.Store(updateCopy)
+	} else {
+		// copy everything except bindKV (skipping it is deleting it)
+		bindKV := fmt.Sprintf("%s|%s", entry.Name, entry.Value)
+		updateCopy := bindEvict.Copy()
+		updateBindThrottleCopy := make(map[string]*BindThrottle)
+		for k,v := range bindEvict.BindThrottle[entry.Sqlhash] {
+			if k == bindKV {
+				continue
+			}
+			updateBindThrottleCopy[k] = v
+		}
+		updateCopy.BindThrottle[entry.Sqlhash] = updateBindThrottleCopy
+		gBindEvict.Store(updateCopy)
+	}
+}
+
+func (bindEvict *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
+	bindEvict.lock.Lock()
+	defer bindEvict.lock.Unlock()
+	sqlBinds := bindEvict.BindThrottle[sqlhash]
 	for k0, v := range bindKV /*parseBinds(request)*/ {
 		k := NormalizeBindName(k0)
 		concatKey := fmt.Sprintf("%s|%s", k, v)
@@ -143,6 +146,7 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		gap := now.Sub(*recent).Seconds() * GetConfig().BindEvictionDecrPerSec
 		entry.decrAllowEveryX(int(gap))
 		if entry.AllowEveryX == 0 {
+			bindEvict.updateThrottle(entry)
 			return false, nil
 		}
 
