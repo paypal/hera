@@ -21,8 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strings"
 	"sync/atomic"
+	"strings"
 	"time"
 
 	"github.com/paypal/hera/cal"
@@ -118,7 +118,7 @@ type BindCount struct {
 	Workers map[string]*WorkerClient // lookup by ticket
 }
 
-func bindEvictNameOk(bindName string) bool {
+func bindEvictNameOk(bindName string) (bool) {
 	commaNames := GetConfig().BindEvictionNames
 	if len(commaNames) == 0 {
 		// for tests, allow all names to be subject to bind eviction
@@ -126,7 +126,7 @@ func bindEvictNameOk(bindName string) bool {
 	}
 	commaNames = strings.ToLower(commaNames)
 	bindName = strings.ToLower(bindName)
-	for _, okSubname := range strings.Split(commaNames, ",") {
+	for _, okSubname := range strings.Split(commaNames,",") {
 		if strings.Contains(bindName, okSubname) {
 			return true
 		}
@@ -134,15 +134,12 @@ func bindEvictNameOk(bindName string) bool {
 	return false
 }
 
-/*
-	A bad query with multiple binds will add independent bind throttles to all
-
-bind name and values
-*/
-func (mgr *adaptiveQueueManager) doBindEviction() int {
+/* A bad query with multiple binds will add independent bind throttles to all
+bind name and values */
+func (mgr *adaptiveQueueManager) doBindEviction() (int) {
 	throttleCount := 0
 	GetBindEvict().lock.Lock()
-	for _, keyValues := range GetBindEvict().BindThrottle {
+	for _,keyValues := range GetBindEvict().BindThrottle {
 		throttleCount += len(keyValues)
 	}
 	GetBindEvict().lock.Unlock()
@@ -175,14 +172,14 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 			}
 			continue
 		}
-		contextBinds := parseBinds(request)
-		sqlsrcPrefix := worker.clientHostPrefix.Load().(string)
-		sqlsrcApp := worker.clientApp.Load().(string)
+                contextBinds := parseBinds(request)
+                sqlsrcPrefix := worker.clientHostPrefix.Load().(string)
+                sqlsrcApp := worker.clientApp.Load().(string)
 		if sqlsrcPrefix != "" {
 			contextBinds[SrcPrefixAppKey] = fmt.Sprintf("%s%s", sqlsrcPrefix, sqlsrcApp)
 			if logger.GetLogger().V(logger.Debug) {
-				msg := fmt.Sprintf("Req info: Add AZ+App to contextBinds: %s", contextBinds[SrcPrefixAppKey])
-				logger.GetLogger().Log(logger.Debug, msg)
+                                msg := fmt.Sprintf("Req info: Add AZ+App to contextBinds: %s", contextBinds[SrcPrefixAppKey])
+                                logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
 		for bindName0, bindValue := range contextBinds {
@@ -203,8 +200,8 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 			}
 			concatKey := fmt.Sprintf("%d|%s|%s", sqlhash, bindName, bindValue)
 			if logger.GetLogger().V(logger.Debug) {
-				msg := fmt.Sprintf("Req info: lookup concatKey = %s in bindCounts", concatKey)
-				logger.GetLogger().Log(logger.Debug, msg)
+                                msg := fmt.Sprintf("Req info: lookup concatKey = %s in bindCounts", concatKey)
+                                logger.GetLogger().Log(logger.Debug, msg)
 			}
 			entry, ok := bindCounts[concatKey]
 			if !ok {
@@ -213,7 +210,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 					Name:    bindName,
 					Value:   bindValue,
 					Workers: make(map[string]*WorkerClient),
-				}
+					}
 				bindCounts[concatKey] = entry
 			}
 
@@ -230,7 +227,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 		bindName := entry.Name
 		bindValue := entry.Value
 
-		if len(entry.Workers) < int(float64(GetConfig().BindEvictionThresholdPct)/100.*float64(numDispatchedWorkers)) {
+		if len(entry.Workers) < int( float64(GetConfig().BindEvictionThresholdPct)/100.*float64(numDispatchedWorkers) ) {
 			continue
 		}
 		// evict sqlhash, bindvalue
@@ -244,7 +241,7 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 
 			if mgr.dispatchedWorkers[worker] != ticket ||
 				worker.Status == wsFnsh ||
-				atomic.LoadInt32(&worker.isUnderRecovery) == 1 /* Recover() uses compare & swap */ {
+				worker.isUnderRecovery == 1 /* Recover() uses compare & swap */ {
 
 				continue
 			}
@@ -277,10 +274,10 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 			throttle.incrAllowEveryX()
 		} else {
 			throttle := BindThrottle{
-				Name:        bindName,
-				Value:       bindValue,
-				Sqlhash:     sqlhash,
-				AllowEveryX: 3*len(entry.Workers) + 1,
+				Name:          bindName,
+				Value:         bindValue,
+				Sqlhash:       sqlhash,
+				AllowEveryX:   3*len(entry.Workers) + 1,
 			}
 			now := time.Now()
 			throttle.RecentAttempt.Store(&now)
@@ -467,7 +464,7 @@ func (mgr *adaptiveQueueManager) getWorkerToRecover() (*WorkerClient, bool) {
 				}
 			}
 		} else {
-			if worker != nil && worker.Status == wsFnsh {
+			if worker != nil && worker.Status == wsFnsh  {
 				if logger.GetLogger().V(logger.Warning) {
 					logger.GetLogger().Log(logger.Warning, "worker.pid state is in FNSH, so skipping", worker.pid)
 				}
