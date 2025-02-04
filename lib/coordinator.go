@@ -925,7 +925,7 @@ func (crd *Coordinator) doRequest(ctx context.Context, worker *WorkerClient, req
 			// The worker is in ACPT state.
 			// It will not finish recovery because of ACPT. The worker will never get back into the pool.
 			// Just marking the state as FNSH and dispatchRequest will return the worker back to the pool.
-			worker.setState(wsFnsh)
+			worker.setState(wsFnsh, false)
 			return false, ErrReqParseFail
 		}
 		cnt := 1

@@ -318,7 +318,7 @@ func (broker *WorkerBroker) startWorkerMonitor() (err error) {
 								if logger.GetLogger().V(logger.Debug) {
 									logger.GetLogger().Log(logger.Debug, "worker (pid=", workerclient.pid, ") received signal. transits from state ", workerclient.Status, " to terminated.")
 								}
-								workerclient.setState(wsUnset) // Set the state to UNSET to make sure worker does not stay in FNSH state so long
+								workerclient.setState(wsUnset, true) // Set the state to UNSET to make sure worker does not stay in FNSH state so long
 								pool.RestartWorker(workerclient)
 							}
 						} else {
