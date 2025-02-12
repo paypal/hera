@@ -122,7 +122,7 @@ static const unsigned int DEFAULT_TRANS_TIMEOUT = 5;	//!< Default global transac
 static const char *const DEFAULT_MODULE_NAME = "Unknown";	//!< Default module name
 
 //!<Key that occ client sends client machine name, should match OCCClient::send_client_info
-static const std::string SERVER_VERSION = "10g"; 
+static const std::string SERVER_VERSION = "19c";
 static const std::string SERVER_RELEASE_PREFIX = "Enterprise Edition Release ";
 static const std::string SERVER_DB_PREFIX = "Oracle Database ";
 static const std::string CLIENT_NAME_PREFIX = "Name: "; 
@@ -1033,6 +1033,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				if (m_sql_rewritten) {
 					c->AddData("sqlhash", m_orig_query_hash);
 				}
+				c->AddData("SQL_ID", sql_id.c_str());
 			}
 			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_bind_data.c_str()), 
 					   m_bind_data.length(), OCI_ATTR_CLIENT_IDENTIFIER, errhp);
@@ -1170,6 +1171,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			CalTransaction cal_trans("FETCH");
 			cal_trans.SetName(m_query_hash);
 			cal_trans.AddData("HOST", m_dbhost_name);
+			cal_trans.AddData("SQL_ID", sql_id.c_str());
 			
 			//fetch a block of rows
 			long long fetched_bsize = fetch(_line);
@@ -1651,6 +1653,16 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		log_oracle_error(rc,"Failed to set failover callback.");
 	}
 	
+	// Enable statement cache
+	if (enable_cache)
+	{
+		rc = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, &max_cache_size, (ub4)0, (ub4)OCI_ATTR_STMTCACHESIZE, errhp);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc, "Failed to set statement cache.");
+		}
+	}
+
 	has_session = true;
 	cal_trans.Completed();
 
@@ -2377,10 +2389,10 @@ int OCCChild::execute_query(const std::string& query)
 		return -1;
 	}
 
-	rc = OCIStmtPrepare(
-			stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
-			(ub4) query.length(),
-			(ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp,
+						stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
+						(ub4)query.length(),
+						(ub4)OCI_NTV_SYNTAX, (ub4)OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
@@ -3131,13 +3143,13 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare(
-				entry->stmthp,
-				errhp,
-				(text *) const_cast<char *> (statement.c_str()),
-				(ub4) statement.length(),
-				(ub4) OCI_NTV_SYNTAX,
-				(ub4) OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp,
+							 entry->stmthp,
+							 errhp,
+							 (text *)const_cast<char *>(statement.c_str()),
+							 (ub4)statement.length(),
+							 (ub4)OCI_NTV_SYNTAX,
+							 OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, entry);
@@ -3160,6 +3172,18 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			return -1;
 		}
 
+        // Get SQL_ID
+		char sql_id_data[32];
+		ub4 sql_id_len = sizeof(sql_id_data);
+		rc = OCIAttrGet((CONST dvoid *)entry->stmthp, OCI_HTYPE_STMT, sql_id_data, &sql_id_len, OCI_ATTR_SQL_ID, errhp);
+		if (rc != OCI_SUCCESS)
+		{
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
+			sql_error(rc, entry);
+			free_stmt(entry);
+			return -1;
+		}
+		sql_id = std::string(sql_id_data, sql_id_len);
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
 		//			statement.contains(" FOR UPDATE"))
@@ -5393,7 +5417,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 						sys_context('USERENV', 'DB_UNIQUE_NAME') AS db_uname, \
 						sys_context('USERENV', 'SID') AS sid \
 						FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'";
-	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(sql), strlen(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, stmthp, errhp, (text *)const_cast<char *>(sql), strlen(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
@@ -5504,7 +5528,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 			return -1;
 		}
 
-		rc = OCIStmtPrepare(m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, m_session_var_stmthp, errhp, (text *)const_cast<char *>(_sql.c_str()), (ub4)_sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{
 			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);

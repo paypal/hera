@@ -278,6 +278,7 @@ private:
 	std::string m_orig_query_hash;
 	int bits_to_match; // Sampled Bind Hash logging. Sampling ratio (1:pow(2,bits_to_match)). Default 1 (Sampling ratio 1:2)
 	unsigned long long int bit_mask; // Compute based on bits_to_match
+	std::string sql_id;				 // Database SQL ID for statement
 
 public:
 	// need to pass in a server socket which is already bound to the correct port
