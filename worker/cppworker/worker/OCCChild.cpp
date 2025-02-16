@@ -2389,10 +2389,10 @@ int OCCChild::execute_query(const std::string& query)
 		return -1;
 	}
 
-	rc = OCIStmtPrepare2(svchp,
-						stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
 						(ub4)query.length(),
-						(ub4)OCI_NTV_SYNTAX, (ub4)OCI_DEFAULT);
+						NULL, 0,
+						(ub4)OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
@@ -3143,11 +3143,12 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare2(svchp,
-							 entry->stmthp,
+		rc = OCIStmtPrepare2(svchp, &entry->stmthp,
 							 errhp,
 							 (text *)const_cast<char *>(statement.c_str()),
 							 (ub4)statement.length(),
+							 NULL,  //No Key
+							 0,  //Key Length
 							 (ub4)OCI_NTV_SYNTAX,
 							 OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
@@ -5417,7 +5418,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 						sys_context('USERENV', 'DB_UNIQUE_NAME') AS db_uname, \
 						sys_context('USERENV', 'SID') AS sid \
 						FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'";
-	rc = OCIStmtPrepare2(svchp, stmthp, errhp, (text *)const_cast<char *>(sql), strlen(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(sql), strlen(sql), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
@@ -5528,7 +5529,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 			return -1;
 		}
 
-		rc = OCIStmtPrepare2(svchp, m_session_var_stmthp, errhp, (text *)const_cast<char *>(_sql.c_str()), (ub4)_sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, &m_session_var_stmthp, errhp, (text *)const_cast<char *>(_sql.c_str()), (ub4)_sql.length(), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{
 			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
