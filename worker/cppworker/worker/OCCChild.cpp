@@ -205,9 +205,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	enable_hb_fix(false),
 	hb_sender(NULL),
 	enable_cache(true),
+	enable_oci_stmt_cache(true),
 	stmt_cache(NULL),
 	cur_stmt(NULL),
 	max_cache_size(0),
+	max_oci_stmt_cache_size(0)
 	max_statement_age(0),
 	cache_size(0),
 	cache_size_peak(0),
@@ -340,6 +342,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	// initialize statement cache vars
 	// check if statement caching is enabled
 	enable_cache = config->is_switch_enabled("enable_cache", FALSE);
+
+	//Enable OCI statement cache
+	enable_oci_stmt_cache = config->is_switch_enabled("enable_oci_stmt_cache", FALSE);
 	enable_whitelist_test = config->is_switch_enabled("enable_whitelist_test", FALSE);
 
 	// PPSCR00377721
@@ -356,6 +361,16 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		return;
 	}
 
+    //MAX OCI statement cache size parameter and it should be > 0
+	if(config->get_value("max_oci_stmt_cache_size", cval))
+	    max_oci_stmt_cache_size = StringUtil::to_int(c_val);
+
+	if (enable_oci_stmt_cache && max_oci_stmt_cache_size < 1)
+	{
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "max_oci_stmt_cache_size undefined or invalid");
+		constructor_success = 0;
+		return;
+	}	
 	// if global caching is enabled or session caching is enabled
 	if (enable_cache || max_cache_size > 0)
 	{
@@ -1654,12 +1669,12 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 	}
 	
 	// Enable statement cache
-	if (enable_cache)
+	if (enable_oci_stmt_cache)
 	{
-		rc = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, &max_cache_size, (ub4)0, (ub4)OCI_ATTR_STMTCACHESIZE, errhp);
+		rc = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, &max_oci_stmt_cache_size, (ub4)0, (ub4)OCI_ATTR_STMTCACHESIZE, errhp);
 		if (rc != OCI_SUCCESS)
 		{
-			log_oracle_error(rc, "Failed to set statement cache.");
+			log_oracle_error(rc, "Failed to set OCI statement cache.");
 		}
 	}
 

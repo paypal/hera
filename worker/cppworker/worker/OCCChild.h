@@ -189,6 +189,7 @@ private:
 
 	// our statment cache
 	bool             enable_cache;
+	bool             enable_oci_cache; //Enable OCI default statement cache 
 	StmtCacheEntry** stmt_cache;
 	StmtCacheEntry*  cur_stmt;
 	StmtCacheEntry   one_stmt;
