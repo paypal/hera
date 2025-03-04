@@ -105,7 +105,7 @@ namespace
 using namespace occ;
 
 //-----------------------------------------------------------------------------
-#define DO_OCI_HANDLE_FREE(res, t, l, errhp2) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l, errhp2)
+#define DO_OCI_HANDLE_FREE(res, t, l, errhp) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l, errhp)
 
 #define NUM_INDICATOR_BUF   64
 #define NUM_STR_SIZE_BUF	64
@@ -209,7 +209,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	stmt_cache(NULL),
 	cur_stmt(NULL),
 	max_cache_size(0),
-	max_oci_stmt_cache_size(0)
+	max_oci_stmt_cache_size(0),
 	max_statement_age(0),
 	cache_size(0),
 	cache_size_peak(0),
@@ -363,7 +363,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 
     //MAX OCI statement cache size parameter and it should be > 0
 	if(config->get_value("max_oci_stmt_cache_size", cval))
-	    max_oci_stmt_cache_size = StringUtil::to_int(c_val);
+	    max_oci_stmt_cache_size = StringUtil::to_int(cval);
 
 	if (enable_oci_stmt_cache && max_oci_stmt_cache_size < 1)
 	{
@@ -4779,40 +4779,24 @@ int OCCChild::clear_indicators()
 	return 0;
 }
 
-
-bool real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level, OCIError *errhp = NULL)
+bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level, OCIError *errhp)
 {
     int rc;
-
     if (hndlp == NULL) return true;
-
-    // Special handling for statement handles when caching is enabled
     if (type == OCI_HTYPE_STMT && errhp != NULL) {
-        // Release to cache instead of freeing (assuming caching is enabled)
         rc = OCIStmtRelease((OCIStmt*)hndlp, errhp, NULL, 0, OCI_DEFAULT);
-        if (rc != OCI_SUCCESS) {
-            std::ostringstream os;
-            os << "failed to OCIStmtRelease(" << (res ? res : "(null)") << ")";
-            log_oracle_error(rc, os.str().c_str(), level);
-            return false;
-        }
-        // Note: Do not set hndlp = NULL here if you want to allow reuse in cache
-        // The cache manages the handle; it will be freed with the session
-        return true;
+    } else {
+        rc = OCIHandleFree(hndlp, type);
+        hndlp = NULL;
     }
-
-    // For all other handle types, use OCIHandleFree
-    rc = OCIHandleFree(hndlp, type);
-    hndlp = NULL;
     if (rc != OCI_SUCCESS) {
         std::ostringstream os;
-        os << "failed to OCIHandleFree(" << (res ? res : "(null)") << ")";
+        os << "failed to " << (type == OCI_HTYPE_STMT ? "OCIStmtRelease" : "OCIHandleFree") << "(" << (res ? res : "(null)") << ")";
         log_oracle_error(rc, os.str().c_str(), level);
         return false;
     }
     return true;
 }
-
 
 int OCCChild::get_column_size(int *size, ub2 *type, ub4 pos, bool use_datetime)
 {

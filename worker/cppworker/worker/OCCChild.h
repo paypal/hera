@@ -189,13 +189,14 @@ private:
 
 	// our statment cache
 	bool             enable_cache;
-	bool             enable_oci_cache; //Enable OCI default statement cache 
+	bool             enable_oci_stmt_cache; //Enable OCI default statement cache 
 	StmtCacheEntry** stmt_cache;
 	StmtCacheEntry*  cur_stmt;
 	StmtCacheEntry   one_stmt;
 	int              max_cache_size;
 	int              max_statement_age;
 	int              cache_size;
+	int              max_oci_stmt_cache_size; //MAx OCI statement cache size
 	int              cache_size_peak;
 	ulong            cache_hits, cache_misses, cache_expires, cache_dumps;
 	int              cache_expire_frequency;
@@ -433,7 +434,7 @@ private:
 	// frees oci resources and logs messages
 	// if the hndlp is NULL, then do nothing and return true
 	// returns false if error was detected
-	bool real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *name, LogLevelEnum level);
+	bool real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *name, LogLevelEnum level, OCIError *errhp = NULL);
 
 	// set or clear non-blocking mode
 	int set_oci_nonblocking(bool _nonblock, const StmtCacheEntry *_stmt = NULL);
