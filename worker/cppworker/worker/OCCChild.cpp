@@ -248,7 +248,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_sql_rewritten(false),
 	m_enable_sql_rewrite(false),
 	bits_to_match(1),
-	bit_mask(0)
+	bit_mask(0),
+	sql_id("")
 {
 
 	std::string cval;
@@ -1048,7 +1049,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				if (m_sql_rewritten) {
 					c->AddData("sqlhash", m_orig_query_hash);
 				}
-				c->AddData("SQL_ID", sql_id.c_str());
+				c->AddData("SQL_ID", sql_id);
 			}
 			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_bind_data.c_str()), 
 					   m_bind_data.length(), OCI_ATTR_CLIENT_IDENTIFIER, errhp);
@@ -1186,7 +1187,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			CalTransaction cal_trans("FETCH");
 			cal_trans.SetName(m_query_hash);
 			cal_trans.AddData("HOST", m_dbhost_name);
-			cal_trans.AddData("SQL_ID", sql_id.c_str());
+			cal_trans.AddData("SQL_ID", sql_id);
 			
 			//fetch a block of rows
 			long long fetched_bsize = fetch(_line);
@@ -3189,16 +3190,17 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 
         // Get SQL_ID
-		char sql_id_data[32];
-		ub4 sql_id_len = sizeof(sql_id_data);
-		rc = OCIAttrGet((CONST dvoid *)entry->stmthp, OCI_HTYPE_STMT, sql_id_data, &sql_id_len, OCI_ATTR_SQL_ID, errhp);
+		char  *sql_id_data = NULL;
+		ub4 sql_id_size = 0;
+		rc = OCIAttrGet((CONST dvoid *)entry->stmthp, OCI_HTYPE_STMT, (dvoid *) &sql_id_data,
+				(ub4 *) &sql_id_size, OCI_ATTR_SQL_ID, errhp);
 		if (rc != OCI_SUCCESS)
 		{
 			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
 			sql_error(rc, entry);
-			free_stmt(entry);
-			return -1;
 		}
+		sql_id.assign(sql_id_data, sql_id_size);
+	    WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc2:%d,sql_id_len:%d, sql_id is :%s", rc2,sql_id.length(), sql_id.c_str());
 		sql_id = std::string(sql_id_data, sql_id_len);
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
