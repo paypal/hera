@@ -2396,14 +2396,16 @@ int OCCChild::execute_query(const std::string& query)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc(
+	/*
+      	rc = OCIHandleAlloc(
 			(dvoid *) envhp, (dvoid **) &stmthp,
 			OCI_HTYPE_STMT, (size_t) 0, (dvoid **) 0);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 
 	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
 						(ub4)query.length(),
@@ -2414,7 +2416,10 @@ int OCCChild::execute_query(const std::string& query)
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
+	
 
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
@@ -3153,7 +3158,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 
 		// save the query text
 		entry->text = statement;
-
+        entry->stmthp = NULL;
 		// log it
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement: %s", statement.c_str());
 		cache_misses++;
@@ -3172,6 +3177,8 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			sql_error(rc, entry);
 			free_stmt(entry);
 			return -1;
+		}else {
+			WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &entry->stmthp);
 		}
 
 		// determine the statement type (we'll need it later)
@@ -5417,13 +5424,14 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
-
+	/*
+	 * 	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 	CalTransaction cal_trans("ORACLE");
 	cal_trans.SetName("profile");
 	
@@ -5437,6 +5445,8 @@ int OCCChild::get_db_charset(std::string& _charset)
 		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
 
 	// Define the output variable
