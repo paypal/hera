@@ -1,5 +1,6 @@
-[![Go Build](https://github.com/paypal/hera/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/paypal/hera/actions/workflows/go.yml)
-[![Java CI with Maven](https://github.com/paypal/hera/actions/workflows/jdbc-ci-maven.yml/badge.svg?branch=master)](https://github.com/paypal/hera/actions/workflows/jdbc-ci-maven.yml)
+[![Go Build](https://github.com/paypal/hera/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/paypal/hera/actions/workflows/go.yml)
+[![Java CI with Maven](https://github.com/paypal/hera/actions/workflows/jdbc-ci-maven.yml/badge.svg?branch=main)](https://github.com/paypal/hera/actions/workflows/jdbc-ci-maven.yml)
+[![Functional Tests](https://github.com/paypal/hera/actions/workflows/manual-ft.yml/badge.svg?branch=main)](https://github.com/paypal/hera/actions/workflows/manual-ft.yml)
 [![License](http://img.shields.io/:license-Apache%202-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
 
 <img src="docs/hera.png" height="240" width="340">
