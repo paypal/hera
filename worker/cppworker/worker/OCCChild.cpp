@@ -3197,20 +3197,22 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 
                 // Get SQL_ID
-		char  *sql_id_data = NULL;
-		ub4 sql_id_size = 0;
+		char sql_id_data[64]; // Allocate a buffer for the SQL ID
+        ub4 sql_id_size = sizeof(sql_id_data);
 		rc = OCIAttrGet((CONST dvoid *)entry->stmthp,
 			       	OCI_HTYPE_STMT,
-			       	(dvoid *) &sql_id_data,
-				(ub4 *) &sql_id_size,
+			       	(dvoid *) sql_id_data,
+				    &sql_id_size,
 			       	OCI_ATTR_SQL_ID, errhp);
 		if (rc != OCI_SUCCESS)
 		{
 			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
 			sql_error(rc, entry);
 		}
+		// Ensure null-termination of the SQL ID string
+		sql_id_data[sql_id_size] = '\0';
 		sql_id.assign(sql_id_data, sql_id_size);
-         	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
+        WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
 		//			statement.contains(" FOR UPDATE"))
