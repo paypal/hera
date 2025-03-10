@@ -3164,13 +3164,13 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare2((dvoid *)svchp, &entry->stmthp,
-							 (dvoid *)errhp,
-							 (text *)const_cast<char *>(statement.c_str()),
-							 (ub4)statement.length(),
-							 (const oratext *)0, (ub4)0,
-							 (ub4)OCI_NTV_SYNTAX,
-							 OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
+		rc = OCIStmtPrepare2(svchp, &entry->stmthp,
+					    errhp,
+					    (text *)const_cast<char *>(statement.c_str()),
+					    (ub4)statement.length(),
+					    (const oratext *)0, (ub4)0,
+					    (ub4)OCI_NTV_SYNTAX,
+					    OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, entry);
