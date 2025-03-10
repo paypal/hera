@@ -3134,7 +3134,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 	{
 		StmtCacheEntry *entry;
 
-		if (!enable_cache || !enable_oci_stmt_cache)
+		if (!enable_cache && !enable_oci_stmt_cache)
 		{
 			// use the global statement entry
 			// but clear it out first to make sure it's fresh
@@ -3164,12 +3164,11 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare2(svchp, &entry->stmthp,
-							 errhp,
+		rc = OCIStmtPrepare2((dvoid *)svchp, &entry->stmthp,
+							 (dvoid *)errhp,
 							 (text *)const_cast<char *>(statement.c_str()),
 							 (ub4)statement.length(),
-							 NULL,  //No Key
-							 0,  //Key Length
+							 (const oratext *)0, (ub4)0,
 							 (ub4)OCI_NTV_SYNTAX,
 							 OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
@@ -3197,21 +3196,20 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 
                 // Get SQL_ID
-		char sql_id_data[64]; // Allocate a buffer for the SQL ID
-        ub4 sql_id_size = sizeof(sql_id_data);
-		rc = OCIAttrGet((CONST dvoid *)entry->stmthp,
+		ub4         sqlidLen;
+		oratext    *sqlid;
+		rc = OCIAttrGet(&entry->stmthp,
 			       	OCI_HTYPE_STMT,
-			       	(dvoid *) sql_id_data,
-				    &sql_id_size,
+			       	&sqlid,
+				    (ub4 *)&sqlidLen,
 			       	OCI_ATTR_SQL_ID, errhp);
 		if (rc != OCI_SUCCESS)
 		{
 			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
 			sql_error(rc, entry);
 		}
-		// Ensure null-termination of the SQL ID string
-		sql_id_data[sql_id_size] = '\0';
-		sql_id.assign(sql_id_data, sql_id_size);
+		// Assign the fetched SQL ID to the std::string member variable
+        sql_id.assign(reinterpret_cast<char*>(sqlid), sqlidLen);
         WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
