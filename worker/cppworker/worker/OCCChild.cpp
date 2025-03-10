@@ -3198,7 +3198,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
                 // Get SQL_ID
 		ub4         sqlidLen;
 		oratext    *sqlid;
-		rc = OCIAttrGet(&entry->stmthp,
+		rc = OCIAttrGet((CONST dvoid *) entry->stmthp,
 			       	OCI_HTYPE_STMT,
 			       	&sqlid,
 				    (ub4 *)&sqlidLen,
