@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 jobs:
   odbTest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     services:
       odb3:
