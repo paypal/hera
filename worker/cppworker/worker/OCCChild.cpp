@@ -3195,22 +3195,26 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			return -1;
 		}
 
-                // Get SQL_ID
-		ub4         sqlidLen;
-		oratext    *sqlid;
-		rc = OCIAttrGet((CONST dvoid *) entry->stmthp,
-			       	OCI_HTYPE_STMT,
-			       	&sqlid,
-				    (ub4 *)&sqlidLen,
-			       	OCI_ATTR_SQL_ID, errhp);
+        // Pre-allocate a buffer that is "large enough" (e.g., 32 bytes)
+        oratext sqlid[32]; // Fixed-size buffer
+        ub4 sqlidLen = sizeof(sqlid); // Set to the size of the buffer
+		rc = OCIAttrGet((CONST dvoid *)entry->stmthp,
+                OCI_HTYPE_STMT,
+                (dvoid *)sqlid,
+                (ub4 *)&sqlidLen,
+                OCI_ATTR_SQL_ID,
+                errhp);
 		if (rc != OCI_SUCCESS)
 		{
 			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
 			sql_error(rc, entry);
+		} else {
+			// Ensure the sqlid buffer is null-terminated (for safety)
+            sqlid[sqlidLen] = '\0';
+		    // Assign the fetched SQL ID to the std::string member variable
+            sql_id.assign(reinterpret_cast<char*>(sqlid), sqlidLen);
+            WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
 		}
-		// Assign the fetched SQL ID to the std::string member variable
-        sql_id.assign(reinterpret_cast<char*>(sqlid), sqlidLen);
-        WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
 		//			statement.contains(" FOR UPDATE"))
