@@ -3149,16 +3149,16 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		entry->version = _version;
 
 		// create a statement handle TODO Passing null handle, so It will get initialized as part of OCIStmtPremare2
-		/*rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
+		rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, NULL);
 			return -1;
-		}*/
+		}
 
 		// save the query text
 		entry->text = statement;
-        entry->stmthp = NULL;
+        //entry->stmthp = NULL;
 		// log it
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement: %s", statement.c_str());
 		cache_misses++;
