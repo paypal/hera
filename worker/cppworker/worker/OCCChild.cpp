@@ -30,6 +30,8 @@
 #include <utility/fnv/fnv.h>
 #include <oci.h>
 #include <xa.h>
+#include <sstream>
+#include <iomanip>
 
 #include "config/Config.h"
 #include "config/CDBConfig.h"
@@ -100,12 +102,12 @@ namespace
 
 		return OCI_TRANS_TIGHT;
 	}
-};
+}
 
 using namespace occ;
 
 //-----------------------------------------------------------------------------
-#define DO_OCI_HANDLE_FREE(res, t, l) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l)
+#define DO_OCI_HANDLE_FREE(res, t, l, errhp) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l, errhp)
 
 #define NUM_INDICATOR_BUF   64
 #define NUM_STR_SIZE_BUF	64
@@ -122,7 +124,7 @@ static const unsigned int DEFAULT_TRANS_TIMEOUT = 5;	//!< Default global transac
 static const char *const DEFAULT_MODULE_NAME = "Unknown";	//!< Default module name
 
 //!<Key that occ client sends client machine name, should match OCCClient::send_client_info
-static const std::string SERVER_VERSION = "10g"; 
+static const std::string SERVER_VERSION = "19c";
 static const std::string SERVER_RELEASE_PREFIX = "Enterprise Edition Release ";
 static const std::string SERVER_DB_PREFIX = "Oracle Database ";
 static const std::string CLIENT_NAME_PREFIX = "Name: "; 
@@ -205,9 +207,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	enable_hb_fix(false),
 	hb_sender(NULL),
 	enable_cache(true),
+	enable_oci_stmt_cache(true),
 	stmt_cache(NULL),
 	cur_stmt(NULL),
 	max_cache_size(0),
+	max_oci_stmt_cache_size(0),
 	max_statement_age(0),
 	cache_size(0),
 	cache_size_peak(0),
@@ -246,7 +250,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_sql_rewritten(false),
 	m_enable_sql_rewrite(false),
 	bits_to_match(1),
-	bit_mask(0)
+	bit_mask(0),
+	sql_id("")
 {
 
 	std::string cval;
@@ -340,6 +345,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	// initialize statement cache vars
 	// check if statement caching is enabled
 	enable_cache = config->is_switch_enabled("enable_cache", FALSE);
+
+	//Enable OCI statement cache
+	enable_oci_stmt_cache = config->is_switch_enabled("enable_oci_stmt_cache", FALSE);
 	enable_whitelist_test = config->is_switch_enabled("enable_whitelist_test", FALSE);
 
 	// PPSCR00377721
@@ -356,6 +364,16 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		return;
 	}
 
+    //MAX OCI statement cache size parameter and it should be > 0
+	if(config->get_value("max_oci_stmt_cache_size", cval))
+	    max_oci_stmt_cache_size = StringUtil::to_int(cval);
+
+	if (enable_oci_stmt_cache && max_oci_stmt_cache_size < 1)
+	{
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "max_oci_stmt_cache_size undefined or invalid");
+		constructor_success = 0;
+		return;
+	}	
 	// if global caching is enabled or session caching is enabled
 	if (enable_cache || max_cache_size > 0)
 	{
@@ -669,7 +687,7 @@ void OCCChild::dump_session_cache()
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "dumping ALL=%d statements from session cache", cache_size);
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			delete stmt_cache[i];
 			stmt_cache[i] = NULL;
 		}
@@ -1099,12 +1117,14 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						}
 					}
                 }
+				c->AddData("sql_id", sql_id);
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
 			}
-			
+
 			m_scuttle_id.clear();
+			sql_id.clear();
 		}
 		m_requests_cnt++;
 		break;
@@ -1651,6 +1671,16 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		log_oracle_error(rc,"Failed to set failover callback.");
 	}
 	
+	// Enable statement cache
+	if (enable_oci_stmt_cache)
+	{
+		rc = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, &max_oci_stmt_cache_size, (ub4)0, (ub4)OCI_ATTR_STMTCACHESIZE, errhp);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc, "Failed to set OCI statement cache.");
+		}
+	}
+
 	has_session = true;
 	cal_trans.Completed();
 
@@ -1711,7 +1741,7 @@ int OCCChild::disconnect()
 	{
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, NULL);
 			delete stmt_cache[i];
 		}
 		delete[] stmt_cache;
@@ -1723,7 +1753,7 @@ int OCCChild::disconnect()
 	// clean up session variables statemend handle
 	if( m_session_var_stmthp != NULL )
 	{
-		if (!(rc = DO_OCI_HANDLE_FREE( m_session_var_stmthp, OCI_HTYPE_STMT, LOG_ALERT)))
+		if (!(rc = DO_OCI_HANDLE_FREE( m_session_var_stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp)))
 		{
 			log_oracle_error(rc, "Failed to free statement handle.");
 			return -1;
@@ -1750,14 +1780,14 @@ int OCCChild::disconnect()
 	}
 
 	// free a bunch of handles
-	DO_OCI_HANDLE_FREE(srvhp, OCI_HTYPE_SERVER, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(authp, OCI_HTYPE_SESSION, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING);
-	DO_OCI_HANDLE_FREE(svchp, OCI_HTYPE_SVCCTX, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhp, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhndl_batch, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhndl_batch2, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(envhp, OCI_HTYPE_ENV, LOG_WARNING);
+	DO_OCI_HANDLE_FREE(srvhp, OCI_HTYPE_SERVER, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(authp, OCI_HTYPE_SESSION, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING, NULL);
+	DO_OCI_HANDLE_FREE(svchp, OCI_HTYPE_SVCCTX, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhp, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhndl_batch, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhndl_batch2, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(envhp, OCI_HTYPE_ENV, LOG_WARNING, NULL);
 
 	rc = OCITerminate(OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
@@ -2368,40 +2398,46 @@ int OCCChild::execute_query(const std::string& query)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc(
+	/*
+      	rc = OCIHandleAlloc(
 			(dvoid *) envhp, (dvoid **) &stmthp,
 			OCI_HTYPE_STMT, (size_t) 0, (dvoid **) 0);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 
-	rc = OCIStmtPrepare(
-			stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
-			(ub4) query.length(),
-			(ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
+						(ub4)query.length(),
+						NULL, 0,
+						(ub4)OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
+	
 
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
-	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT) == false)
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *) stmthp, errhp);
+	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, NULL) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
 	}
-
+    sql_id.clear();
 	return 0;
 }
 
@@ -2840,7 +2876,7 @@ void OCCChild::free_stmt(StmtCacheEntry *_entry)
 		return;
 
 	// zap the stmthp
-	DO_OCI_HANDLE_FREE(_entry->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+	DO_OCI_HANDLE_FREE(_entry->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 
 	// zap the defines
 	delete[] _entry->defines;
@@ -3101,7 +3137,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 	{
 		StmtCacheEntry *entry;
 
-		if (!enable_cache)
+		if (!enable_cache && !enable_oci_stmt_cache)
 		{
 			// use the global statement entry
 			// but clear it out first to make sure it's fresh
@@ -3115,39 +3151,41 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 		entry->version = _version;
 
-		// create a statement handle
-		rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
+		// create a statement handle TODO Passing null handle, so It will get initialized as part of OCIStmtPremare2
+		/*rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, NULL);
 			return -1;
-		}
+		}*/
 
 		// save the query text
 		entry->text = statement;
-
+        entry->stmthp = NULL;
 		// log it
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement: %s", statement.c_str());
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare(
-				entry->stmthp,
-				errhp,
-				(text *) const_cast<char *> (statement.c_str()),
-				(ub4) statement.length(),
-				(ub4) OCI_NTV_SYNTAX,
-				(ub4) OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, &entry->stmthp,
+					    errhp,
+					    (text *)const_cast<char *>(statement.c_str()),
+					    (ub4)statement.length(),
+					    (const oratext *)0, (ub4)0,
+					    (ub4)OCI_NTV_SYNTAX,
+					    OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, entry);
 			free_stmt(entry);
 			return -1;
+		}else {
+			WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &entry->stmthp);
 		}
 
 		// determine the statement type (we'll need it later)
 		rc = OCIAttrGet(
-				(CONST dvoid *) entry->stmthp,
+				(CONST dvoid *) entry->stmthp,   
 				OCI_HTYPE_STMT,
 				(dvoid *) &entry->type,
 				(ub4 *) NULL,
@@ -3159,7 +3197,6 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			free_stmt(entry);
 			return -1;
 		}
-
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
 		//			statement.contains(" FOR UPDATE"))
@@ -3249,7 +3286,6 @@ int OCCChild::prepare_special(uint _statement_id)
 	else
 	{
 		results_valid = true;
-
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement (cached): %s", results->get_query().c_str());
 	}
 
@@ -3972,6 +4008,8 @@ int OCCChild::execute(int& _cmd_rc)
 			_cmd_rc = -1;
 		return -1;
 	}
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *) stmt->stmthp, errhp);
 
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
@@ -4740,29 +4778,24 @@ int OCCChild::clear_indicators()
 	return 0;
 }
 
-
-bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level)
+bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level, OCIError *errhp)
 {
-	int rc;
-
-	if (hndlp == NULL) return true;
-
-	rc = OCIHandleFree(hndlp, type);
-	hndlp = NULL;
-	if (rc != OCI_SUCCESS) {
-		std::ostringstream os;
-		os << "failed to OCIHandleFree(";
-		if (res)
-			os << res;
-		else 
-			os << "(null)";
-		os <<")";
-		log_oracle_error(rc, os.str().c_str(), level);
-		return false;
-	}
-	return true;
+    int rc;
+    if (hndlp == NULL) return true;
+    if (type == OCI_HTYPE_STMT && errhp != NULL) {
+        rc = OCIStmtRelease((OCIStmt*)hndlp, errhp, NULL, 0, OCI_DEFAULT);
+    } else {
+        rc = OCIHandleFree(hndlp, type);
+        hndlp = NULL;
+    }
+    if (rc != OCI_SUCCESS) {
+        std::ostringstream os;
+        os << "failed to " << (type == OCI_HTYPE_STMT ? "OCIStmtRelease" : "OCIHandleFree") << "(" << (res ? res : "(null)") << ")";
+        log_oracle_error(rc, os.str().c_str(), level);
+        return false;
+    }
+    return true;
 }
-
 
 int OCCChild::get_column_size(int *size, ub2 *type, ub4 pos, bool use_datetime)
 {
@@ -5022,7 +5055,7 @@ int OCCChild::clear_2pc_state(void)
 	{
 		// Free the existing transaction handle
 		int rc;
-		if (DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING) == false) {
+		if (DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING, NULL) == false) {
 			return -1;
 		}
 
@@ -5379,13 +5412,14 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
-
+	/*
+	 * 	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 	CalTransaction cal_trans("ORACLE");
 	cal_trans.SetName("profile");
 	
@@ -5393,12 +5427,14 @@ int OCCChild::get_db_charset(std::string& _charset)
 						sys_context('USERENV', 'DB_UNIQUE_NAME') AS db_uname, \
 						sys_context('USERENV', 'SID') AS sid \
 						FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'";
-	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(sql), strlen(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(sql), strlen(sql), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
 
 	// Define the output variable
@@ -5410,7 +5446,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [value].");
 		return -1;
 	}
@@ -5423,7 +5459,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [local_id].");
 		return -1;
 	}
@@ -5435,7 +5471,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [db_uname].");
 		return -1;
 	}
@@ -5448,7 +5484,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [sid].");
 		return -1;
 	}
@@ -5457,7 +5493,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
@@ -5472,7 +5508,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 
 	// clean up
-	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT))
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp))
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
@@ -5504,10 +5540,10 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 			return -1;
 		}
 
-		rc = OCIStmtPrepare(m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, &m_session_var_stmthp, errhp, (text *)const_cast<char *>(_sql.c_str()), (ub4)_sql.length(), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
@@ -5540,24 +5576,26 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 
 		if (rc != OCI_SUCCESS)
 		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
 		}
-
+      
 	}
 
 	// Execute
 	rc = OCIStmtExecute(svchp, m_session_var_stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		m_session_var_stmthp = NULL;
 		return -1;
 	}
-
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *) m_session_var_stmthp, errhp);
+	sql_id.clear();
 	return 0;
 }
 
@@ -5773,4 +5811,40 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unknown", fo_event);
 	}
 	return 0;
+}
+
+void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
+	// Check for valid handles and return early if invalid
+	if (!hndlp || !errhp) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid statement hndlp or errhp pointer in fetch_sql_id.");
+		sql_id.clear();
+		return;
+        }
+	// Pre-allocate a buffer that is "large enough" (e.g., 32 bytes)
+        oratext sqlid[32]; // Fixed-size buffer
+        ub4 sqlIdLen = sizeof(sqlid); // Set to the size of the buffer
+	sword rc = OCI_SUCCESS;
+
+	rc = OCIAttrGet(hndlp,
+	                OCI_HTYPE_STMT,
+					(dvoid *)sqlid,
+					(ub4 *)&sqlIdLen,
+					OCI_ATTR_SQL_ID,
+					errhp);
+	if (rc != OCI_SUCCESS || sqlIdLen == 0) {
+        WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id length from statement or sql_id is not available.");
+		log_oracle_error(rc, "failed to fetch sql_id length from statement or sql_id is not available.");
+		sql_id.clear();
+		return;
+	}
+	//Ensure sqlid buffer is null-terminated
+	sqlid[sqlIdLen] = '\0';
+	// Convert the fetched SQL_ID to hexadecimal format
+	std::ostringstream hex_sql_id;
+        for (ub4 i = 0; i < sqlIdLen; ++i) {
+            hex_sql_id << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(sqlid[i]);
+        }
+	//Assign the fetched SQL_ID to the std::string member variable
+	sql_id.assign(hex_sql_id.str());
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
 }
