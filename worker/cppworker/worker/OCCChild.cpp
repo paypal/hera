@@ -5812,18 +5812,6 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 }
 
 void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
-	if (hndlp) {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received valid statement hndlp: %p", hndlp);
-	} else {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received NULL or invalid statement hndlp.");
-	}
-
-	if (errhp) {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received valid error handler errhp: %p", errhp);
-	} else {
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received NULL or invalid errhp.");
-	}
-
 	// Check for valid handles and return early if invalid
 	if (!hndlp || !errhp) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid statement hndlp or errhp pointer in fetch_sql_id.");
@@ -5832,7 +5820,7 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
     }
 	// Pre-allocate a buffer that is "large enough" (e.g., 32 bytes)
     oratext sqlid[32]; // Fixed-size buffer
-    ub4 sqlidLen = sizeof(sqlid); // Set to the size of the buffer
+    ub4 sqlIdLen = sizeof(sqlid); // Set to the size of the buffer
 	sword rc = OCI_SUCCESS;
 
 	rc = OCIAttrGet(hndlp,
@@ -5849,8 +5837,13 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 	}
 	//Ensure sqlid buffer is null-terminated
 	sqlid[sqlIdLen] = '\0';
+	// Convert the fetched SQL_ID to hexadecimal format
+    std::ostringstream hex_sql_id;
+    for (ub4 i = 0; i < sqlIdLen; ++i) {
+        hex_sql_id << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(sqlid[i]);
+    }
 	//Assign the fetched SQL_ID to the std::string member variable
-	sql_id.assign(reinterpret_cast<char *>(sqlid), sqlIdLen);
+	sql_id.assign(hex_sql_id.str());
 	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
 	free(sqlid);
 }
