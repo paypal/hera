@@ -2429,7 +2429,7 @@ int OCCChild::execute_query(const std::string& query)
 		return -1;
 	}
     //extract sql_id
-	fetch_sql_id((CONST dvoid *)stmthp, errhp);
+	fetch_sql_id((CONST dvoid *) stmthp, errhp);
 	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, NULL) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
@@ -3183,7 +3183,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 
 		// determine the statement type (we'll need it later)
 		rc = OCIAttrGet(
-				(CONST dvoid *) entry->stmthp,
+				(CONST dvoid *) entry->stmthp,   
 				OCI_HTYPE_STMT,
 				(dvoid *) &entry->type,
 				(ub4 *) NULL,
@@ -4007,7 +4007,7 @@ int OCCChild::execute(int& _cmd_rc)
 		return -1;
 	}
     //extract sql_id
-	fetch_sql_id((CONST dvoid *)&stmt->stmthp, errhp);
+	fetch_sql_id((CONST dvoid *) stmt->stmthp, errhp);
 
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
@@ -5592,7 +5592,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 		return -1;
 	}
     //extract sql_id
-	fetch_sql_id((CONST dvoid *)m_session_var_stmthp, errhp);
+	fetch_sql_id((CONST dvoid *) m_session_var_stmthp, errhp);
 	sql_id.clear();
 	return 0;
 }
