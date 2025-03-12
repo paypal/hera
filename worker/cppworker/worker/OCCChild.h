@@ -528,7 +528,7 @@ private:
 	void set_orig_query_hash(const std::string& _query);
 
     //Fetch sql_id for statement
-	void fetch_sql_id(dvoid *&hndlp, OCIError *errhp);
+	void fetch_sql_id(const void  *hndlp, OCIError *errhp);
 };
 
 #endif

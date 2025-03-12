@@ -5811,7 +5811,7 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 	return 0;
 }
 
-void OCCChild::fetch_sql_id(const dvoid  *hndlp, OCIError *errhp) {
+void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 	//First get length of SQLID
 	oratext *sqlid = NULL;
     ub4 sqlIdLen = 0;
