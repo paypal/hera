@@ -1120,8 +1120,9 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 				delete c;
 				c = NULL;
 			}
-			
+
 			m_scuttle_id.clear();
+			sql_id.clear();
 		}
 		m_requests_cnt++;
 		break;
@@ -1187,7 +1188,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			CalTransaction cal_trans("FETCH");
 			cal_trans.SetName(m_query_hash);
 			cal_trans.AddData("HOST", m_dbhost_name);
-			cal_trans.AddData("SQL_ID", sql_id);
 			
 			//fetch a block of rows
 			long long fetched_bsize = fetch(_line);
@@ -2428,13 +2428,14 @@ int OCCChild::execute_query(const std::string& query)
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *)stmthp, errhp);
 	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, NULL) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
 	}
-
+    sql_id.clear();
 	return 0;
 }
 
@@ -3149,16 +3150,16 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		entry->version = _version;
 
 		// create a statement handle TODO Passing null handle, so It will get initialized as part of OCIStmtPremare2
-		rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
+		/*rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, NULL);
 			return -1;
-		}
+		}*/
 
 		// save the query text
 		entry->text = statement;
-        //entry->stmthp = NULL;
+        entry->stmthp = NULL;
 		// log it
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement: %s", statement.c_str());
 		cache_misses++;
@@ -3193,27 +3194,6 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			sql_error(rc, entry);
 			free_stmt(entry);
 			return -1;
-		}
-
-        // Pre-allocate a buffer that is "large enough" (e.g., 32 bytes)
-        oratext sqlid[32]; // Fixed-size buffer
-        ub4 sqlidLen = sizeof(sqlid); // Set to the size of the buffer
-		rc = OCIAttrGet((CONST dvoid *)entry->stmthp,
-                OCI_HTYPE_STMT,
-                (dvoid *)sqlid,
-                (ub4 *)&sqlidLen,
-                OCI_ATTR_SQL_ID,
-                errhp);
-		if (rc != OCI_SUCCESS)
-		{
-			WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
-			sql_error(rc, entry);
-		} else {
-			// Ensure the sqlid buffer is null-terminated (for safety)
-            sqlid[sqlidLen] = '\0';
-		    // Assign the fetched SQL ID to the std::string member variable
-            sql_id.assign(reinterpret_cast<char*>(sqlid), sqlidLen);
-            WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc:%d,sql_id_len:%d, sql_id is :%s", rc, sql_id.length(), sql_id.c_str());
 		}
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
@@ -4026,6 +4006,8 @@ int OCCChild::execute(int& _cmd_rc)
 			_cmd_rc = -1;
 		return -1;
 	}
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *)&stmt->stmthp, errhp);
 
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
@@ -5597,7 +5579,7 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 			m_session_var_stmthp = NULL;
 			return -1;
 		}
-
+      
 	}
 
 	// Execute
@@ -5609,7 +5591,9 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 		m_session_var_stmthp = NULL;
 		return -1;
 	}
-
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *)m_session_var_stmthp, errhp);
+	sql_id.clear();
 	return 0;
 }
 
@@ -5825,4 +5809,49 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unknown", fo_event);
 	}
 	return 0;
+}
+
+void OCCChild::fetch_sql_id(const dvoid  *hndlp, OCIError *errhp) {
+	//First get length of SQLID
+	oratext *sqlid = NULL;
+    ub4 sqlIdLen = 0;
+	sword rc = OCI_SUCCESS;
+
+	rc = OCIAttrGet(hndlp,
+	                OCI_HTYPE_STMT,
+					(dvoid *)NULL,
+					(ub4 *)&sqlIdLen,
+					OCI_ATTR_SQL_ID,
+					errhp);
+	if (rc != OCI_SUCCESS || sqlIdLen == 0) {
+        WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id length from statement or sql_id is not available.");
+		log_oracle_error(rc, "failed to fetch sql_id length from statement or sql_id is not available.");
+		sql_id.clear();
+		return;
+	}
+	//Alllocate memory for sqlid
+	std::vector<oratext> sqlid_buffer(sqlIdLen + 1);
+	sqlid = sqlid_buffer.data();
+	if (!sqlid) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Failed to allocate memory for sqlid.");
+		return;
+	}
+	//Now fetch actual SQL ID
+	rc = OCIAttrGet(hndlp,
+					OCI_HTYPE_STMT,
+					(dvoid *)sqlid,
+					(ub4 *)&sqlIdLen,
+					OCI_ATTR_SQL_ID,
+					errhp);
+	if (rc != OCI_SUCCESS) {
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
+		log_oracle_error(rc, "failed to fetch sql_id from statement.");
+		sql_id.clear();
+	} else {
+		//Ensure sqlid buffer is null-terminated
+		sqlid[sqlIdLen] = '\0';
+		//Assign the fetched SQL_ID to the std::string member variable
+		sql_id.assign(reinterpret_cast<char *>(sqlid), sqlIdLen);
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
+	}		
 }

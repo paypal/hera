@@ -51,7 +51,7 @@ struct StmtCacheEntry
 	void clear(void) { text.clear(); stmthp = NULL; type = occ::UNKNOWN_STMT; num_cols = 0; when = 0; num_exec = 0; defines = NULL; columns = NULL; version = occ::V1; has_datetime = false; }
 
 	std::string    text;       // query text
-	OCIStmt*  stmthp;     // statement handle
+OCIStmt*  stmthp;     // statement handle
 	occ::StatementType       type;       // the type of statement (largely the same as OCI_STMT_xxx)
 	ub4       num_cols;   // number of columns selected
 	time_t    when;       // last used
@@ -194,9 +194,9 @@ private:
 	StmtCacheEntry*  cur_stmt;
 	StmtCacheEntry   one_stmt;
 	int              max_cache_size;
+	int              max_oci_stmt_cache_size;
 	int              max_statement_age;
 	int              cache_size;
-	int              max_oci_stmt_cache_size; //MAx OCI statement cache size
 	int              cache_size_peak;
 	ulong            cache_hits, cache_misses, cache_expires, cache_dumps;
 	int              cache_expire_frequency;
@@ -256,7 +256,7 @@ private:
 	bool m_enable_session_flow;
 	std::string m_db_version;
 	std::string m_db_release;
-	OCIStmt * m_session_var_stmthp;
+    OCIStmt * m_session_var_stmthp;
 	// oracle_lobprefetch_size turns on LOB prefetch size --- during BLOB/CLOB fetch, if BLOB/CLOB size is less than or equal to oracle_lobprefetch_size,
 	// 														  then the data is returned in the same round trip as BLOB/CLOB locator.
 	// Thus, this feature would save one round trip occured in OCILobRead2().
@@ -373,8 +373,8 @@ protected:
 
 	int run_oci_func(int _func, const StmtCacheEntry *_stmt, const OCIFuncParams& _params, int *_oci_rc = NULL);
 
-        // execute query with N bind variables
-        int execute_query_with_n_binds( const std::string & _sql, const std::vector<std::string> &_names, const std::vector<std::string> & _values );
+    // execute query with N bind variables
+    int execute_query_with_n_binds( const std::string & _sql, const std::vector<std::string> &_names, const std::vector<std::string> & _values );
 
 	// clears out the null indicators in the define array
 	int clear_indicators();
@@ -434,7 +434,7 @@ private:
 	// frees oci resources and logs messages
 	// if the hndlp is NULL, then do nothing and return true
 	// returns false if error was detected
-	bool real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *name, LogLevelEnum level, OCIError *errhp = NULL);
+	bool real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *name, LogLevelEnum level, OCIError *errhp);
 
 	// set or clear non-blocking mode
 	int set_oci_nonblocking(bool _nonblock, const StmtCacheEntry *_stmt = NULL);
@@ -527,6 +527,8 @@ private:
 
 	void set_orig_query_hash(const std::string& _query);
 
+    //Fetch sql_id for statement
+	void fetch_sql_id(dvoid *&hndlp, OCIError *errhp);
 };
 
 #endif
