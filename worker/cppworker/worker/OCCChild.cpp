@@ -30,6 +30,8 @@
 #include <utility/fnv/fnv.h>
 #include <oci.h>
 #include <xa.h>
+#include <sstream>
+#include <iomanip>
 
 #include "config/Config.h"
 #include "config/CDBConfig.h"
@@ -5838,7 +5840,7 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 	//Ensure sqlid buffer is null-terminated
 	sqlid[sqlIdLen] = '\0';
 	// Convert the fetched SQL_ID to hexadecimal format
-        std::ostringstream hex_sql_id;
+	std::ostringstream hex_sql_id;
         for (ub4 i = 0; i < sqlIdLen; ++i) {
             hex_sql_id << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(sqlid[i]);
         }
