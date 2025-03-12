@@ -5830,14 +5830,14 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 		sql_id.clear();
 		return;
     }
-	//First get length of SQLID
-	oratext *sqlid = NULL;
-    ub4 sqlIdLen = 0;
+	// Pre-allocate a buffer that is "large enough" (e.g., 32 bytes)
+    oratext sqlid[32]; // Fixed-size buffer
+    ub4 sqlidLen = sizeof(sqlid); // Set to the size of the buffer
 	sword rc = OCI_SUCCESS;
 
 	rc = OCIAttrGet(hndlp,
 	                OCI_HTYPE_STMT,
-					(dvoid *)NULL,
+					(dvoid *)sqlid,
 					(ub4 *)&sqlIdLen,
 					OCI_ATTR_SQL_ID,
 					errhp);
@@ -5847,29 +5847,10 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 		sql_id.clear();
 		return;
 	}
-	// Allocate memory for sqlid
-    sqlid = (oratext *)malloc(sqlIdLen + 1); // +1 for NULL terminator
-	if (!sqlid) {
-		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Failed to allocate memory for sqlid.");
-		return;
-	}
-	//Now fetch actual SQL ID
-	rc = OCIAttrGet(hndlp,
-					OCI_HTYPE_STMT,
-					(dvoid *)sqlid,
-					(ub4 *)&sqlIdLen,
-					OCI_ATTR_SQL_ID,
-					errhp);
-	if (rc != OCI_SUCCESS) {
-		WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
-		log_oracle_error(rc, "failed to fetch sql_id from statement.");
-		free(sqlid);
-	} else {
-		//Ensure sqlid buffer is null-terminated
-		sqlid[sqlIdLen] = '\0';
-		//Assign the fetched SQL_ID to the std::string member variable
-		sql_id.assign(reinterpret_cast<char *>(sqlid), sqlIdLen);
-		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
-		free(sqlid);
-	}		
+	//Ensure sqlid buffer is null-terminated
+	sqlid[sqlIdLen] = '\0';
+	//Assign the fetched SQL_ID to the std::string member variable
+	sql_id.assign(reinterpret_cast<char *>(sqlid), sqlIdLen);
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
+	free(sqlid);
 }
