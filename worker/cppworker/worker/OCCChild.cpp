@@ -5829,9 +5829,8 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 		sql_id.clear();
 		return;
 	}
-	//Alllocate memory for sqlid
-	std::vector<oratext> sqlid_buffer(sqlIdLen + 1);
-	sqlid = sqlid_buffer.data();
+	// Allocate memory for sqlid
+    sqlid = (oratext *)malloc(sqlIdLen + 1); // +1 for NULL terminator
 	if (!sqlid) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Failed to allocate memory for sqlid.");
 		return;
@@ -5846,12 +5845,13 @@ void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
 	if (rc != OCI_SUCCESS) {
 		WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id from statement.");
 		log_oracle_error(rc, "failed to fetch sql_id from statement.");
-		sql_id.clear();
+		free(sqlid);
 	} else {
 		//Ensure sqlid buffer is null-terminated
 		sqlid[sqlIdLen] = '\0';
 		//Assign the fetched SQL_ID to the std::string member variable
 		sql_id.assign(reinterpret_cast<char *>(sqlid), sqlIdLen);
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
+		free(sqlid);
 	}		
 }
