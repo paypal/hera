@@ -5812,6 +5812,24 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 }
 
 void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
+	if (hndlp) {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received valid statement hndlp: %p", hndlp);
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received NULL or invalid statement hndlp.");
+	}
+
+	if (errhp) {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received valid error handler errhp: %p", errhp);
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "fetch_sql_id: Received NULL or invalid errhp.");
+	}
+
+	// Check for valid handles and return early if invalid
+	if (!hndlp || !errhp) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid statement hndlp or errhp pointer in fetch_sql_id.");
+		sql_id.clear();
+		return;
+    }
 	//First get length of SQLID
 	oratext *sqlid = NULL;
     ub4 sqlIdLen = 0;
