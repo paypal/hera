@@ -364,6 +364,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		return;
 	}
 
+    //Give precedence to existing statement cache, if both "enable_cache" and "enable_oci_stmt_cache" are enabled.
+	//In this it will disable OCI statement cache.
+	if enable_cache && enable_oci_stmt_cache {
+		enable_oci_stmt_cache = false;
+	}
     //MAX OCI statement cache size parameter and it should be > 0
 	if(config->get_value("max_oci_stmt_cache_size", cval))
 	    max_oci_stmt_cache_size = StringUtil::to_int(cval);
