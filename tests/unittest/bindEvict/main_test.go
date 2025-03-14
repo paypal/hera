@@ -32,6 +32,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["bind_eviction_names"] = "p"
 	appcfg["bind_eviction_threshold_pct"] = "50"
+	appcfg["bind_eviction_max_throttle_duration_sec"] = "60"
 
 	appcfg["request_backlog_timeout"] = "1000"
 	appcfg["soft_eviction_probability"] = "100"
@@ -133,7 +134,7 @@ func fastAndSlowBinds() error {
 	stop2 = 1 // stop bad clients
 	lib.GetConfig().BindEvictionDecrPerSec = 11500.1
 	defer func() { lib.GetConfig().BindEvictionDecrPerSec = 1.1 }()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		fmt.Printf("Error conn %s\n", err.Error())
