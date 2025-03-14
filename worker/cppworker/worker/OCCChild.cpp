@@ -1746,7 +1746,7 @@ int OCCChild::disconnect()
 	{
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, NULL);
+			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			delete stmt_cache[i];
 		}
 		delete[] stmt_cache;
@@ -2435,9 +2435,7 @@ int OCCChild::execute_query(const std::string& query)
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-    //extract sql_id
-	fetch_sql_id((CONST dvoid *) stmthp, errhp);
-	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, NULL) == false)
+	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
@@ -5502,7 +5500,6 @@ int OCCChild::get_db_charset(std::string& _charset)
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
 	// fill in the result
 	_charset = value;
 	m_connected_id = local_id[0];
@@ -5598,9 +5595,9 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 		m_session_var_stmthp = NULL;
 		return -1;
 	}
-    //extract sql_id
-	fetch_sql_id((CONST dvoid *) m_session_var_stmthp, errhp);
-	sql_id.clear();
+	if (DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp) == false) {
+			log_oracle_error(rc, "Failed to free statement handle.");
+	}
 	return 0;
 }
 
