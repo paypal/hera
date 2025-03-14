@@ -277,10 +277,11 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 			throttle.incrAllowEveryX()
 		} else {
 			throttle := BindThrottle{
-				Name:        bindName,
-				Value:       bindValue,
-				Sqlhash:     sqlhash,
-				AllowEveryX: 3*len(entry.Workers) + 1,
+				Name:              bindName,
+				Value:             bindValue,
+				Sqlhash:           sqlhash,
+				AllowEveryX:       3*len(entry.Workers) + 1,
+				throttleStartTime: time.Now(),
 			}
 			now := time.Now()
 			throttle.RecentAttempt.Store(&now)

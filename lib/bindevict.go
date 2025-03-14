@@ -28,12 +28,13 @@ import (
 )
 
 type BindThrottle struct {
-	Name             string
-	Value            string
-	Sqlhash          uint32
-	RecentAttempt    atomic.Value // time.Time
-	AllowEveryX      int
-	AllowEveryXCount int
+	Name              string
+	Value             string
+	Sqlhash           uint32
+	RecentAttempt     atomic.Value // time.Time
+	AllowEveryX       int
+	AllowEveryXCount  int
+	throttleStartTime time.Time //This enables time-based throttle.
 }
 
 var gBindEvict atomic.Value
@@ -137,6 +138,12 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 			entry.decrAllowEveryX(2)
 		}
 
+		//If throttle start duration is greater than max throttle duration then clear throttle for bind-in pair
+		if time.Since(entry.throttleStartTime) >= time.Duration(GetConfig().BindEvictionMaxThrottleDurarionInSec)*time.Second {
+			logger.GetLogger().Log(logger.Info, fmt.Sprintf("max thorttle time reached for sql: %s and bind-in key: %s", sqlhash, k))
+			entry.decrAllowEveryX(10000)
+			continue
+		}
 		// check if not used in a while
 		now := time.Now()
 		recent := entry.RecentAttempt.Load().(*time.Time)
