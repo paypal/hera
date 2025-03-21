@@ -48,23 +48,24 @@ type Config struct {
 	NumStdbyDbs        int
 	InitialMaxChildren int
 	ReadonlyPct        int
-	TafChildrenPct 	   int
+	TafChildrenPct     int
 	//
 	// backlog
 	//
-	BacklogPct                  int
-	BacklogTimeoutMsec          int
-	BacklogTimeoutUnit          int64
-	ShortBacklogTimeoutMsec     int
-	SoftEvictionEffectiveTimeMs int
-	SoftEvictionProbability     int
-	BindEvictionTargetConnPct   int
-	BindEvictionThresholdPct    int
-	BindEvictionDecrPerSec      float64
-	BindEvictionNames           string
-	BindEvictionMaxThrottle     int
-	SkipEvictRegex              string
-	EvictRegex                  string
+	BacklogPct                           int
+	BacklogTimeoutMsec                   int
+	BacklogTimeoutUnit                   int64
+	ShortBacklogTimeoutMsec              int
+	SoftEvictionEffectiveTimeMs          int
+	SoftEvictionProbability              int
+	BindEvictionTargetConnPct            int
+	BindEvictionThresholdPct             int
+	BindEvictionDecrPerSec               float64
+	BindEvictionNames                    string
+	BindEvictionMaxThrottle              int
+	BindEvictionMaxThrottleDurarionInSec int
+	SkipEvictRegex                       string
+	EvictRegex                           string
 	//
 	//
 	//
@@ -447,6 +448,7 @@ func InitConfig(poolName string) error {
 	gAppConfig.SoftEvictionProbability = cdb.GetOrDefaultInt("soft_eviction_probability", 50)
 	gAppConfig.BindEvictionTargetConnPct = cdb.GetOrDefaultInt("bind_eviction_target_conn_pct", 50)
 	gAppConfig.BindEvictionMaxThrottle = cdb.GetOrDefaultInt("bind_eviction_max_throttle", 20)
+	gAppConfig.BindEvictionMaxThrottleDurarionInSec = cdb.GetOrDefaultInt("bind_eviction_max_throttle_duration_sec", 120)
 	default_evict_names := fmt.Sprintf("id,num,%s", SrcPrefixAppKey)
 	gAppConfig.BindEvictionNames = cdb.GetOrDefaultString("bind_eviction_names", default_evict_names)
 	gAppConfig.BindEvictionThresholdPct = cdb.GetOrDefaultInt("bind_eviction_threshold_pct", 60)

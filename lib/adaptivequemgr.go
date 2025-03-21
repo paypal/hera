@@ -18,6 +18,7 @@
 package lib
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -277,14 +278,18 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 			throttle.incrAllowEveryX()
 		} else {
 			throttle := BindThrottle{
-				Name:        bindName,
-				Value:       bindValue,
-				Sqlhash:     sqlhash,
-				AllowEveryX: 3*len(entry.Workers) + 1,
+				Name:              bindName,
+				Value:             bindValue,
+				Sqlhash:           sqlhash,
+				AllowEveryX:       3*len(entry.Workers) + 1,
+				throttleStartTime: time.Now(),
 			}
 			now := time.Now()
 			throttle.RecentAttempt.Store(&now)
 			sqlBind[concatKey] = &throttle
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("Add BIND_EVICT for sql_hash: %d bind_name : %s and bind value: %x startTime: %v", sqlhash, bindName, sha256.Sum256([]byte(bindValue)), throttle.throttleStartTime))
+			}
 		}
 	}
 	return evictCount

@@ -11,7 +11,6 @@ import (
 	//"github.com/paypal/hera/client/gosqldriver"
 	_ "github.com/paypal/hera/client/gosqldriver/tcp" /*to register the driver*/
 
-	"github.com/paypal/hera/lib"
 	"github.com/paypal/hera/tests/unittest/testutil"
 	"github.com/paypal/hera/utility/logger"
 )
@@ -32,19 +31,19 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["bind_eviction_names"] = "p"
 	appcfg["bind_eviction_threshold_pct"] = "50"
-	appcfg["bind_eviction_max_throttle_duration_sec"] = "60"
+	appcfg["bind_eviction_max_throttle_duration_sec"] = "3"
 
 	appcfg["request_backlog_timeout"] = "1000"
-	appcfg["soft_eviction_probability"] = "100"
+	appcfg["soft_eviction_probability"] = "0"
 
 	opscfg := make(map[string]string)
 	max_conn = 25
 	opscfg["opscfg.default.server.max_connections"] = fmt.Sprintf("%d", int(max_conn))
 	opscfg["opscfg.default.server.log_level"] = "5"
 
-	opscfg["opscfg.default.server.saturation_recover_threshold"] = "10"
+	opscfg["opscfg.default.server.saturation_recover_threshold"] = "100"
 	//opscfg["opscfg.default.server.saturation_recover_throttle_rate"]= "100"
-	opscfg["opscfg.hera.server.saturation_recover_throttle_rate"] = "100"
+	opscfg["opscfg.hera.server.saturation_recover_throttle_rate"] = "5"
 	// saturation_recover_throttle_rate
 
 	return appcfg, opscfg, testutil.MySQLWorker
@@ -80,8 +79,6 @@ DELIMITER ;`)
 }
 
 func TestMain(m *testing.M) {
-	logger.GetLogger().Log(logger.Debug, "begin 20230918kkang TestMain")
-	fmt.Printf("TestMain 20230918kkang\n")
 	os.Exit(testutil.UtilMain(m, cfg, before))
 }
 
@@ -115,43 +112,12 @@ func fastAndSlowBinds() error {
 	// client threads of slow queries
 	var stop2 int
 	var badCliErr string
-	mkClients(1+int(max_conn*1.6), &stop2, 29001111, "badClient", &badCliErr, db)
-	time.Sleep(3100 * time.Millisecond)
-	/* if (testutil.RegexCountFile("BIND_THROTTLE", "cal.log") == 0) {
-		return fmt.Errorf("BIND_THROTTLE was not triggered")
-	}
-	if (testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0) {
-		return fmt.Errorf("BIND_EVICT was not triggered")
-	} // */
-
-	// start normal clients after initial backlog timeouts
-	var normCliErrStr string
-	var stop int
-	mkClients(1, &stop, 21001111, "n client", &normCliErrStr, db)
-	time.Sleep(1100 * time.Millisecond)
+	mkClients(1+int(max_conn*10), &stop2, 29001111, "badClient", &badCliErr, db)
+	time.Sleep(90 * time.Second)
 
 	// if we throttle down or stop, it restores
 	stop2 = 1 // stop bad clients
-	lib.GetConfig().BindEvictionDecrPerSec = 11500.1
-	defer func() { lib.GetConfig().BindEvictionDecrPerSec = 1.1 }()
-	time.Sleep(2 * time.Second)
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		fmt.Printf("Error conn %s\n", err.Error())
-		return err
-	}
-	defer conn.Close()
-	err = sleepyQ(conn, 29001111)
-	if err != nil {
-		msg := fmt.Sprintf("test failed, throttle down didn't restore")
-		fmt.Printf("%s", msg)
-		return fmt.Errorf("%s", msg)
-	}
-
-	stop = 1
-	if len(normCliErrStr) != 0 {
-		return NormCliErr()
-	}
+	time.Sleep(10 * time.Second)
 	return nil
 }
 
@@ -178,7 +144,7 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 					fmt.Printf(grpName+" connected %d\n", clientId)
 					if err != nil {
 						fmt.Printf(nowStr+grpName+" Error %d conn %s\n", clientId, err.Error())
-						time.Sleep(7 * time.Millisecond)
+						time.Sleep(4 * time.Millisecond)
 						continue
 					}
 				}
@@ -197,16 +163,16 @@ func mkClients(num int, stop *int, bindV int, grpName string, outErr *string, db
 					}
 				}
 				count++
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(4 * time.Millisecond)
 			}
 			fmt.Printf(time.Now().Format("15:04:05.000000 ")+grpName+"%d END loop%d\n", clientId, count)
 		}(i)
 	}
 }
 
-func TestBindEvict(t *testing.T) {
+func TestBindEvictWithThrottleTime(t *testing.T) {
 	// we would like to clear hera.log, but even if we try, lots of messages still go there
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	logger.GetLogger().Log(logger.Debug, "TestbindEvictWithThrottleTime +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 	err := fastAndSlowBinds()
 	if err != nil {
 		t.Fatalf("main step function returned err %s", err.Error())
@@ -217,5 +183,8 @@ func TestBindEvict(t *testing.T) {
 	if testutil.RegexCountFile("BIND_EVICT", "cal.log") == 0 {
 		t.Fatalf("BIND_EVICT was not triggered")
 	}
-	logger.GetLogger().Log(logger.Debug, "TestBindEvict stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
+	if testutil.RegexCountFile("max throttle time reached for sql", "hera.log") == 0 {
+		t.Fatalf("max throttle time recovery is not done")
+	}
+	logger.GetLogger().Log(logger.Debug, "TestbindEvictWithThrottleTime stop +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 } // */
