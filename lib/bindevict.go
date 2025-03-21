@@ -18,6 +18,7 @@
 package lib
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"regexp"
 	"sync"
@@ -139,10 +140,17 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		}
 
 		//If throttle start duration is greater than max throttle duration then clear throttle for bind-in pair
-		if time.Since(entry.throttleStartTime) >= time.Duration(GetConfig().BindEvictionMaxThrottleDurarionInSec)*time.Second {
-			logger.GetLogger().Log(logger.Info, fmt.Sprintf("max thorttle time reached for sql: %s and bind-in key: %s", sqlhash, k))
+		elapsedTime := time.Since(entry.throttleStartTime).Seconds()
+		if elapsedTime >= float64(GetConfig().BindEvictionMaxThrottleDurarionInSec) {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, fmt.Sprintf("max throttle time reached for sql: %d, bind-in key: %s and bind value: %x", sqlhash, k, sha256.Sum256([]byte(v))))
+			}
 			entry.decrAllowEveryX(10000)
 			continue
+		} else {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, fmt.Sprintf("throttle time: %v for sql: %d and bind-in key: %s and bind_value: %x", elapsedTime, sqlhash, k, sha256.Sum256([]byte(v))))
+			}
 		}
 		// check if not used in a while
 		now := time.Now()

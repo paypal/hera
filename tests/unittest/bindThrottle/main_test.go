@@ -31,6 +31,7 @@ func cfg() (map[string]string, map[string]string, testutil.WorkerType) {
 	appcfg["child.executable"] = "mysqlworker"
 	appcfg["bind_eviction_names"] = "p"
 	appcfg["bind_eviction_threshold_pct"] = "50"
+	appcfg["bind_eviction_max_throttle_duration_sec"] = "30"
 
 	appcfg["request_backlog_timeout"] = "1000"
 	appcfg["soft_eviction_probability"] = "100"
@@ -237,6 +238,9 @@ func TestBindThrottle(t *testing.T) {
 
 	if testutil.RegexCountFile(".*BIND_THROTTLE\t1354401077\t1.*", "cal.log") < 1 {
 		t.Fatalf("BIND_THROTTLE should trigger for SQL HASH 1354401077")
+	}
+	if testutil.RegexCountFile("max throttle time reached for sql", "hera.log") != 0 {
+		t.Fatalf("max throttle time recovery should not trigger")
 	}
 	logger.GetLogger().Log(logger.Debug, "BindThrottle done +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n")
 } // */
