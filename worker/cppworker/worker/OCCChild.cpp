@@ -1056,11 +1056,27 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			{
 				if (config->is_switch_enabled("enable_bind_hash_logging", false)) {
 					bool skip = false;
-					if (m_corr_id.length() > 16) { // Max hex value that can be stored in ULLONG_MAX (FFFFFFFFFFFFFFFF)
+					if (m_corr_id.length() > 16 && m_corr_id.length() != 32) { // Max hex value that can be stored in ULLONG_MAX (FFFFFFFFFFFFFFFF); corrid.length() != 32 checked to handle new corrid with length 32
 						skip = true; // Reduce the logging noise.
 					}
 					if (!skip) {
-						unsigned long long int corrid = strtoull(m_corr_id.c_str(), NULL , 16);
+						unsigned long long int corrid;
+						unsigned long long int corrIdMsbVal;
+						unsigned long long int corrIdLsbVal;
+						bool longCorrId = false;
+						std::string corrIdMsb;
+						std::string corrIdLsb;
+
+						if (m_corr_id.length() == 32) {
+							longCorrId = true;
+							corrIdMsb = m_corr_id.substr(0, 16);  // First 16 digits (Most Significant)
+							corrIdLsb  = m_corr_id.substr(16, 16); // Last 16 digits (Least Significant)
+							corrIdMsbVal = strtoull(corrIdMsb.c_str(), NULL, 16);
+							corrIdLsbVal  = strtoull(corrIdLsb.c_str(), NULL, 16);
+						} else {
+							corrid = strtoull(m_corr_id.c_str(), NULL , 16);
+						}
+
 						if (errno == ERANGE) {
 							std::ostringstream msg;
 							msg << "m_err=error on strtoull(), errno=" << errno;
@@ -1072,7 +1088,7 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 							e_name.AddData("corr_id_", m_corr_id);
 							e_name.Completed();
 						}
-						if (!skip && (bit_mask == (corrid & bit_mask))) { // Allow
+						if (!skip && ((longCorrId && (bit_mask == (corrIdMsbVal & bit_mask)) && (bit_mask == (corrIdLsbVal & bit_mask))) || (!longCorrId && bit_mask == (corrid & bit_mask)))) { // Allow	
 							if (bind_array->size() > 0) {
 								// Skip SQL with large number of binds
 								if (bind_array->size() > 5 || bind_array->at(0).get()->array_row_num > 1) {
