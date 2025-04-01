@@ -4786,7 +4786,7 @@ bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, Lo
     int rc;
     if (hndlp == NULL) return true;
     if (type == OCI_HTYPE_STMT && errhp != NULL) {
-        rc = OCIStmtRelease((OCIStmt*)hndlp, errhp, NULL, 0, OCI_DEFAULT);
+        rc = OCIStmtRelease((OCIStmt*)hndlp, errhp, NULL, 0, OCI_STRLS_CACHE_DELETE);
     } else {
         rc = OCIHandleFree(hndlp, type);
         hndlp = NULL;
