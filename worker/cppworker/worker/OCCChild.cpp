@@ -1071,6 +1071,9 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			{
 				if ((cur_stmt->type != SELECT_STMT) && (cur_stmt->type != SELECT_FOR_UPDATE_STMT))
 				{
+					if enable_oci_stmt_cache == true && enable_cache == false {
+						DO_OCI_HANDLE_FREE(cur_stmt->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
+					}
 					cur_stmt = NULL;
 				}
 			}
@@ -4648,7 +4651,9 @@ unsigned long long OCCChild::fetch(const std::string& count)
 		}
 
 		eor(is_in_transaction() ? EORMessage::IN_TRANSACTION : EORMessage::FREE, OCC_NO_MORE_DATA);
-
+        if enable_oci_stmt_cache == true && enable_cache == false {
+			DO_OCI_HANDLE_FREE(cur_stmt->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
+		}
 		cur_stmt = NULL;
 	}
 	else
