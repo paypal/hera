@@ -19,6 +19,7 @@ package lib
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -28,12 +29,13 @@ import (
 )
 
 type BindThrottle struct {
-	Name             string
-	Value            string
-	Sqlhash          uint32
-	RecentAttempt    atomic.Value // time.Time
-	AllowEveryX      int
-	AllowEveryXCount int
+	Name                  string
+	Value                 string
+	Sqlhash               uint32
+	RecentAttempt         atomic.Value // time.Time
+	AllowEveryX           int
+	AllowEveryXCount      int
+	privGapCalculatedTime atomic.Value
 }
 
 var gBindEvict atomic.Value
@@ -116,7 +118,7 @@ func (entry *BindThrottle) incrAllowEveryX() {
 	}
 }
 
-func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool) (bool, *BindThrottle) {
+func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavyUsage bool, throttleRecoveryFactor float64) (bool, *BindThrottle) {
 	GetBindEvict().lock.Lock()
 	sqlBinds := GetBindEvict().BindThrottle[sqlhash]
 	GetBindEvict().lock.Unlock()
@@ -129,19 +131,38 @@ func (be *BindEvict) ShouldBlock(sqlhash uint32, bindKV map[string]string, heavy
 		}
 		/* matched bind name and value
 		we stop searching and should return something */
-
+		now := time.Now()
 		// update based on usage
 		if heavyUsage {
 			entry.incrAllowEveryX()
+			//disable the gap-based throttle reduction when usage is heavy,
+			//ensuring reductions only happen during sustained low usage.
+			if entry.privGapCalculatedTime.Load() != nil {
+				entry.privGapCalculatedTime.Store((*time.Time)(nil))
+			}
 		} else {
 			entry.decrAllowEveryX(2)
+			if val := entry.privGapCalculatedTime.Load(); val == nil {
+				entry.privGapCalculatedTime.Store(&now)
+			} else {
+				// check if not used in a while
+				//This GAP will calculate every one second and decrese throttle for every 1 seconds
+				//with multiplicative value
+				privGapCalTime, ok := val.(*time.Time)
+				if ok {
+					gapInSeconds := now.Sub(*privGapCalTime).Seconds()
+					if gapInSeconds >= 1.0 {
+						//This calculation helps if sustained low usage around 60 seconds with 40% higher than threshold then
+						//The recovery will 1 x 10 + 40 per second, in a minute it is going to reduce = 3000.
+						//This makes from peak value 10000 it takes 2.5 minutes to full recovery from bind throttle.
+						gap := gapInSeconds*GetConfig().BindEvictionDecrPerSec + math.Ceil(throttleRecoveryFactor)
+						entry.decrAllowEveryX(int(gap))
+						entry.privGapCalculatedTime.Store(&now)
+					}
+				}
+			}
 		}
 
-		// check if not used in a while
-		now := time.Now()
-		recent := entry.RecentAttempt.Load().(*time.Time)
-		gap := now.Sub(*recent).Seconds() * GetConfig().BindEvictionDecrPerSec
-		entry.decrAllowEveryX(int(gap))
 		if entry.AllowEveryX == 0 {
 			return false, nil
 		}

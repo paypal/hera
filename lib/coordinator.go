@@ -669,8 +669,11 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 		numFree := GetStateLog().numFreeWorker(crd.shard.shardID, wType)
 		heavyUsage := false
 		thres := float64(GetConfig().BindEvictionTargetConnPct) / 100.0 * float64(cfg)
+		var throttleRecoveryFactor float64 = 1.0
 		if numFree < int(thres) {
 			heavyUsage = true
+		} else {
+			throttleRecoveryFactor = ((float64(numFree) - thres) / float64(cfg)) * 100
 		}
 		if logger.GetLogger().V(logger.Verbose) {
 			msg := fmt.Sprintf("bind throttle heavyUsage?%t free:%d cfg:%d pct:%d thres:%f", heavyUsage,
@@ -686,7 +689,7 @@ func (crd *Coordinator) dispatchRequest(request *netstring.Netstring) error {
 				logger.GetLogger().Log(logger.Debug, msg)
 			}
 		}
-		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage)
+		needBlock, throttleEntry := GetBindEvict().ShouldBlock(uint32(crd.sqlhash), bindkv, heavyUsage, throttleRecoveryFactor)
 		if needBlock {
 			msg := fmt.Sprintf("k=%s&v=%s&allowEveryX=%d&allowFrac=%.5f&raddr=%s",
 				throttleEntry.Name,
