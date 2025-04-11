@@ -283,6 +283,8 @@ func (mgr *adaptiveQueueManager) doBindEviction() int {
 				AllowEveryX: 3*len(entry.Workers) + 1,
 			}
 			now := time.Now()
+
+			throttle.privGapCalculatedTimeInNanos.Store(int64(0))
 			throttle.RecentAttempt.Store(&now)
 			sqlBind[concatKey] = &throttle
 		}
