@@ -175,7 +175,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 			if logger.GetLogger().V(logger.Verbose) {
 				logger.GetLogger().Log(logger.Verbose, crd.id, "Will try first the primary pool")
 			}
-			worker, ticket, err = primaryPool.GetWorker(crd.sqlhash, 0 /*no wait in backlog*/)
+			worker, ticket, err = primaryPool.GetWorker(crd.sqlhash, crd.isRead /*no wait in backlog*/)
 			if err == nil {
 				if logger.GetLogger().V(logger.Verbose) {
 					logger.GetLogger().Log(logger.Verbose, crd.id, "Trying first pool")
@@ -326,7 +326,7 @@ func (crd *Coordinator) DispatchTAFSession(request *netstring.Netstring) error {
 	}
 
 	var fbticket string
-	worker, fbticket, err = fallbackPool.GetWorker(crd.sqlhash)
+	worker, fbticket, err = fallbackPool.GetWorker(crd.sqlhash, crd.isRead)
 	if err == nil {
 		var wait bool
 		wait, err = crd.doRequest(crd.ctx, worker, request, crd.conn, nil)

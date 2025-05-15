@@ -53,6 +53,10 @@ const (
 	CmdShardKey         = 27
 	CmdGetNumShards     = 28
 	CmdSetShardID       = 29
+	CmdCacheKey         = 30
+	CmdCacheTTL         = 31
+	CmdCacheOp          = 32
+
 )
 
 // DataType defines Bind data types
@@ -84,6 +88,7 @@ const (
 	CmdServerConnectionRejectedClientTime  = 1010
 	CmdServerInfo                          = 1011
 	CmdServerIntInfo                       = 1012
+	CmdServerRespondedFromCache            = 1020
 
 	CmdClientProtocolNameNoAuth = 2001
 	CmdClientProtocolName       = 2002

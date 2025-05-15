@@ -47,6 +47,26 @@ type HeraConn interface {
 	SetClientInfo(poolname string, host string) error
 
 	SetClientInfoWithPoolStack(poolName string, host string, poolStack string) error
+
+	SetClientInfoWithPayload(poolName string, host string, payload string) error
+
+	// Used to pass the cache key as part of the request.
+	SetCacheKey(payload string)
+
+	// Reset the set set via SetCacheKey
+	ResetCacheKey()
+
+	// Used to set the cache TTL as part of the request.
+	SetCacheTTL(payload string)
+
+	// Reset the set set via SetCacheTTL
+	ResetCacheTTL()
+
+	// Used to set the cache operation. (For ex: GET) as part of the request.
+	SetCacheOperation(payload string)
+
+	// Reset the set set via SetCacheOperation
+	ResetCacheOperation()
 }
 
 // HeraStmt is an API extension for *sql.Stmt

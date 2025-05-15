@@ -19,19 +19,22 @@
 //
 // The driver should be used via the database/sql package:
 //
-//  import "database/sql"
-//  import _ "github.com/paypal/hera/client/gosqldriver/tls"
+//	import "database/sql"
+//	import _ "github.com/paypal/hera/client/gosqldriver/tls"
 //
-//  db, err := sql.Open("hera", "1:<ip>:<port>")
+//	db, err := sql.Open("hera", "1:<ip>:<port>")
 package tls
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/paypal/hera/client/gosqldriver"
 	"github.com/paypal/hera/common"
@@ -40,7 +43,9 @@ import (
 )
 
 type heraDriver struct {
-	TLSCfg *tls.Config
+	TLSCfg           *tls.Config
+	Ssl              bool
+	EncryptedAuthKey []byte
 }
 
 // HeraTLSDrv is a global object keeping the configuration
@@ -48,9 +53,11 @@ var HeraTLSDrv *heraDriver // TODO make it private, create the tlsConfig in Open
 
 func init() {
 	HeraTLSDrv = &heraDriver{
-		TLSCfg: &tls.Config{},
+		TLSCfg:           &tls.Config{},
+		Ssl:              false,
+		EncryptedAuthKey: nil,
 	}
-	sql.Register("hera", HeraTLSDrv)
+	sql.Register("heratls", HeraTLSDrv)
 }
 
 func (driver *heraDriver) Open(url string) (driver.Conn, error) {
@@ -71,6 +78,69 @@ func (driver *heraDriver) Open(url string) (driver.Conn, error) {
 	}
 
 	reader := netstring.NewNetstringReader(conn)
+
+	if driver.Ssl {
+		var ns *netstring.Netstring
+		nss := make([]*netstring.Netstring, 2)
+
+		nss[0] = netstring.NewNetstringFrom(common.CmdClientProtocolName, []byte(fmt.Sprintf("occ 1")))
+		nss[1] = netstring.NewNetstringFrom(common.CmdClientUsername, []byte(fmt.Sprintf("clocapp")))
+
+		ns = netstring.NewNetstringEmbedded(nss)
+		_, err = conn.Write(ns.Serialized)
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "Failed to send protocol name")
+			}
+			return nil, errors.New("failed to send protocol name")
+		}
+
+		ns, err := reader.ReadNext()
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+			}
+			return nil, errors.New("failed to read server info")
+		}
+
+		if ns.Cmd == common.CmdServerChallenge {
+
+			mac := hmac.New(sha256.New, driver.EncryptedAuthKey)
+			_, err := mac.Write(ns.Payload)
+			if err != nil {
+				return nil, errors.New("challenge verification failed")
+			}
+			generatedMac := mac.Sum(nil)
+			nss := make([]*netstring.Netstring, 2)
+
+			nss[0] = netstring.NewNetstringFrom(common.CmdClientChallengeResponse, generatedMac)
+			nss[1] = netstring.NewNetstringFrom(common.CmdClientCurrentClientTime, []byte(fmt.Sprintf("%d", time.Now().Unix())))
+
+			ns = netstring.NewNetstringEmbedded(nss)
+			_, err = conn.Write(ns.Serialized)
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "Failed to send custom auth challenge")
+				}
+				return nil, errors.New("failed to send custom auth challenge\"")
+			}
+
+			ns, err := reader.ReadNext()
+			if err != nil {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "Failed to read server response ", err)
+				}
+				return nil, errors.New("failed to read server response")
+			}
+
+			if ns.Cmd != common.CmdServerConnectionAccepted {
+				if logger.GetLogger().V(logger.Warning) {
+					logger.GetLogger().Log(logger.Warning, "server did not accept connection")
+				}
+				return nil, errors.New("server did not accept connection")
+			}
+		}
+	}
 
 	// send client info
 	pid := os.Getpid()

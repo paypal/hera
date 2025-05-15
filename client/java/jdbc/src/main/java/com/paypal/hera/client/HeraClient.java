@@ -51,4 +51,6 @@ public interface HeraClient {
 	public boolean isReadOnly();
 
 	public String getHeraClientConnID();
+
+	public void setPoolName(String poolName);
 }

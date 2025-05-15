@@ -70,12 +70,12 @@ func TestPoolDempotency(t *testing.T) {
 	}
 	go pool.checkWorkerLifespan()
 
-	wa := NewWorker(0, wtypeRW, 0, 0, "cloc", nil)
-	wb := NewWorker(1, wtypeRW, 0, 0, "cloc", nil)
-	wc := NewWorker(2, wtypeRW, 0, 0, "cloc", nil)
-	wd := NewWorker(3, wtypeRW, 0, 0, "cloc", nil)
-	we := NewWorker(4, wtypeRW, 0, 0, "cloc", nil)
-	wf := NewWorker(5, wtypeRW, 0, 0, "cloc", nil)
+	wa := NewWorker(0, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
+	wb := NewWorker(1, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
+	wc := NewWorker(2, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
+	wd := NewWorker(3, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
+	we := NewWorker(4, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
+	wf := NewWorker(5, ShIdUnset, wtypeRW, 0, 0, "cloc", nil)
 	wa.setState(wsInit)
 	wb.setState(wsInit)
 	wc.setState(wsInit)

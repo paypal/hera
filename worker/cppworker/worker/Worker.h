@@ -153,6 +153,7 @@ protected:
 	int init_protected(const void*);
 	int helper_load_protected_configs(const void* pin);
 	std::string m_corr_id;
+	std::string m_pool_name;
 	int m_sid;
 	timeval m_mux_start_time;
 	uint m_saturation_recover;
@@ -205,6 +206,9 @@ protected:
 
 	void set_txn_time_offset(bool _reset=false);
 
+	// support action during cutover
+	virtual void cutover_support() { return; };
+
 protected:
 	bool check_max_requests_and_lifespan();
 	std::string m_protocol_version;
@@ -216,6 +220,7 @@ protected:
 	std::string m_query_hash;
 	int m_connected_id;
 	std::string m_db_uname;
+	bool m_set_user_role;
 
 	void eor(int _status);
 	void eor(int _status, const std::string& _buffer);

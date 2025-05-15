@@ -29,6 +29,7 @@ const (
 	EvtNAmeTafBklg = "BKLG"
 
 	EvtTypeSharding           = "SHARDING"
+	EvtTypeCutover            = "CUTOVER"
 	EvtTypeMux                = "HERAMUX"
 	EvtNameBadShardID         = "bad_shard_id"
 	EvtNameUnkKey             = "unknown_key_name"
@@ -77,7 +78,27 @@ var (
 	ErrNoScuttleIdPredicate,
 	ErrCrossKeysDML,
 	ErrQueryBindBlocker,
+	ErrNotInternal,
 	ErrOther,
+	ErrCutoverReadNotAllowed,
+	ErrCutoverWriteNotAllowed,
+	ErrSrcUnknown,
+	ErrCutoverKill,
+	ErrCacheNotEnabled,
+	ErrCacheCorridNotSet,
+	ErrCacheBadRequest,
+	ErrCacheReqNotSupported,
+	ErrCacheSkipResponse,
+	ErrCacheDisabled,
+	ErrCacheAppDisabled,
+	ErrCacheShadowTest,
+	ErrCacheClientClosed,
+	ErrCacheMultipleClientReq,
+	ErrCacheClientReqCanceled,
+	ErrCacheClientWriteFailed,
+	ErrCacheKeyNotSet,
+	ErrCacheInvalidTTL,
+	ErrCacheInvalidOperation,
 	ErrReqParseFail error
 )
 
@@ -108,6 +129,26 @@ func MkErr(prefix string) {
 	ErrQueryBindBlocker = errors.New(prefix + "-207: dba query bind blocker")
 	ErrOther = errors.New(prefix + "-1000: unknown error")
 	ErrReqParseFail = errors.New("Request error")
+	ErrCutoverReadNotAllowed = errors.New(prefix + "-500: active db cutover no read allowed")
+	ErrCutoverWriteNotAllowed = errors.New(prefix + "-501: active db cutover no write allowed")
+	ErrCutoverKill = errors.New(prefix + "-502: db cutover stop txn in progress")
+	ErrNotInternal = errors.New(prefix + "-503: set shard by non-internal sql")
+	ErrSrcUnknown = errors.New(prefix + "-510: unknown source to internal sql")
+	ErrCacheNotEnabled = errors.New("sql is not enabled for caching")
+	ErrCacheCorridNotSet = errors.New("cache session: corrid is NotSet")
+	ErrCacheBadRequest = errors.New("cache session: bad request")
+	ErrCacheReqNotSupported = errors.New("cache session: request not supported")
+	ErrCacheSkipResponse = errors.New("cache session: skip GET response from cache")
+	ErrCacheDisabled = errors.New("sql is disabled for caching")
+	ErrCacheAppDisabled = errors.New("caching is not enabled for client application")
+	ErrCacheShadowTest = errors.New("cache session: shadow test enabled")
+	ErrCacheClientClosed = errors.New("cache session: client connection closed")
+	ErrCacheMultipleClientReq = errors.New("cache session: multiple client request not supported")
+	ErrCacheClientReqCanceled = errors.New("cache session: client request canceled")
+	ErrCacheClientWriteFailed = errors.New("cache session: client write failed")
+	ErrCacheKeyNotSet = errors.New("cache-controlled cache request: key not set")
+	ErrCacheInvalidTTL = errors.New("cache-controlled cache request: invalid ttl value")
+	ErrCacheInvalidOperation = errors.New("client-controlled cache request: invalid operation")
 }
 
 // Configuration entry names
@@ -117,6 +158,7 @@ const (
 )
 
 type dbtype int
+type ShardByTwoTask int
 
 // Database typoe constants
 const (
@@ -136,4 +178,41 @@ const (
 
 const (
 	SrcPrefixAppKey string = "srcPrefixApp"
+)
+
+// rapid cutover overloaded some of the sharding definition
+// two_task pool is shard 0
+// two_task_cutover is shard 1
+// support max 2 db at this time
+const (
+	ShIdTns        ShardByTwoTask = 0
+	ShIdTnsCutover ShardByTwoTask = 1
+	MaxDbInCutover ShardByTwoTask = 2
+	ShIdUnset      ShardByTwoTask = 3
+)
+
+const (
+	EnablePhStr  = "ENABLE"
+	FlexupPhStr  = "FLEXUP"
+	CutoverPhStr = "CUTOVER"
+	UnsetStr     = "NONE"
+)
+
+const (
+	Source = "SRC"
+	Target = "TGT"
+)
+
+const (
+	EnablePhId  = 1
+	FlexupPhId  = 2
+	CutoverPhId = 3
+)
+
+const (
+	ReadOk  int = 0x0001
+	WriteOk int = 0x0002
+)
+const (
+	CacheSeparator string = "##%%OCCCacheSep&&**"
 )

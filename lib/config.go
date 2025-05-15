@@ -36,6 +36,11 @@ const (
 	oracle_worker_config_cal_name = "OCC_ORACLE_WORKER_CONFIG"
 )
 
+type Resize struct {
+	maxWorker int
+	shid      ShardByTwoTask
+}
+
 // The Config contains all the static configuration
 type Config struct {
 	CertChainFile   string
@@ -144,6 +149,11 @@ type Config struct {
 	TAFAllowSlowEveryX   int
 	TAFNormallySlowCount int
 
+	// Enable cutver - create source and target connections
+	EnableCutover            bool
+	CutoverCfgReloadInterval int
+	CutoverPostfix           string
+
 	// for testing, enabling profile
 	EnableProfile     bool
 	ProfileHTTPPort   string
@@ -174,6 +184,22 @@ type Config struct {
 	// taf testing
 	TestingEnableDMLTaf bool
 
+	// Caching
+	EnableCaching bool
+	CachingCfgReloadInterval int
+	CacheEndPoint string
+	CacheDefaultTTL int
+	EnableCompression bool
+	CacheNamespace string
+	CacheConnectionPoolSize int
+	CacheConnectTimeoutMs int
+	CacheResponseTimeoutMs int
+	CacheSSLEnabled bool
+	CacheCertFilePath string
+	CacheBypassLTM bool
+
+	// Requires cal_enable_threadgroup enabled to true. This ensures the messages are put in different swimlanes.
+	numCalThreads int
 	//
 	// enable background goroutine to recover worker not returned by coordinator
 	//
@@ -379,8 +405,24 @@ func InitConfig(poolName string) error {
 	if gAppConfig.EnableTAF {
 		InitTAF(gAppConfig.NumOfShards)
 	}
-	// TODO:
-	gAppConfig.NumStdbyDbs = 1
+	// DB Cutover
+	gAppConfig.EnableCutover = cdb.GetOrDefaultBool("enable_cutover", false)
+	if gAppConfig.EnableCutover {
+		if gAppConfig.EnableSharding == true || gAppConfig.EnableTAF == true {
+			gAppConfig.EnableCutover = false
+		}
+	}
+	gAppConfig.CutoverCfgReloadInterval = cdb.GetOrDefaultInt("cutover_cfg_reload_interval", 2)
+
+	if gAppConfig.EnableCutover {
+		err = cutoverSetup()
+		if err != nil {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "cutover config init error")
+			}
+			return err
+		}
+	}
 
 	// Fetch Oracle worker configurations.. The defaults must be same between oracle worker and here for accurate logging.
 	gAppConfig.EnableCache = cdb.GetOrDefaultBool("enable_cache", false)
@@ -388,22 +430,34 @@ func InitConfig(poolName string) error {
 	gAppConfig.EnableQueryReplaceNL = cdb.GetOrDefaultBool("enable_query_replace_nl", true)
 	gAppConfig.EnableBindHashLogging = cdb.GetOrDefaultBool("enable_bind_hash_logging", false)
 	gAppConfig.EnableSessionVariables = cdb.GetOrDefaultBool("enable_session_variables", false)
-	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_non_blocking", false)
+	gAppConfig.UseNonBlocking = cdb.GetOrDefaultBool("use_nonblocking", false)
 
 	var numWorkers int
 	numWorkers = 6
 	//err = config.InitOpsConfigWithName("../opscfg/hera.txt")
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "init opscfg")
+	}
 	err = config.InitOpsConfig()
 	if err != nil {
-		if logger.GetLogger().V(logger.Info) {
-			logger.GetLogger().Log(logger.Info, "Error initializing ops config:", err.Error())
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Error initializing ops config:", err.Error())
 		}
 	} else {
 		cfg := config.GetOpsConfig()
 		numWorkersOpscfg, err := cfg.GetInt(ConfigMaxWorkers)
 		if err == nil {
 			numWorkers = numWorkersOpscfg
-		} // continue on error
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "OpsConfig GetInt(ConfigMaxWorkers)", numWorkersOpscfg)
+			}
+		} else {
+			if logger.GetLogger().V(logger.Warning) {
+				logger.GetLogger().Log(logger.Warning, "OpsConfig GetInt(ConfigMaxWorkers) error", err.Error())
+				return errors.New("error load opscfg MaxWorker")
+			}
+		}
+		// continue on error
 		gOpsConfig = &OpsConfig{
 			logLevel:               cfg.GetOrDefaultInt("log_level", logLevel),
 			numWorkers:             uint32(numWorkers),
@@ -415,7 +469,9 @@ func InitConfig(poolName string) error {
 			satRecoverThrottleRate: uint32(cfg.GetOrDefaultInt("saturation_recover_throttle_rate", 0)),
 		}
 		logger.SetLogVerbosity(int32(gOpsConfig.logLevel))
+		/* comment this out to see if init works
 		gAppConfig.numWorkersCh <- numWorkers
+		*/
 	}
 
 	gAppConfig.ReadonlyPct = cdb.GetOrDefaultInt("readonly_children_pct", 0)
@@ -477,6 +533,23 @@ func InitConfig(poolName string) error {
 	gAppConfig.QueryBindBlockerMinSqlPrefix = cdb.GetOrDefaultInt("query_bind_blocker_min_sql_prefix", 20)
 	gAppConfig.TestingEnableDMLTaf = cdb.GetOrDefaultBool("testing_enable_dml_taf", false)
 	gAppConfig.EnableDanglingWorkerRecovery = cdb.GetOrDefaultBool("enable_danglingworker_recovery", false)
+
+	// Caching related configs
+	gAppConfig.EnableCaching = cdb.GetOrDefaultBool("enable_caching", false)
+	gAppConfig.CachingCfgReloadInterval = cdb.GetOrDefaultInt("caching_cfg_reload_interval", 10)
+	gAppConfig.CacheEndPoint = cdb.GetOrDefaultString("cache_endpoint", "127.0.0.1:5080")
+	gAppConfig.EnableCompression = cdb.GetOrDefaultBool("cache_enable_compression", false)
+	gAppConfig.CacheNamespace = cdb.GetOrDefaultString("cache_namespace", "test_ns")
+	gAppConfig.CacheConnectionPoolSize = cdb.GetOrDefaultInt("cache_connection_pool_size", 2)
+	gAppConfig.CacheConnectTimeoutMs = cdb.GetOrDefaultInt("cache_connection_timeout_ms", 1000)
+	gAppConfig.CacheResponseTimeoutMs = cdb.GetOrDefaultInt("cache_response_timeout_ms", 50)
+	gAppConfig.CacheDefaultTTL = cdb.GetOrDefaultInt("cache_default_ttl", 60)
+	gAppConfig.CacheSSLEnabled = cdb.GetOrDefaultBool("cache_ssl_enabled", true)
+	gAppConfig.CacheCertFilePath = cdb.GetOrDefaultString("cache_cert_file_path", currentDir)
+	gAppConfig.CacheBypassLTM = cdb.GetOrDefaultBool("cache_bypass_ltm", false)
+
+	// num cal threads. Takes effect when cal_enable_threadgroup is enabled. Otherwise, all msgs will end up in one swimlane
+	gAppConfig.numCalThreads = cdb.GetOrDefaultInt("num_cal_threads", 25)
 
 	gAppConfig.GoStatsInterval = cdb.GetOrDefaultInt("go_stats_interval", 10)
 	defaultConns := 10000 // disable by default
@@ -650,9 +723,13 @@ func LogOccConfigs() {
 		"KEEP-ALIVE": {
 			"use_non_blocking": gAppConfig.UseNonBlocking,
 		},
+		"RAPID-CUTOVER": {
+			"enable_cutover": gAppConfig.EnableCutover,
+			"cutover_cfg_reload_interval": gAppConfig.CutoverCfgReloadInterval, 
+		},
 	}
-	calName := mux_config_cal_name
 	for feature, configs := range whiteListConfigs {
+		calName := mux_config_cal_name
 		switch feature {
 		case "BACKLOG":
 			if gAppConfig.BacklogPct == 0 {
@@ -718,6 +795,10 @@ func LogOccConfigs() {
 				continue
 			}
 			calName = oracle_worker_config_cal_name
+		case "RAPID-CUTOVER":
+			if !gAppConfig.EnableCutover {
+				continue
+			}
 		}
 
 		evt := cal.NewCalEvent(calName, fmt.Sprintf(feature), cal.TransOK, "")
@@ -820,6 +901,11 @@ func GetMaxRequestsPerChild() uint32 {
 
 // NumWorkersCh returns the channel where number of workers change is sent
 func (cfg *Config) NumWorkersCh() <-chan int {
+	return cfg.numWorkersCh
+}
+
+// NumWorkersCh returns the channel where to update number of workers change
+func (cfg *Config) NumWorkersChW() chan int {
 	return cfg.numWorkersCh
 }
 
@@ -937,4 +1023,14 @@ func GetNumWWorkers(shard int) int {
 		}
 	}
 	return num
+}
+
+func cutoverSetup() error {
+	loadEnvErr := setPermTwoTaskName()
+	if loadEnvErr == nil {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "mux starts up - cutover env ready")
+		}
+	}
+	return loadEnvErr
 }

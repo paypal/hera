@@ -378,6 +378,10 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_STANDBY0_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
+
+			os.Setenv("TWO_TASK_0", os.Getenv("TWO_TASK"))
+			os.Setenv("TWO_TASK_STANDBY0", os.Getenv("TWO_TASK"))
+			os.Setenv("TWO_TASK_STANDBY0_0", os.Getenv("TWO_TASK"))
 			os.Setenv("MYSQL_IP", ip)
 			// Set up the rac_maint table
 			pfx := os.Getenv("MGMT_TABLE_PREFIX")

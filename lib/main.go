@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"strconv"
 
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/utility/logger"
@@ -48,9 +49,7 @@ func Run() {
 	/* Don't log.
 	We haven't configured log level, so lots goes to stdout/err log. */
 	if len(*namePtr) == 0 {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "missing --name parameter")
-		}
+		logger.GetLogger().Log(logger.Alert, "missing --name parameter")
 		FullShutdown()
 	}
 
@@ -58,16 +57,12 @@ func Run() {
 
 	err := InitConfig(*namePtr)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to initialize configuration:", err.Error())
 		FullShutdown()
 	}
 	pidfile, err := os.Create(GetConfig().MuxPidFile)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "Can't open", GetConfig().MuxPidFile, err.Error())
-		}
+		logger.GetLogger().Log(logger.Alert, "Can't open", GetConfig().MuxPidFile, err.Error())
 		FullShutdown()
 	} else {
 		pidfile.WriteString(fmt.Sprintf("%d\n", os.Getpid()))
@@ -102,9 +97,7 @@ func Run() {
 	nameForTns := *namePtr
 	CfgFromTns(nameForTns)
 	if (GetWorkerBrokerInstance() == nil) || (GetWorkerBrokerInstance().RestartWorkerPool(*namePtr) != nil) {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to start hera worker")
 		FullShutdown()
 	}
 
@@ -131,14 +124,6 @@ func Run() {
 		GetStateLog().SetStartTime(time.Now())
 	}
 
-	go func() {
-		sleep := time.Duration(GetConfig().ConfigReloadTimeMs)
-		for {
-			time.Sleep(time.Millisecond * sleep)
-			CheckOpsConfigChange()
-		}
-	}()
-
 	//This logs the configured parameter with the feature name in the CAL log periodically based on ConfigLoggingReloadTimeHours.
 	LogOccConfigs()
 	configLoggingTicker := time.NewTicker(time.Duration(GetConfig().ConfigLoggingReloadTimeHours) * time.Hour)
@@ -160,17 +145,14 @@ func Run() {
 		InitQueryBindBlocker(*namePtr)
 	}
 
-	if logger.GetLogger().V(logger.Info) {
-		logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
-	}
+	logger.GetLogger().Log(logger.Info, "Waiting for at least one database connection")
 
 	pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRW, 0, 0)
 	if err != nil {
-		if logger.GetLogger().V(logger.Alert) {
-			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
-		}
+		logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RW, 0, 0:", err)
 		FullShutdown()
 	}
+
 	for {
 		if pool.GetHealthyWorkersCount() > 0 {
 			break
@@ -184,6 +166,24 @@ func Run() {
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
+
+	// some features with rw split instance, it must have at least a read worker available
+	if (GetConfig().EnableCutover || GetConfig().EnableSharding) && GetConfig().ReadonlyPct > 0 { 
+		pool, err := GetWorkerBrokerInstance().GetWorkerPool(wtypeRO, 0, 0)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "failed to get pool WTYPE_RO, 0, 0:", err)
+			FullShutdown()
+		}
+
+		for {
+			if pool.GetHealthyWorkersCount() > 0 {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+
+
 	var lsn Listener
 	if GetConfig().KeyFile != "" {
 		lsn = NewTLSListener(fmt.Sprintf("0.0.0.0:%d", GetConfig().Port))
@@ -194,13 +194,40 @@ func Run() {
 	if GetConfig().EnableSharding {
 		err = InitShardingCfg()
 		if err != nil {
-			if logger.GetLogger().V(logger.Alert) {
-				logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err)
-			}
+			logger.GetLogger().Log(logger.Alert, "failed to initialize sharding config:", err.Error())
+			FullShutdown()
+		}
+	} else if GetConfig().EnableCutover {
+		time.Sleep(time.Second * 1)
+		err = InitCutoverCfg(*namePtr)
+		if err != nil {
+			logger.GetLogger().Log(logger.Alert, "failed to initialize cutover config:", err.Error())
 			FullShutdown()
 		}
 	}
+
 	InitRacMaint(*namePtr)
+
+	if GetConfig().EnableCaching {
+		logger.GetLogger().Log(logger.Verbose, "enable_caching is set to true...")
+		err = InitCachingCfg(*namePtr)
+		logger.GetLogger().Log(logger.Verbose, "After InitCachingCfg in main...")
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize caching config:", err)
+			}
+			// FullShutdown() -- Do not shut down during initial phase
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main...")
+		_, err = GetJunoClient()
+		if err != nil {
+			if logger.GetLogger().V(logger.Alert) {
+				logger.GetLogger().Log(logger.Alert, "failed to initialize juno client:", err)
+			}
+			FullShutdown()
+		}
+		logger.GetLogger().Log(logger.Verbose, "GetJunoClient in main successful...")
+	}
 
 	srv := NewServer(lsn, HandleConnection)
 
@@ -213,6 +240,11 @@ func Run() {
 	//
 	defer func() {
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 	}()
 
 	<-GetWorkerBrokerInstance().Stopped()
@@ -245,6 +277,11 @@ func handlePanicAndReleaseResource(mux_process_id int) {
 		// this case is thread group calDefaultThreadGroupName.
 		//
 		cal.ReleaseCxtResource()
+		if GetConfig().EnableCaching {
+			for i := 0; i < GetConfig().numCalThreads; i++ {
+				cal.ReleaseCxtResource(cal.DefaultTGName + strconv.Itoa(i))
+			}
+		}
 		os.Exit(1)
 	}
 }

@@ -49,6 +49,9 @@ func init() {
 	sql.Register("hera", drv)
 }
 
+func RegisterHeraDriver() {
+}
+
 func (driver *heraDriver) Open(url string) (driver.Conn, error) {
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "Dialing to hera server:", url)

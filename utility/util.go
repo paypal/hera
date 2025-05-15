@@ -1,6 +1,11 @@
 // Package utility defines generic utilitarian functions
 package utility
 
+import (
+	"hash"
+	"hash/fnv"
+)
+
 // Fowler/Noll/Vo- hash
 // FNV hashes are designed to be fast while maintaining a low
 // collision rate. The FNV speed allows one to quickly hash lots
@@ -20,4 +25,10 @@ func GetSQLHash(sqltext string) (sqlhash uint32) {
 	var lo = uint32(hash & 0x00000000ffffffff)
 	var hi = uint32((hash >> 32) & 0x00000000ffffffff)
 	return hi ^ lo
+}
+
+func GetFNV128a(input string) ([]byte) {
+	var hash hash.Hash = fnv.New128a()
+	hash.Write([]byte(input))
+	return hash.Sum(nil)
 }

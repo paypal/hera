@@ -34,6 +34,7 @@ HBSender* HBSender::the_hbsender = NULL;
 HBSender::HBSender(OCCChild* _occ_child, int _timeout, pid_t _ppid, int _ctrl_fd) {
 	m_occ_child = _occ_child;
 	m_timeout = _timeout;
+	// if cutover is enabled, we need to 
 	m_is_enabled = false;
 	m_rq_id = 0;
 	m_ppid = _ppid;
@@ -111,7 +112,6 @@ void HBSender::run() {
 	while(1) {
 
 		int snooze_time = get_snooze_time();
-
 		if (snooze_time > 0 ) {
 			if (wait_for_ctrl(snooze_time)) {
 				if (!handle_ctrl())
@@ -145,12 +145,25 @@ bool HBSender::handle_ctrl()
 	synchronize(this);
 	std::string payload;
 	int code = m_reader->read(&payload);
-	if (code != CMD_INTERRUPT_MSG) {
-			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid control command: %d. Exiting", code);
+	if (code != CMD_INTERRUPT_MSG &&  code != CMD_UPDATE_MSG) {
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "New Invalid control command: %d. Exiting", code);
 
 			// we're in really bad state
 			_exit(0);
 	}
+	
+	if (code == CMD_UPDATE_MSG) {
+		if (payload.length() != 1) {
+			WRITE_LOG_ENTRY(logfile, LOG_INFO, "New Invalid ctrl update msg length %d. Exiting", payload.length());
+			_exit(0);
+		}
+		const char* flag = payload.c_str();
+		uint8_t user_role = uint8_t(flag[0]);
+		// WRITE_LOG_ENTRY(logfile, LOG_ALERT, "New ctrl update msg %s", payload.c_str());
+		m_occ_child->enable_set_user_role(user_role);	
+		return true;
+	}
+
 	if (payload.length() != 5) {
 			WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid control command payload length: %d. Exiting", payload.length());
 
@@ -168,7 +181,6 @@ bool HBSender::handle_ctrl()
 	// capture the req_id which can be used during recover() so as to not recover different req_id due to race condition
 	m_occ_child->set_id_to_abort(rq_id);
 	uint16_t flags = data[0];
-
 	if (flags == ControlMessage::STRANDED_SKIP_BREAK) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "high load, skipping break");
 		m_occ_child->trigger_recovery(flags);

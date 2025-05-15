@@ -178,7 +178,8 @@ void WorkerApp::init_logs()
 
 	// get the log level
 	if (config->get_value("log_level", cval))
-		log_level = StringUtil::to_uint(cval);
+		//log_level = StringUtil::to_uint(cval);
+		log_level = LOG_DEBUG; 
 	else
 		log_level = LOG_DEBUG;
 
@@ -230,6 +231,7 @@ void WorkerApp::init_logs()
 	OPSConfig& opscfg = OPSConfig::create_instance(opscfgFile);
 	if (opscfg.get_value("log_level", cval)) {
 		log_level = StringUtil::to_uint(cval);
+		log_level = 5; 
 	}
 	logger->set_log_level(static_cast<LogLevelEnum>(log_level));
 }

@@ -63,6 +63,12 @@ type Transaction interface {
 	SetOperationName(string, bool)
 }
 
+// AtomicTransaction declares the functions for generating CAL transactions
+type AtomicTransaction interface {
+	Activity
+	SetDuration(float32)
+}
+
 // HeartBeat declares the functions for generating CAL heartbeat
 type HeartBeat interface {
 	Activity

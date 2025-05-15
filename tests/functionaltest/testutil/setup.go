@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	speedbump "github.com/kffl/speedbump/lib"
+	"github.com/paypal/hera/lib"
 	"net"
 	"os"
 	"os/exec"
@@ -201,30 +203,23 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 	CleanDB(dockerName)
 	if dbType == MySQL {
 		// mac must use port forward
-		cmd := exec.Command("docker", "run", "--name", dockerName, "-p3306:3306", "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:latest")
+		cmd := exec.Command("docker", "run", "--name", dockerName, "-p3306:3306", "-e", "MYSQL_ROOT_PASSWORD=1-testDb", "-e", "MYSQL_DATABASE="+dbName, "-d", "mysql:8.0")
 		cmd.Run()
-
-		// find its IP
-		cmd = exec.Command("docker", "inspect", "--format", "{{ .NetworkSettings.IPAddress }}", dockerName)
-		var ipBuf bytes.Buffer
-		cmd.Stdout = &ipBuf
-		cmd.Run()
-		ipBuf.Truncate(ipBuf.Len() - 1)
-
+		os.Setenv("username", "root")
+		os.Setenv("password", "1-testDb")
+		ipBuf := bytes.NewBufferString("127.0.0.1")
 		for {
-			conn, err := net.Dial("tcp", ipBuf.String()+":3306")
+			err := DBDirect("select 1", "127.0.0.1", dbName /*"heratestdb"*/, MySQL)
 			if err != nil {
 				time.Sleep(1 * time.Second)
 				logger.GetLogger().Log(logger.Debug, "waiting for mysql server to come up "+ipBuf.String()+" "+dockerName)
 				continue
 			} else {
-				conn.Close()
 				break
 			}
 		}
 
-		os.Setenv("username", "root")
-		os.Setenv("password", "1-testDb")
+
 		q := "CREATE USER 'appuser'@'%' IDENTIFIED BY '1-testDb'"
 		logger.GetLogger().Log(logger.Warning, "set up app user:"+q)
 		err := DBDirect(q, ipBuf.String(), dbName, MySQL)
@@ -239,7 +234,7 @@ func MakeDB(dockerName string, dbName string, dbType DBType) (ip string) {
 		} else {
 			os.Setenv("username", "appuser")
 		}
-
+		os.Setenv("mysql_ip", ipBuf.String())
 		return ipBuf.String()
 	} else if dbType == PostgreSQL {
 		cmd := exec.Command("docker", "run", "--name", dockerName, "-e", "POSTGRES_PASSWORD=1-testDb", "-e", "POSTGRES_DB="+dbName, "-d", "postgres:12")
@@ -294,19 +289,6 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 		dbs = make(map[string]*sql.DB)
 	}
 	db0, ok := dbs[ip+dbName]
-	if !ok {
-		fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
-			os.Getenv("username"),
-			os.Getenv("password"),
-			ip,
-			dbName)
-		//fmt.Println("fullDsn",fullDsn)
-		var err error
-		db0, err = sql.Open("mysql", fullDsn)
-		if err != nil {
-			return err
-		}
-	}
 	if dbType == MySQL {
 		if !ok {
 			fullDsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s",
@@ -314,16 +296,11 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 				os.Getenv("password"),
 				ip,
 				dbName)
-			//fmt.Println("fullDsn",fullDsn)
 			var err error
 			db0, err = sql.Open("mysql", fullDsn)
 			if err != nil {
 				return err
 			}
-			db0.SetMaxIdleConns(0)
-			// defer db0.Close()
-			dbs[ip+dbName] = db0
-			dbs["127.0.0.1"+dbName] = db0
 		}
 	} else if dbType == PostgreSQL {
 		if !ok {
@@ -341,7 +318,9 @@ func DBDirect(query string, ip string, dbName string, dbType DBType) error {
 			dbs[ip+dbName] = db0
 		}
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	db0.SetMaxIdleConns(0)
+	dbs[ip+dbName] = db0
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	conn0, err := db0.Conn(ctx)
 	if err != nil {
 		return err
@@ -395,10 +374,8 @@ func (m *mux) StartServer() error {
 			os.Setenv("TWO_TASK_4", "tcp(127.0.0.1:2121)/heratestdb")
 		} else if xMysql == "auto" {
 			ip := MakeDB("mysql22", "heratestdb", MySQL)
-			if os.Getenv("SHELL") == "/bin/zsh" {
-				ip = "127.0.0.1" // for mac
-			}
 			os.Setenv("TWO_TASK", "tcp("+ip+":3306)/heratestdb")
+			os.Setenv("TWO_TASK_STANDBY0", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_1", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_2", "tcp("+ip+":3306)/heratestdb")
 			os.Setenv("TWO_TASK_3", "tcp("+ip+":3306)/heratestdb")
@@ -437,17 +414,8 @@ func (m *mux) StartServer() error {
 	m.wg.Add(1)
 	go func() {
 		// run the multiplexer
-		//os.Args = append(os.Args, "--name", "hera-test")
-		//lib.Run()
-		mydir, err1 := os.Getwd()
-		if err1 != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed Get current working directory", err1)
-		}
-		m.watchdogCmd = exec.Command(mydir+"/watchdog", "--name", "hera-test")
-		m.watchdogCmd.Env = append(os.Environ(), "--name", "hera-test")
-		if err := m.watchdogCmd.Run(); err != nil {
-			logger.GetLogger().Log(logger.Alert, "Failed to start Mux process with watchdog.", err)
-		}
+		os.Args = append(os.Args, "--name", "hera-test")
+		lib.Run()
 		m.wg.Done()
 	}()
 
@@ -478,7 +446,7 @@ func (m *mux) StartServer() error {
 }
 
 func (m *mux) StopServer() {
-	syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
+	//syscall.Kill(m.watchdogCmd.Process.Pid, syscall.SIGTERM)
 	syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	if m.dbServ != nil {
 		m.dbStop()
@@ -505,4 +473,26 @@ func (m *mux) StopServer() {
 	m.cleanupConfig()
 	os.Chdir(m.origDir)
 	logger.GetLogger().Log(logger.Info, "Exit StopServer time=", time.Now().Unix())
+}
+
+func StartSpeedBumpProxy(port int, destAddr string, initialDelayInS int64, sineAmplitudeInS int64, sinePeriodInM int64) (*speedbump.Speedbump, error) {
+	cfg := speedbump.SpeedbumpCfg{
+		Port:       port,
+		DestAddr:   destAddr,
+		BufferSize: 16384,
+		QueueSize:  2048,
+		Latency: &speedbump.LatencyCfg{
+			Base:          time.Duration(initialDelayInS) * time.Millisecond,
+			SineAmplitude: time.Millisecond * time.Duration(sineAmplitudeInS),
+			SinePeriod:    time.Minute * time.Duration(sinePeriodInM),
+		},
+		LogLevel: "TRACE",
+	}
+
+	sb, err := speedbump.NewSpeedbump(&cfg)
+
+	if err != nil {
+		return nil, err
+	}
+	return sb, nil
 }

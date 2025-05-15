@@ -19,8 +19,9 @@
 
 enum ServerInternalCommand {
 	CMD_CONTROL_MSG		=501,
-	CMD_EOR				=502, // end of response
+	CMD_EOR			=502, // end of response
 	CMD_INTERRUPT_MSG	=503,
+	CMD_UPDATE_MSG          =504,
 };
 
 #endif // _OCCMUX_COMMANDS_H

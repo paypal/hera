@@ -1,23 +1,23 @@
 package testutil
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
-	"io/ioutil"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"regexp"
-	"time"
-	"strings"
-	"testing"
-        "github.com/paypal/hera/client/gosqldriver"
+	"github.com/paypal/hera/client/gosqldriver"
 	_ "github.com/paypal/hera/client/gosqldriver/tcp"
 	_ "github.com/paypal/hera/lib"
 	"github.com/paypal/hera/utility/logger"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"regexp"
+	"strings"
+	"testing"
+	"time"
 )
 
 var (

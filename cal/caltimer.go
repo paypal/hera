@@ -40,9 +40,9 @@ func (ct *CalTimer) Reset(){
   ct.tBegin = time.Now()
 }
 
-// return time elapsed since last Reset call in 10th of micro seconds
+// return time elapsed since last Reset call in milliseconds
 func (ct *CalTimer) Duration() float32{
   var timediff time.Duration
   timediff = time.Since(ct.tBegin)
-  return float32(timediff.Nanoseconds()) / float32(time.Millisecond * 10)
+  return float32(timediff.Nanoseconds()) / float32(time.Millisecond)
 }

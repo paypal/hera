@@ -1,4 +1,3 @@
-// Copyright 2019 PayPal Inc.
 //
 // Licensed to the Apache Software Foundation (ASF) under one or more
 // contributor license agreements.  See the NOTICE file distributed with
@@ -57,7 +56,6 @@ type WorkerPool struct {
 
 	currentSize int // the number of workers in the pool
 	desiredSize int // the desired number of workers in the pool, usually equal to currentSize, different for a
-	// brief period when the pool is dynamically resized
 
 	moduleName string // basically the application name as it comes from the command line
 	// the number of worker not in INIT state, atomically maintained
@@ -85,10 +83,17 @@ type WorkerPool struct {
 	workers []*WorkerClient
 	// Throtle workers lifecycle
 	thr Throttler
+
+	// Cutover feaeture
+	CoShardID        ShardByTwoTask // a pool has number of workers connected to either two_task or two_task_cutover shards, applied to both r/w types
+	phase            string         // the phase is updated by the cutovercfg
+	dbUname          string         // the dbuname is updated by the cutovercfg
+	checkSetUserRole uint           // 0 disable, 1 enable, whether pool requires workers to do userrole check/set or not
 }
 
 // Init creates the pool by creating the workers and making all the initializations
-func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID int, moduleName string) error {
+
+func (pool *WorkerPool) Init(wType HeraWorkerType, pool2task ShardByTwoTask, size int, instID int, shardID int, moduleName string) error {
 	pool.Type = wType
 	pool.activeQ = NewQueue()
 	//pool.poolCond = &sync.Cond{L: &sync.Mutex{}}
@@ -99,6 +104,13 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 	pool.currentSize = 0
 	pool.desiredSize = size
 	pool.moduleName = moduleName
+	pool.CoShardID = ShIdUnset
+	pool.checkSetUserRole = 0
+	if GetConfig().EnableCutover {
+		pool.CoShardID = pool2task
+		pool.ShardID = int(pool2task)
+	}
+
 	pool.workers = make([]*WorkerClient, size)
 	pool.thr = NewThrottler(uint32(GetConfig().MaxDbConnectsPerSec), fmt.Sprintf("%d_%d_%d", wType, shardID, instID))
 	for i := 0; i < size; i++ {
@@ -114,7 +126,8 @@ func (pool *WorkerPool) Init(wType HeraWorkerType, size int, instID int, shardID
 
 // spawnWorker starts a worker and spawn a routine waiting for the "ready" message
 func (pool *WorkerPool) spawnWorker(wid int) error {
-	worker := NewWorker(wid, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
+
+	worker := NewWorker(wid, pool.CoShardID, pool.Type, pool.InstID, pool.ShardID, pool.moduleName, pool.thr)
 
 	worker.setState(wsSchd)
 	millis := rand.Intn(GetConfig().RandomStartMs)
@@ -218,6 +231,28 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 	}
 	pool.workers[worker.ID] = worker
 
+	if GetConfig().EnableCutover {
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "pool::WorkerReady", pool.Type, pool.InstID, " pool userRole=", pool.checkSetUserRole, "worker rolecheck=", worker.roleCheck)
+		}
+		if pool.checkSetUserRole != uint(worker.roleCheck) {
+			worker.sendUserRoleMsg(pool.checkSetUserRole)
+		}
+	}
+
+	// Adding size check given the pool size change can happen during init too (rapid cutover)
+	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
+		go func(w *WorkerClient) {
+			if logger.GetLogger().V(logger.Info) {
+				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
+			}
+			w.Terminate()
+		}(worker)
+		// restartworker actually does the size counting reduction.
+		pool.poolCond.L.Unlock()
+		return nil
+	}
+
 	pool.poolCond.L.Unlock()
 	//
 	// notify one waiting agent on the availability of a new worker in the pool
@@ -226,6 +261,7 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "poolsize (after signal)", pool.activeQ.Len(), " type ", pool.Type)
 	}
+
 	return nil
 }
 
@@ -237,7 +273,7 @@ func (pool *WorkerPool) WorkerReady(worker *WorkerClient) (err error) {
 //	way to do this except to pass in the sqlhash as a parameter.
 //
 // @param timeoutMs[0] timeout in milliseconds. default to adaptive queue timeout.
-func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
+func (pool *WorkerPool) GetWorker(sqlhash int32, crdIsRead bool, timeoutMs ...int) (worker *WorkerClient, t string, err error) {
 	if logger.GetLogger().V(logger.Debug) {
 		logger.GetLogger().Log(logger.Debug, "Pool::GetWorker(start) type:", pool.Type, ", instance:", pool.InstID, ", active: ", pool.activeQ.Len(), "healthy:", pool.GetHealthyWorkersCount())
 	}
@@ -449,7 +485,7 @@ func (pool *WorkerPool) GetWorker(sqlhash int32, timeoutMs ...int) (worker *Work
 	if wchLen > 0 {
 		workerclient.DrainResponseChannel(0 /*no wait to minimize the latency*/)
 	}
-
+	workerclient.crdIsRead = crdIsRead
 	return workerclient, ticket, nil
 }
 
@@ -474,7 +510,7 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 		return nil
 	}
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "Pool::ReturnWorker(start)", worker.pid, worker.Type, worker.instID, "healthy:", pool.GetHealthyWorkersCount())
+		logger.GetLogger().Log(logger.Debug, "Pool::ReturnWorker(start)", pool.dbUname, worker.pid, worker.Type, worker.instID, "healthy:", pool.GetHealthyWorkersCount())
 	}
 
 	if (len(ticket) == 0) || (pool.checkoutTickets[worker] != ticket) {
@@ -498,7 +534,8 @@ func (pool *WorkerPool) ReturnWorker(worker *WorkerClient, ticket string) (err e
 	if (pool.desiredSize < pool.currentSize) && (worker.ID >= pool.desiredSize) {
 		go func(w *WorkerClient) {
 			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid, ", pool_type =", worker.Type, ", inst =", worker.instID)
+				logger.GetLogger().Log(logger.Info, "Pool resized, terminate worker: pid =", worker.pid,
+					",worker.ID", worker.ID, "pool.ShardID", pool.ShardID, "pool_type =", worker.Type, ", inst =", worker.instID)
 			}
 			w.Terminate()
 		}(worker)
@@ -622,7 +659,8 @@ func (pool *WorkerPool) getActiveWorker() (worker *WorkerClient) {
 // until the worker eventually calls ReturnWorker to make itself available
 func (pool *WorkerPool) Resize(newSize int) {
 	if logger.GetLogger().V(logger.Verbose) {
-		logger.GetLogger().Log(logger.Verbose, "Resizing pool:", pool.Type, pool.currentSize, "->", newSize)
+		logger.GetLogger().Log(logger.Verbose, "Resizing pool:", pool.dbUname, pool.Type, pool.currentSize, "->", newSize,
+			"[currentSize desiredSize newsize]=[", pool.currentSize, pool.desiredSize, newSize)
 	}
 	pool.poolCond.L.Lock()
 	defer pool.poolCond.L.Unlock()
@@ -645,6 +683,9 @@ func (pool *WorkerPool) Resize(newSize int) {
 		pool.currentSize = pool.desiredSize
 	} else {
 		// remove the idle/free workers now. workers not free with ID > pool.desiredSize are terminated in ReturnWorker
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "pool.desiredSize", pool.desiredSize, "pool shard id", pool.ShardID, "coshard id", pool.CoShardID)
+		}
 		remove := func(item interface{}) bool {
 			worker := item.(*WorkerClient)
 			if worker.ID >= pool.desiredSize {
@@ -861,4 +902,155 @@ func (pool *WorkerPool) decBacklogCnt() {
 		e.Completed()
 		atomic.StoreInt32(&(pool.backlogCnt), 0)
 	}
+}
+
+/* enforce pool-db integrity. At phase "cutover" and "flexup", it should be only called to enforce on two_task_cutover shard. */
+func (pool *WorkerPool) enforceIntegrity() {
+	if pool == nil {
+		evt := cal.NewCalEvent(EvtTypeCutover, "wp_nil_dbun_skip", cal.TransOK, "")
+		evt.Completed()
+		return
+	}
+
+	if !(pool.phase == CutoverPhStr || pool.phase == FlexupPhStr) {
+		return
+	}
+
+	cnt := 0
+	var workers []*WorkerClient
+	pool.poolCond.L.Lock()
+	for i := 0; i < pool.currentSize; i++ {
+		if pool.workers[i] != nil {
+			if pool.workers[i].dbUname != pool.dbUname {
+				if pool.activeQ.Remove(pool.workers[i]) {
+					pool.activeQ.Remove(pool.workers[i])
+					workers = append(workers, pool.workers[i])
+					cnt++
+				}
+			}
+		}
+	}
+	pool.poolCond.L.Unlock()
+	for _, w := range workers {
+		if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Info, "error: dbuname mismatched. workerpool coshard=", pool.CoShardID, ", shard=", pool.ShardID, ", terminate worker: pid =",
+				w.pid, ", worker type =", w.Type, ", inst =", w.instID, "HEALTHY worker Count=", pool.GetHealthyWorkersCount())
+		}
+		calname := fmt.Sprintf("kill_diff_dbun_%d_%d_%d", int(pool.CoShardID), int(w.Type), w.instID)
+		evt := cal.NewCalEvent(EvtTypeCutover, calname, cal.TransOK, "")
+		evt.Completed()
+		w.Terminate()
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "enforceIntegrity done.", pool.phase, pool.dbUname)
+	}
+}
+
+// workerpool integrity ensured in following ways
+// 1. when cfg change, it invokes the function to check all workers' info
+// 2. workerpool will track the current setting, and enforce at attachWorker() in case the worker is restarted/recycled outside condition 1.
+// At "enable" ignore all mismatch
+// At "flexup" and "cutover" enforces TWO_TASK_CUTOVER pool DBUNAME mismatch
+
+func (pool *WorkerPool) ChangeCutoverInfo(newPhase string, newDbUname string, isSrc bool) {
+	if pool.phase == newPhase && pool.dbUname == newDbUname {
+		return
+	}
+
+	evt := cal.NewCalEvent(EvtTypeCutover, "update_wp_cfg_change", cal.TransOK, pool.dbUname)
+	evt.Completed()
+
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Warning, "workerpool", pool.Type, pool.ShardID, "phase and dbuname before: [",
+			pool.phase, ",", pool.dbUname, "], new: [", newPhase, ",", newDbUname, "]")
+	}
+
+	pool.phase = newPhase
+	pool.dbUname = newDbUname
+	// only enforce two_task_cutover pool's dbuname integrity at "flexup" and "cutover" phases.
+	if !isSrc && (pool.phase == CutoverPhStr || pool.phase == FlexupPhStr) {
+		pool.enforceIntegrity()
+	}
+}
+
+/*
+check all active workers and send abort command based on read and write status during cutover
+*/
+func (pool *WorkerPool) StopWorker(stopR bool, stopW bool) {
+	if pool == nil || (!GetConfig().EnableCutover) {
+		return
+	}
+
+	cnt := 0
+	stopSql := false
+	stopCnt := 0
+	for i := 0; i < pool.currentSize; i++ {
+		stopSql = false
+		if pool.workers[i] != nil {
+			if pool.workers[i].Status == wsBusy || pool.workers[i].Status == wsWait {
+				if stopR && stopW {
+					stopSql = true
+				} else if stopR && (pool.workers[i].crdIsRead) {
+					stopSql = true
+				} else if stopW && (!pool.workers[i].crdIsRead) {
+					stopSql = true
+				}
+
+				if stopSql {
+					select {
+					case pool.workers[i].ctrlCh <- &workerMsg{data: nil, free: false, abort: true, bindEvict: false, cutoverStop: true}:
+					default:
+						if logger.GetLogger().V(logger.Warning) {
+							logger.GetLogger().Log(logger.Warning, "stopR ", stopR, ", stopW", stopW, "w.pid =", pool.workers[i].pid,
+								", worker type =", pool.workers[i].Type, ", inst =", pool.workers[i].instID,
+								"HEALTHY worker Count=", pool.GetHealthyWorkersCount(), "TotalWorkers:", pool.desiredSize)
+							logger.GetLogger().Log(logger.Warning, "failed to publish abort msg (cutover StopWorker)", pool.workers[i].pid)
+						}
+					}
+					stopCnt++
+				}
+			}
+			cnt++
+		}
+	}
+
+	if logger.GetLogger().V(logger.Info) {
+		logger.GetLogger().Log(logger.Info, "cutover stop on-going sql stopped, total count", stopCnt, cnt)
+	}
+}
+
+// cutovercfg calls this function at reload. When checkSetUserRole changes (0 disable, 1 enable), notifying worker to begin/stop set role.
+// Notification is done via ctrl msg to existing workers
+// Worker init in progress not yet added to the pool (WorkerReady) may not be aware of change.
+func (pool *WorkerPool) CheckSetUserRole(_enable uint) {
+	if pool.checkSetUserRole == _enable {
+		if logger.GetLogger().V(logger.Debug) {
+			logger.GetLogger().Log(logger.Debug, "wpool CheckSetUserRole flag unchanged", pool.phase, pool.dbUname, pool.checkSetUserRole)
+		}
+		return
+	}
+	pool.checkSetUserRole = _enable
+	setflag := pool.checkSetUserRole
+	var workers []*WorkerClient
+	caltxn := cal.NewCalTransaction(EvtTypeCutover, "wpool_set_role", cal.TransOK, "", cal.DefaultTGName)
+	cnt := 0
+	pool.poolCond.L.Lock() // do we really need lock?
+	for i := 0; i < pool.currentSize; i++ {
+		if pool.workers[i] != nil {
+			workers = append(workers, pool.workers[i])
+			cnt++
+		}
+	}
+	caltxn.Completed()
+	for _, w := range workers {
+		if w == nil {
+			if logger.GetLogger().V(logger.Verbose) {
+				logger.GetLogger().Log(logger.Verbose, "wpool set user role flag nil worker | shid, co-shid", pool.ShardID, pool.CoShardID, " | worker id", w.ID)
+			}
+			continue
+		}
+		w.sendUserRoleMsg(setflag)
+
+	}
+	pool.poolCond.L.Unlock()
 }

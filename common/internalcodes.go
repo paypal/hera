@@ -22,6 +22,7 @@ const (
 	CmdControlMsg   = 501
 	CmdEOR          = 502 // end of response
 	CmdInterruptMsg = 503 // sent by mux to worker to interrupt the running request
+	CmdUpdateMsg    = 504 // sent by mux to worker to update worker property
 )
 
 // EOR codes

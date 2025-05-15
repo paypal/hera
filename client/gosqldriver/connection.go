@@ -22,12 +22,11 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"net"
-	"os"
-
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/encoding/netstring"
 	"github.com/paypal/hera/utility/logger"
+	"net"
+	"os"
 )
 
 var corrIDUnsetCmd = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte("CorrId=NotSet"))
@@ -38,6 +37,10 @@ type heraConnection struct {
 	reader *netstring.Reader
 	// for the sharding extension
 	shardKeyPayload []byte
+	//caching extension
+	cacheKey []byte
+	cacheTTL []byte
+	cacheOperation []byte
 	// correlation id
 	corrID *netstring.Netstring
 	clientinfo *netstring.Netstring
@@ -51,7 +54,6 @@ func NewHeraConnection(conn net.Conn) driver.Conn {
 	}
 	return hera
 }
-
 
 // Prepare returns a prepared statement, bound to this connection.
 func (c *heraConnection) Prepare(query string) (driver.Stmt, error) {
@@ -100,6 +102,7 @@ func (c *heraConnection) execNs(ns *netstring.Netstring) error {
 		logger.GetLogger().Log(logger.Verbose, c.id, "send command:", ns.Cmd, ", payload:", payload)
 	}
 	_, err := c.conn.Write(ns.Serialized)
+	logger.GetLogger().Log(logger.Verbose, c.id, "after write")
 	return err
 }
 
@@ -172,6 +175,36 @@ func (c *heraConnection) ResetShardKeyPayload() {
 }
 
 // implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheKey(payload string) {
+	c.cacheKey = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheKey() {
+	c.SetCacheKey("")
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheTTL(payload string) {
+	c.cacheTTL = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheTTL() {
+	c.SetCacheTTL("")
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) SetCacheOperation(payload string) {
+	c.cacheOperation = []byte(payload)
+}
+
+// implementing the extension HeraConn interface
+func (c *heraConnection) ResetCacheOperation() {
+	c.SetCacheOperation("")
+}
+
+// implementing the extension HeraConn interface
 func (c *heraConnection) SetCalCorrID(corrID string) {
 	c.corrID = netstring.NewNetstringFrom(common.CmdClientCalCorrelationID, []byte(fmt.Sprintf("CorrId=%s", corrID)))
 }
@@ -238,5 +271,37 @@ func (c *heraConnection) SetClientInfoWithPoolStack(poolName string, host string
         if logger.GetLogger().V(logger.Debug) {
                 logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
         }
+	return nil
+}
+
+func (c *heraConnection) SetClientInfoWithPayload(poolName string, host string, payload string)(error){
+	if len(poolName) <= 0 && len(host) <= 0 && len(payload) <= 0 {
+		return nil
+	}
+
+	pid := os.Getpid()
+	data := fmt.Sprintf("PID: %d, HOST: %s, Poolname: %s, %s, Command: SetClientInfo,", pid, host, poolName, payload)
+	c.clientinfo = netstring.NewNetstringFrom(common.CmdClientInfo, []byte(string(data)))
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "SetClientInfo", c.clientinfo.Serialized)
+	}
+
+	_, err := c.conn.Write(c.clientinfo.Serialized)
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to send client info")
+		}
+		return errors.New("Failed custom auth, failed to send client info")
+	}
+	ns, err := c.reader.ReadNext()
+	if err != nil {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Failed to read server info")
+		}
+		return errors.New("Failed to read server info")
+	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "Server info:", string(ns.Payload))
+	}
 	return nil
 }

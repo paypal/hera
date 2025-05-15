@@ -224,6 +224,12 @@ func ClearLogsData() {
 	defer calLogFile.Close()
 }
 
+func CheckError(err error, t *testing.T) {
+	if err != nil {
+		t.Fatal("Error:", err)
+	}
+}
+
 func ModifyOpscfgParam (t *testing.T, logfile string, opscfg_param string, opscfg_value string) {
 	//Read file
 	data, err := ioutil.ReadFile(runFolder + "/" + logfile)

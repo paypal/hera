@@ -71,7 +71,7 @@ func GetWLCfg() *WLCfg {
 }
 
 /*
-	get the SQL used to read the shard map configuration
+get the SQL used to read the shard map configuration
 */
 func getSQL() string {
 	// TODO: add hostname in the comment
@@ -98,7 +98,7 @@ func getSQL() string {
 }
 
 /*
-	load the physical to logical maping
+load the physical to logical maping
 */
 func loadMap(ctx context.Context, db *sql.DB) error {
 	if logger.GetLogger().V(logger.Verbose) {
@@ -198,7 +198,8 @@ func loadMap(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
-/**
+/*
+*
 get the SQL used to read the whitelist configuration
 */
 func getWLSQL() string {
@@ -214,7 +215,7 @@ func getWLSQL() string {
 }
 
 /*
-	load the whitelist mapping
+load the whitelist mapping
 */
 func loadWhitelist(ctx context.Context, db *sql.DB) {
 	if logger.GetLogger().V(logger.Verbose) {

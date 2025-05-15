@@ -171,6 +171,12 @@ type calTransaction struct {
 	mTimer CalTimer
 }
 
+type calAtomicTransaction struct {
+	calActivity
+	mDuration float32
+	mTimer CalTimer
+}
+
 // NewCalEvent creates a CAL event
 func NewCalEvent(_type string, _name string, _status string, _data string, _tgname ...string) Event {
 	et := new(calEvent)
@@ -196,6 +202,13 @@ func NewCalHeartBeat(_type string, _name string, _status string, _data string, _
 // NewCalTransaction creates a CAL transaction
 func NewCalTransaction(_type string, _name string, _status string, _data string, _tgname string) Transaction {
 	ct := new(calTransaction)
+	ct.init(_type, _name, _status, _data, _tgname)
+	return ct
+}
+
+// NewCalAtomicTransaction creates a CAL atomic transaction
+func NewCalAtomicTransaction(_type string, _name string, _status string, _data string, _tgname string) AtomicTransaction {
+	ct := new(calAtomicTransaction)
 	ct.init(_type, _name, _status, _data, _tgname)
 	return ct
 }
@@ -725,6 +738,80 @@ func (act *calHeartBeat) init(_type string, _name string, _status string, _data 
 
 /********************************************************
  ********************************************************
+ *               calAtomicTransaction
+ ********************************************************
+ */
+ func (act *calAtomicTransaction) init(_type string, _name string, _status string, _data string, _tgname string) {
+	if !act.isCalClientEnabled() {
+		return
+	}
+	act.mClass = calClassAtomicTransaction
+	act.initialize(_type, _name, _status, _data, _tgname)
+
+	act.mTimer.Reset()
+	act.mDuration = -1
+
+}
+
+func (act *calAtomicTransaction) SetDuration(_duration float32) {
+	if !act.isCalClientEnabled() {
+		return
+	}
+	if _duration < minDuration {
+		act.mDuration = minDuration
+	} else if _duration > maxDuration {
+		act.mDuration = maxDuration
+	} else {
+		act.mDuration = _duration
+	}
+}
+
+func (act *calAtomicTransaction) Completed() {
+	if act.mCompleted {
+		return
+	}
+	if !act.isCalClientEnabled() {
+		return
+	}
+
+	act.sendSelf()
+	act.mCompleted = true
+}
+
+func (act *calAtomicTransaction) sendSelf() {
+	var duration_str string
+	// to safeguard 64 to 32 bit int conversion
+	value := act.mTimer.Duration()
+	var duration float32
+	if int32(value) > maxDuration {		// Check on comparision between float and int
+		duration = maxDuration
+	} else {
+		duration = value
+	}
+	if act.mDuration >= minDuration{
+		duration = act.mDuration
+	}
+	duration_str = fmt.Sprintf("%.2f", duration)
+	var buf bytes.Buffer
+	buf.WriteString(act.mClass)
+	buf.WriteString(act.mTimeStamp)
+	buf.WriteString(calTab)
+	buf.WriteString(act.mType)
+	buf.WriteString(calTab)
+	buf.WriteString(act.mName)
+	buf.WriteString(calTab)
+	buf.WriteString(act.mStatus)
+	buf.WriteString(calTab)
+	buf.WriteString(duration_str)
+	buf.WriteString(calTab)
+	buf.WriteString(act.mData)
+	buf.WriteString(calEndOfLine)
+	var str = buf.String()
+	act.writeData(str)
+}
+
+/********************************************************
+ ********************************************************
  *               calTransaction
  ********************************************************
  */
@@ -1053,10 +1140,10 @@ func (act *calTransaction) completeAnyNestedTransactions() {
  */
 func (act *calTransaction) addAdditionalFieldsForRoot() {
 	var buf bytes.Buffer
-	buf.WriteString("corr_id_")
-	buf.WriteString(calEquals)
-	buf.WriteString(act.GetCorrelationID())
-	buf.WriteString(calAmpersand)
+	// buf.WriteString("corr_id_")
+	// buf.WriteString(calEquals)
+	// buf.WriteString(act.GetCorrelationID())
+	// buf.WriteString(calAmpersand)
 	buf.WriteString("log_id_")
 	buf.WriteString(calEquals)
 	//buf.WriteString(client.GetLogId())

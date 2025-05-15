@@ -23,7 +23,7 @@ import (
 	"time"
 	/* to cast to the Hera extension */)
 
-var url = flag.String("url", "", "Heras URL, default to the Url from the input file")
+var url = flag.String("url", "10.183.166.76:12386", "Heras URL, default to the Url from the input file")
 var input = flag.String("input", "in.txt", "the input file to read the batch commands, default in.txt")
 
 type Suite struct {
@@ -88,6 +88,7 @@ func main() {
 
 	logger.GetLogger().Log(logger.Info, "Batch:", suite)
 	logger.GetLogger().Log(logger.Info, "********************************")
+	logger.GetLogger().Log(logger.Info, "Opening sql ", *input)
 	logger.GetLogger().Log(logger.Info, "Opening ", *url)
 
 	db, err := sql.Open("hera", *url)
@@ -99,12 +100,14 @@ func main() {
 
 	var wg sync.WaitGroup
 	wg.Add(len(suite.Tests))
+	logger.GetLogger().Log(logger.Info,"number of suite.Tests", len(suite.Tests))
 	for _, test := range suite.Tests {
 		go func(t *Test) {
 			run(db, t)
 			wg.Done()
 		}(&test)
 	}
+	logger.GetLogger().Log(logger.Info, "finish tests", *url)
 	wg.Wait()
 }
 
@@ -116,27 +119,34 @@ func run(db *sql.DB, test *Test) error {
 		logger.GetLogger().Log(logger.Warning, "Error connecting: ", err)
 		return err
 	}
+	logger.GetLogger().Log(logger.Info, "Begin Setup")
 	txn, _ := c.BeginTx(ctx, nil)
 	for _, q := range test.Setup {
 		runQ(ctx, db, &c, &txn, &q)
 	}
+	logger.GetLogger().Log(logger.Info, "Begin repeat")
 	for i := 0; i <= test.Repeat; i++ {
 		for _, q := range test.Queries {
 			runQ(ctx, db, &c, &txn, &q)
 		}
 	}
+	logger.GetLogger().Log(logger.Info, "Begin cleanup")
 	for _, q := range test.Cleanup {
+		logger.GetLogger().Log(logger.Info, "runQ")
 		runQ(ctx, db, &c, &txn, &q)
 	}
-	txn.Rollback()
+	logger.GetLogger().Log(logger.Info, "Done Cleanup runQ")
+	//txn.Rollback()
+	//logger.GetLogger().Log(logger.Info, "Done txn.Rollback")
 	c.Close()
-	logger.GetLogger().Log(logger.Info, "Done test --------", test.Name)
+	logger.GetLogger().Log(logger.Info, "Done c.Close()")
 	return nil
 }
 
 func runQ(ctx context.Context, db *sql.DB, pc **sql.Conn, ptxn **sql.Tx, q *Query) error {
 	switch q.Type {
 	case 0: //select
+		logger.GetLogger().Log(logger.Info, "runQ SELECT")
 		return runSelect(ctx, *ptxn, q, *pc)
 	case 1:
 		return runDML(ctx, *ptxn, q, *pc)
@@ -157,7 +167,8 @@ func runQ(ctx context.Context, db *sql.DB, pc **sql.Conn, ptxn **sql.Tx, q *Quer
 		}
 	case 5:
 		ms, _ := strconv.Atoi(q.Sql)
-		time.Sleep(time.Millisecond * time.Duration(ms))
+		logger.GetLogger().Log(logger.Warning, "sleep: ", ms)
+		time.Sleep(time.Second * time.Duration(ms))	
 	}
 	return nil
 }
@@ -183,9 +194,11 @@ func runSelect(ctx context.Context, txn *sql.Tx, q *Query, c *sql.Conn) error {
 		return err
 	}
 
+	logger.GetLogger().Log(logger.Info, "Shuping runSelect test") 
 	if rows != nil {
 		rowNum := 0
 		names, err := rows.Columns()
+	logger.GetLogger().Log(logger.Info, "Shuping - row != nil : rows.Columns")
 		if err != nil {
 			if logger.GetLogger().V(logger.Warning) {
 				logger.GetLogger().Log(logger.Warning, "Err getting columns:", err)
@@ -227,9 +240,11 @@ func runSelect(ctx context.Context, txn *sql.Tx, q *Query, c *sql.Conn) error {
 			}
 		}
 		rows.Close()
+	logger.GetLogger().Log(logger.Info, "Shuping - rows.Close")
 	}
 
 	stmt1.Close()
+	logger.GetLogger().Log(logger.Info, "Shuping - Close()")
 	return nil
 }
 

@@ -130,6 +130,7 @@ Worker::Worker(const InitParams& _params) :
 	m_eor_free_sent(false),
 	m_query_hash("NotSet"),
 	m_connected_id(0),
+	m_set_user_role(false),
 	m_data_fd(3),
 	m_ctrl_fd(4)
 {
@@ -333,7 +334,7 @@ void Worker::run()
 		return;
 
 	std::ostringstream os;
-	os << m_connected_id << " " << m_db_uname;
+	os << m_connected_id << " " << m_db_uname << " " << m_set_user_role;
 	if (-1 == m_writer->write(CMD_CONTROL_MSG, os.str())) {
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Can't write the initial control message");
 		return;
@@ -738,6 +739,8 @@ void Worker::check_opscfg()
 		if (opscfg.get_value("log_level", val)) {
 			log_level = StringUtil::to_int(val);
 		}
+		// just for dev test, remove after development
+		//log_level = LOG_DEBUG;
 		if (m_log_level != log_level)
 		{
 			m_log_level = log_level;

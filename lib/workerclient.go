@@ -67,8 +67,9 @@ type workerMsg struct {
 	// EOR IN_TRANSACTION or EOR IN_CURSOR_IN_TRANSACTION is received
 	inTransaction bool
 	// tell coordinator to abort dosession with an ErrWorkerFail. call will recover worker.
-	abort     bool
-	bindEvict bool
+	abort       bool
+	bindEvict   bool
+	cutoverStop bool
 	// the request counter / Id
 	rqId uint32
 	// the actual message to be sent to the client
@@ -90,15 +91,19 @@ type BindPair struct {
 // WorkerClient represents a worker process
 type WorkerClient struct {
 	ID            int              // the worker identifier, from 0 to max worker count
+	ConnTwoTask   ShardByTwoTask   // indicate the worker belonging to two_task (non-cutover)or two_task_cutover
 	Type          HeraWorkerType   // the type of worker (ex write, read); all workers from the same type are grouped in a pool
 	Status        HeraWorkerStatus // the worker state, like init, accept, etc
 	workerConn    net.Conn         // the connection over which it communicates with the worker process
 	workerOOBConn net.Conn         // the connection over which it sends out-of-band messages
 	pid           int              // worker pid, needed to check terminated worker before recycling a new one
 	instID        int              // currently 0 or 1
-	shardID       int              //
+	shardID       int              // used in both sharding and cutover
 	racID         int              // for RAC maintenance, the rac ID where the worker connected
 	dbUname       string           // the database name where the worker connected
+	roleCheck     uint
+	// when coordinator uses this worker via GetWorker(), we will reset this.
+	crdIsRead bool
 
 	//
 	// sending data message from worker to coordinator (owner == doRead thread)
@@ -188,8 +193,8 @@ func envUpsert(attr *syscall.ProcAttr, key string, val string) {
 }
 
 // NewWorker creates a new workerclient instance (pointer)
-func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
-	worker := &WorkerClient{ID: wid, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
+func NewWorker(wid int, connPool ShardByTwoTask, wType HeraWorkerType, instID int, shardID int, moduleName string, thr Throttler) *WorkerClient {
+	worker := &WorkerClient{ID: wid, ConnTwoTask: connPool, Type: wType, Status: wsUnset, instID: instID, shardID: shardID, moduleName: moduleName, thr: thr}
 	maxReqs := GetMaxRequestsPerChild()
 	if maxReqs >= 4 {
 		worker.maxReqCount = maxReqs - uint32(rand.Intn(int(maxReqs/4)))
@@ -199,9 +204,7 @@ func NewWorker(wid int, wType HeraWorkerType, instID int, shardID int, moduleNam
 	if lifespan >= 4 {
 		worker.exitTime = worker.startTime + int64(lifespan) - int64(rand.Intn(int(lifespan/4)))
 	}
-	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
-	}
+	logger.GetLogger().Log(logger.Debug, fmt.Sprintf("workerId=%d max_requests_per_child=%d max_lifespan_per_child=%d exitTime=%d", worker.ID, worker.maxReqCount, worker.exitTime-worker.startTime, worker.exitTime))
 	// TODO
 	worker.racID = -1
 	atomic.CompareAndSwapInt32(&worker.isUnderRecovery, 1, 0)
@@ -241,6 +244,8 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	var twoTask string
 	switch worker.Type {
 	case wtypeStdBy:
+		// DB cutover doesn't support standby; standby only for readonly pools
+		// Critical-r1 pattern is exception. Main connections will be SOR, which can go through cutover.
 		if GetConfig().EnableSharding {
 			envUpsert(&attr, envCalClientSession, fmt.Sprintf("CLIENT_SESSION_TAF_%d", worker.shardID))
 			if GetConfig().EnableTAF {
@@ -269,9 +274,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 				et.Completed()
 				return errors.New(twoTaskEnv + " is not defined")
 			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-			}
+			logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			twoTaskEnv = "TWO_TASK_STANDBY0"
 			twoTask = os.Getenv(twoTaskEnv)
 		}
@@ -291,29 +294,64 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
-			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R", dbHostName))
-			envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d", worker.ID))
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R_LIVE1")
+				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R_LIVE1", dbHostName))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER LIVE1 %d", worker.ID))
+			} else {
+				// standard RO setup
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_R")
+				envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_R", dbHostName))
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("R-WORKER %d", worker.ID))
+			}
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
 
-		twoTaskEnv := fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
+		twoTaskEnv := ""
+		if GetConfig().EnableCutover {
+			if worker.ConnTwoTask == ShIdTnsCutover {
+				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_CUTOVER_0") // should this be "_CUTOVER_%d" ? looks yes, see fallback handling below
+			} else {
+				twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_0")
+			}
+			logger.GetLogger().Log(logger.Debug, "cutover enabled. define twoTaskEnv=", twoTaskEnv)
+
+		} else {
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_READ_%d", worker.shardID)
+		}
+
 		twoTask = os.Getenv(twoTaskEnv)
 		if twoTask == "" {
-			if worker.shardID != 0 {
-				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
-				et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
-				et.Completed()
-				return errors.New(twoTaskEnv + " is not defined")
-			}
-			if logger.GetLogger().V(logger.Info) {
+			logger.GetLogger().Log(logger.Debug, "cutover enabled. handle", twoTaskEnv, "not defined")
+			if GetConfig().EnableCutover {
+				logger.GetLogger().Log(logger.Debug, twoTaskEnv, "is not defined, fallback")
+				if worker.ConnTwoTask == ShIdTns {
+					twoTaskEnv = "TWO_TASK_READ"
+				} else {
+					twoTaskEnv = "TWO_TASK_READ_CUTOVER"
+				}
+			} else {
+
+				if worker.shardID != 0 {
+					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
+					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
+					et.Completed()
+					return errors.New(twoTaskEnv + " is not defined")
+				}
 				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
 			}
-			twoTaskEnv = "TWO_TASK_READ"
 			twoTask = os.Getenv(twoTaskEnv)
 		}
+
 		if twoTask != "" {
 			envUpsert(&attr, envTwoTask, twoTask)
+			if GetConfig().EnableCutover {
+				if worker.ConnTwoTask == ShIdTnsCutover {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsCutoverName())
+				} else {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsName())
+				}
+			}
 		} else {
 			if os.Getenv(envTwoTask) == "" {
 				logger.GetLogger().Log(logger.Alert, "TWO_TASK is not defined for READ worker")
@@ -330,34 +368,62 @@ func (worker *WorkerClient) StartWorker() (err error) {
 			envUpsert(&attr, envDbHostName, fmt.Sprintf("%s_%d", dbHostName, worker.shardID))
 			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER shd%d %d", worker.shardID, worker.ID))
 		} else {
-			envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
-			envUpsert(&attr, envDbHostName, dbHostName)
-			envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d", worker.ID))
+			if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION_LIVE1")
+				envUpsert(&attr, envDbHostName, dbHostName)
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER LIVE1 %d", worker.ID))
+			} else {
+				envUpsert(&attr, envCalClientSession, "CLIENT_SESSION")
+				envUpsert(&attr, envDbHostName, dbHostName)
+				envUpsert(&attr, envLogPrefix, fmt.Sprintf("WORKER %d", worker.ID))
+			}
 		}
 		envUpsert(&attr, envHeraName, worker.moduleName)
-
-		twoTaskEnv := fmt.Sprintf("TWO_TASK_%d", worker.shardID)
-		twoTask = os.Getenv(twoTaskEnv)
-		if twoTask == "" {
-			if worker.shardID != 0 {
-				logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
-				et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
-				et.Completed()
-				return errors.New(twoTaskEnv + " is not defined")
-			}
-			if logger.GetLogger().V(logger.Info) {
-				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback")
-			}
-			twoTaskEnv = envTwoTask
-			twoTask = os.Getenv(twoTaskEnv)
+		twoTaskEnv := ""
+		if GetConfig().EnableCutover && worker.ConnTwoTask == ShIdTnsCutover {
+			twoTaskEnv = "TWO_TASK_CUTOVER"
 		} else {
-			envUpsert(&attr, envTwoTask, twoTask)
+			twoTaskEnv = fmt.Sprintf("TWO_TASK_%d", worker.shardID)
 		}
+		twoTask = os.Getenv(twoTaskEnv)
+		logger.GetLogger().Log(logger.Info, "twoTaskEnv", twoTaskEnv, "value:", twoTask)
+		if twoTask == "" {
+			if GetConfig().EnableCutover {
+				logger.GetLogger().Log(logger.Info, twoTaskEnv, "is not defined, fallback to default")
+				twoTaskEnv = envTwoTask
+				if worker.ConnTwoTask == ShIdTnsCutover {
+					twoTaskEnv += "_CUTOVER"
+				}
+				twoTask = os.Getenv(twoTaskEnv)
+				logger.GetLogger().Log(logger.Info, twoTaskEnv, "fallback to default", twoTask)
+
+			} else {
+				if worker.shardID != 0 {
+					logger.GetLogger().Log(logger.Alert, twoTaskEnv, "is not defined")
+					et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
+					et.Completed()
+					return errors.New(twoTaskEnv + " is not defined")
+				}
+				// fallback
+				twoTaskEnv = envTwoTask
+				twoTask = os.Getenv(twoTaskEnv)
+			}
+		}
+
 		if twoTask == "" {
 			logger.GetLogger().Log(logger.Alert, "TWO_TASK is not defined")
 			et := cal.NewCalEvent(cal.EventTypeError, twoTaskEnv, cal.TransOK, "")
 			et.Completed()
 			return errors.New("TWO_TASK is not defined")
+		} else {
+			envUpsert(&attr, envTwoTask, twoTask)
+			if GetConfig().EnableCutover {
+				if worker.ConnTwoTask == ShIdTnsCutover {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsCutoverName())
+				} else {
+					envUpsert(&attr, "cutover_two_task_key", GetTnsName())
+				}
+			}
 		}
 	}
 
@@ -442,8 +508,7 @@ func (worker *WorkerClient) StartWorker() (err error) {
 	//
 	// arguments
 	//
-	var argv []string
-	argv = make([]string, 3, 3)
+	argv := make([]string, 3, 3)
 	argv[0] = workerPath
 	argv[1] = "--config"
 	argv[2] = "hera.txt"
@@ -521,13 +586,48 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 		return fmt.Errorf("Expected control message (%d) instead got (%d)", common.CmdControlMsg, ns.Cmd)
 	}
 	ln := len(ns.Payload)
+	if logger.GetLogger().V(logger.Verbose) {
+		logger.GetLogger().Log(logger.Verbose, "attachToWorker worker returned payload", string(ns.Payload))
+	}
+
 	if ln > 0 {
 		worker.racID = 0
 		// extract rac ID and db uname
 		for i := 0; i < ln; i++ {
 			ch := ns.Payload[i]
 			if ch == ' ' {
-				worker.dbUname = string(ns.Payload[i:])
+				subp := strings.TrimSpace(string(ns.Payload[i:]))
+				info := strings.Fields(subp)
+				worker.dbUname = info[0]
+				if GetConfig().EnableCutover && len(info) > 1 {
+					flag, err := strconv.Atoi(info[1])
+					if err != nil {
+						if logger.GetLogger().V(logger.Alert) {
+							logger.GetLogger().Log(logger.Alert, "Can't get valid roleCheck flag")
+						}
+						return fmt.Errorf("cutover enabled but can't get roleCheck flag in control message (%s)", info)
+					} else {
+						logger.GetLogger().Log(logger.Verbose, "worker returned m_set_user_reload", flag)
+						pool, err := GetWorkerBrokerInstance().GetWorkerPool(worker.Type, worker.instID, worker.shardID)
+						if err != nil {
+							// is this possible?
+							if logger.GetLogger().V(logger.Alert) {
+								logger.GetLogger().Log(logger.Alert, "cutover attachToWorker can't get workerpool")
+							}
+							return fmt.Errorf("cutover enabled but attachToWorker can't get workerpool")
+						}
+
+						wpflag := pool.checkSetUserRole
+						if wpflag != uint(flag) {
+							evt := cal.NewCalEvent(EvtTypeCutover, "update_wkr_role_flag", cal.TransOK, strconv.Itoa(int(wpflag)))
+							evt.Completed()
+							buff := []byte{byte(wpflag)}
+							ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
+							worker.workerOOBConn.Write(ns.Serialized)
+							worker.roleCheck = wpflag
+						}
+					}
+				}
 				break
 			} else {
 				n := ch - '0'
@@ -544,6 +644,48 @@ func (worker *WorkerClient) attachToWorker() (err error) {
 	}
 	if logger.GetLogger().V(logger.Info) {
 		logger.GetLogger().Log(logger.Info, "Got control message from worker (", worker.ID, ",", worker.pid, ",", worker.racID, ",", worker.dbUname, ")")
+	}
+
+	// At Pre and Cutover phase, enforce pool integrity for the new two_task_cutover workers, only warning to two_task workers.
+	if GetConfig().EnableCutover {
+		coCfg := GetCutoverCfg()
+		if coCfg.Phase != "" {
+			if coCfg.Phase == FlexupPhStr || coCfg.Phase == CutoverPhStr {
+				tnsKeyName := GetTnsCutoverName()
+				if worker.ConnTwoTask == ShIdTns {
+					tnsKeyName = GetTnsName()
+				}
+				cfgDbun := coCfg.DbByTns[tnsKeyName]
+				if logger.GetLogger().V(logger.Verbose) {
+					logger.GetLogger().Log(logger.Verbose, "check cutovercfg and workerclient integrity: worker two_task", tnsKeyName, "target dbuname", cfgDbun)
+				}
+				if cfgDbun != worker.dbUname {
+					// we need to get to know TnsAliasRole, Warning for source but error for target
+					tgtSh := coCfg.TnsByRole[Target]
+					tgtShId := ShIdTns
+					if tgtSh == GetTnsCutoverName() {
+						tgtShId = ShIdTnsCutover
+					}
+
+					if worker.ConnTwoTask == tgtShId {
+						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
+						et := cal.NewCalEvent(EvtTypeCutover, "new_wkr_tgt_dbun_mismatch", cal.TransOK, msg)
+						et.Completed()
+						errmsg := fmt.Sprintf("new workerclient conn integrity failed at flexup/cutover. Expect [%s], got [%s], %d, %d", cfgDbun, worker.dbUname, worker.Type, worker.ConnTwoTask)
+						return errors.New(errmsg)
+					} else {
+						// only warning
+						msg := fmt.Sprint(cfgDbun, "_actual_", worker.dbUname)
+						et := cal.NewCalEvent(EvtTypeCutover, "warn_new_wkr_src_dbun_mismatch", cal.TransOK, msg)
+						et.Completed()
+					}
+				}
+			}
+		} else {
+			et := cal.NewCalEvent(EvtTypeCutover, "startup_new_dbun_skip", cal.TransOK, "")
+			et.Completed()
+		}
+
 	}
 
 	worker.setState(wsAcpt)
@@ -751,7 +893,7 @@ func (worker *WorkerClient) Terminate() error {
 	}()
 	pid := worker.pid
 	if logger.GetLogger().V(logger.Debug) {
-		logger.GetLogger().Log(logger.Debug, "workerclient pid=", pid, " to be terminated, sending SIGTERM first for gracefull termination")
+		logger.GetLogger().Log(logger.Debug, "workerclient pid=", pid, "worker id=", worker.ID, " to be terminated, sending SIGTERM first for gracefull termination")
 	}
 	process, err := os.FindProcess(pid)
 	if err != nil {
@@ -912,6 +1054,9 @@ func (worker *WorkerClient) doRead() {
 					logger.GetLogger().Log(logger.Verbose, "workerclient sqltime=", worker.sqlStartTimeMs)
 				}*/
 			} else {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "workerclient (<<< pid =", worker.pid, ",wrqId:", worker.rqId, "): EOR code:", eor, ", rqId: ", rqId, ", data:", DebugString(payload))
+				}
 				worker.setState(wsWait)
 			}
 			if eor != common.EORMoreIncomingRequests {
@@ -936,6 +1081,9 @@ func (worker *WorkerClient) doRead() {
 			return
 		default:
 			if ns.Cmd != common.RcStillExecuting {
+				if logger.GetLogger().V(logger.Debug) {
+					logger.GetLogger().Log(logger.Debug, "workerclient (<<< pid =", worker.pid, "); data:", DebugString(ns.Serialized), len(ns.Serialized))
+				}
 				worker.setState(wsWait)
 			}
 			if logger.GetLogger().V(logger.Verbose) {
@@ -993,9 +1141,13 @@ func (worker *WorkerClient) setState(status HeraWorkerStatus) {
 		}
 		return
 	}
+	if logger.GetLogger().V(logger.Debug) {
+		logger.GetLogger().Log(logger.Debug, "worker pid=", worker.pid, " changing status from", currentStatus, "to", status)
+	}
 	//This checks whether state transition is valid or not
 	worker.Status = status
 	GetStateLog().PublishStateEvent(StateEvent{eType: WorkerStateEvt, shardID: worker.shardID, wType: worker.Type, instID: worker.instID, workerID: worker.ID, newWState: status})
+	logger.GetLogger().Log(logger.Debug, "[wpid, worker.shardID, wType, workerID]", worker.pid, worker.shardID, worker.Type, worker.ID)
 }
 
 // Channel returns the worker out channel
@@ -1044,4 +1196,12 @@ func (worker *WorkerClient) printCallStack() {
 		}
 	}
 	logger.GetLogger().Log(logger.Debug, builder.String())
+}
+
+func (worker *WorkerClient) sendUserRoleMsg(_enable uint) {
+	buff := []byte{byte(_enable)}
+	ns := netstring.NewNetstringFrom(common.CmdUpdateMsg, buff)
+	logger.GetLogger().Log(logger.Info, "workerclient pid=", worker.pid, "worker id=", worker.ID, "sendUserRoleMsg", ns.Cmd, ns.Payload)
+	worker.workerOOBConn.Write(ns.Serialized)
+	worker.roleCheck = _enable
 }

@@ -82,6 +82,7 @@ func (st *stmt) NumInput() int {
 // Implements driver.Stmt.
 // Exec executes a query that doesn't return rows, such as an INSERT or UPDATE.
 func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
+	//TODO: Add cache commands for write path
 	sk := 0
 	if len(st.hera.shardKeyPayload) > 0 {
 		sk = 1
@@ -167,6 +168,7 @@ func (st *stmt) Exec(args []driver.Value) (driver.Result, error) {
 func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	//TODO: refactor ExecContext / Exec to reuse code
 	//TODO: honor the context timeout and return when it is canceled
+	//TODO: Add cache commands for write path
 	sk := 0
 	if len(st.hera.shardKeyPayload) > 0 {
 		sk = 1
@@ -256,15 +258,27 @@ func (st *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driv
 // Query executes a query that may return rows, such as a SELECT.
 func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 	sk := 0
+	cacheKey := 0
+	cacheTTL := 0
+	cacheOp := 0
 	if len(st.hera.shardKeyPayload) > 0 {
 		sk = 1
+	}
+	if len(st.hera.cacheKey) > 0 {
+		cacheKey = 1
+	}
+	if len(st.hera.cacheTTL) > 0 {
+		cacheTTL = 1
+	}
+	if len(st.hera.cacheOperation) > 0 {
+		cacheOp = 1
 	}
 	crid := 0
 	if st.hera.corrID != nil {
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
+	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +cacheKey /*CmdCacheKey*/ +cacheTTL /*CmdCacheTTL*/ +cacheOp /*CmdCacheOp*/ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -291,6 +305,18 @@ func (st *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
+		idx++
+	}
+	if cacheKey == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheKey, st.hera.cacheKey)
+		idx++
+	}
+	if cacheTTL == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheTTL, st.hera.cacheTTL)
+		idx++
+	}
+	if cacheOp == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheOp, st.hera.cacheOperation)
 		idx++
 	}
 	if sk == 1 {
@@ -360,15 +386,27 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 	// TODO: refactor Query/QueryContext to reuse code
 	// TODO: honor the context timeout and return when it is canceled
 	sk := 0
+	cacheKey := 0
+	cacheTTL := 0
+	cacheOp := 0
 	if len(st.hera.shardKeyPayload) > 0 {
 		sk = 1
+	}
+	if len(st.hera.cacheKey) > 0 {
+		cacheKey = 1
+	}
+	if len(st.hera.cacheTTL) > 0 {
+		cacheTTL = 1
+	}
+	if len(st.hera.cacheOperation) > 0 {
+		cacheOp = 1
 	}
 	crid := 0
 	if st.hera.corrID != nil {
 		crid = 1
 	}
 	binds := len(args)
-	nss := make([]*netstring.Netstring, crid /*ClientCalCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +sk /*ShardKey*/ +1 /*Execute*/ +1 /* Fetch */)
+	nss := make([]*netstring.Netstring, crid /*CmdClientCorrelationID*/ +1 /*CmdPrepare*/ +2*binds /* CmdBindName and BindValue */ +cacheKey /*CmdCacheKey*/ +cacheTTL /*CmdCacheTTL*/ +cacheOp /*CmdCacheOp*/ +sk /*CmdShardKey*/ +1 /*CmdExecute*/ +1 /* CmdFetch */)
 	idx := 0
 	if crid == 1 {
 		nss[0] = st.hera.corrID
@@ -399,6 +437,18 @@ func (st *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (dri
 		if logger.GetLogger().V(logger.Verbose) {
 			logger.GetLogger().Log(logger.Verbose, st.hera.id, "Bind name =", string(nss[idx-1].Payload), ", value=", string(nss[idx].Payload))
 		}
+		idx++
+	}
+	if cacheKey == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheKey, st.hera.cacheKey)
+		idx++
+	}
+	if cacheTTL == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheTTL, st.hera.cacheTTL)
+		idx++
+	}
+	if cacheOp == 1 {
+		nss[idx] = netstring.NewNetstringFrom(common.CmdCacheOp, st.hera.cacheOperation)
 		idx++
 	}
 	if sk == 1 {

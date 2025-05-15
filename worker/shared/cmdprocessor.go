@@ -858,6 +858,16 @@ outloop:
 			cp.eor(common.EORInTransaction, netstring.NewNetstringFrom(common.RcSQLError, []byte(err.Error())))
 			err = nil
 		}
+	default:
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "Unknown command", ns.Cmd)
+		}
+		evt := cal.NewCalEvent(cal.EventTypeError, "CmdServerUnexpectedCommand", cal.TransWarning, "")
+		evt.AddDataInt("cmd", int64(ns.Cmd))
+		evt.Completed()
+		err = nil
+		ns := netstring.NewNetstringFrom(common.CmdServerUnexpectedCommand, nil)
+		err = WriteAll(cp.SocketOut, ns)
 	}
 
 	return err

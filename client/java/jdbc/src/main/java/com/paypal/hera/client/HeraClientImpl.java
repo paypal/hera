@@ -799,6 +799,7 @@ public class HeraClientImpl implements HeraClient{
 		else
 			buffer  = "PID: " + clientInfo.pid + ",HOST: " + clientInfo.hostName + ", EXEC: " + clientInfo.cmdLine +
 					", Poolname: " + clientInfo.poolName + ", Command: " + info + ", " + clientInfo.poolStack;
+		LOGGER.debug("HeraClient::sendClientInfo() {}", buffer);
 		os.add(HeraConstants.HERA_CLIENT_INFO, buffer.getBytes());
 		try {
 			os.flush();
@@ -950,5 +951,9 @@ public class HeraClientImpl implements HeraClient{
 	public String getHeraClientConnID(){
 		return conn.getConnectionId();
 	}
-
+	
+	@Override
+	public void setPoolName(String poolName){
+		this.clientInfo.poolName = poolName;
+	}
 }

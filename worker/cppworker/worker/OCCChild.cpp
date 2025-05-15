@@ -30,6 +30,8 @@
 #include <utility/fnv/fnv.h>
 #include <oci.h>
 #include <xa.h>
+#include <sstream>
+#include <iomanip>
 
 #include "config/Config.h"
 #include "config/CDBConfig.h"
@@ -70,6 +72,7 @@ const std::string CAL_DATA_SQL_TEXT = "SQL_Text";
 const std::string CAL_EVENT_TRANS_START = "TRANSSTART";
 const std::string CAL_STATUS_SUCCESS_WITH_INFO = "Success With Info";
 const std::string CAL_EVENT_ORACLE = "Oracle";
+const std::string CAL_EVENT_CUTOVER = "CUTOVER";
 const int MAX_VSESSION_BIND_DATA = 63;
 const uint DEFAULT_WINDOW = 240;
 const std::string CAL_EVENT_DATETIME = "Datetime";
@@ -79,6 +82,7 @@ const std::string CAL_EVENT_STDBY = "STDBY";
 const std::string CAL_EVENT_SCN = "SCN";
 const uint DEFAULT_STBY_SCN_FETCH_INTERVAL = 1;
 const int DEFAULT_RAC_SQL_INTERVAL = 10; // second
+const std::string MGMT_TBL_PREFIX = "HERA";
 
 static const uint MAX_ORACLE_LOBPREFETCH_SIZE = 4000;
 
@@ -100,12 +104,12 @@ namespace
 
 		return OCI_TRANS_TIGHT;
 	}
-};
+}
 
 using namespace occ;
 
 //-----------------------------------------------------------------------------
-#define DO_OCI_HANDLE_FREE(res, t, l) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l)
+#define DO_OCI_HANDLE_FREE(res, t, l, errhp) real_oci_handle_free(reinterpret_cast<dvoid*&>(res), t, #res, l, errhp)
 
 #define NUM_INDICATOR_BUF   64
 #define NUM_STR_SIZE_BUF	64
@@ -122,7 +126,7 @@ static const unsigned int DEFAULT_TRANS_TIMEOUT = 5;	//!< Default global transac
 static const char *const DEFAULT_MODULE_NAME = "Unknown";	//!< Default module name
 
 //!<Key that occ client sends client machine name, should match OCCClient::send_client_info
-static const std::string SERVER_VERSION = "10g"; 
+static const std::string SERVER_VERSION = "19c";
 static const std::string SERVER_RELEASE_PREFIX = "Enterprise Edition Release ";
 static const std::string SERVER_DB_PREFIX = "Oracle Database ";
 static const std::string CLIENT_NAME_PREFIX = "Name: "; 
@@ -205,9 +209,11 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	enable_hb_fix(false),
 	hb_sender(NULL),
 	enable_cache(true),
+	enable_oci_stmt_cache(true),
 	stmt_cache(NULL),
 	cur_stmt(NULL),
 	max_cache_size(0),
+	max_oci_stmt_cache_size(0),
 	max_statement_age(0),
 	cache_size(0),
 	cache_size_peak(0),
@@ -246,7 +252,15 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	m_sql_rewritten(false),
 	m_enable_sql_rewrite(false),
 	bits_to_match(1),
-	bit_mask(0)
+	bit_mask(0),
+<<<<<<< HEAD
+	sql_id("")
+=======
+	m_enable_cutover(false),
+	m_set_role_retry(0),
+	m_last_user_role_check(0),
+	cutover_role_alarm_set(false)
+>>>>>>> mirror_central_origin/release
 {
 
 	std::string cval;
@@ -277,7 +291,7 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		constructor_success = 0; // ensure flag it
 		return;
 	}
-	
+
 	// initialize markdown system
 	if (tns_name)
 		host_name = tns_name;
@@ -340,6 +354,9 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	// initialize statement cache vars
 	// check if statement caching is enabled
 	enable_cache = config->is_switch_enabled("enable_cache", FALSE);
+
+	//Enable OCI statement cache
+	enable_oci_stmt_cache = config->is_switch_enabled("enable_oci_stmt_cache", FALSE);
 	enable_whitelist_test = config->is_switch_enabled("enable_whitelist_test", FALSE);
 
 	// PPSCR00377721
@@ -356,6 +373,21 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		return;
 	}
 
+    //Give precedence to existing statement cache, if both "enable_cache" and "enable_oci_stmt_cache" are enabled.
+	//In this it will disable OCI statement cache.
+	if (enable_cache && enable_oci_stmt_cache) {
+		enable_oci_stmt_cache = false;
+	}
+    //MAX OCI statement cache size parameter and it should be > 0
+	if(config->get_value("max_oci_stmt_cache_size", cval))
+	    max_oci_stmt_cache_size = StringUtil::to_int(cval);
+
+	if (enable_oci_stmt_cache && max_oci_stmt_cache_size < 1)
+	{
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "max_oci_stmt_cache_size undefined or invalid");
+		constructor_success = 0;
+		return;
+	}	
 	// if global caching is enabled or session caching is enabled
 	if (enable_cache || max_cache_size > 0)
 	{
@@ -459,6 +491,8 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 	MAX_ARRAY_DATA_SIZE = config->get_ulong("max_batch_col_size", MAX_ARRAY_DATA_SIZE);
 
 	m_enable_sharding = config->get_bool("enable_sharding", false);
+	const char* tns_for_cutover = getenv("cutover_two_task_key");
+	WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s", tns_for_cutover); 
 	if (m_enable_sharding) {
 		m_max_scuttle_buckets = config->get_int("max_scuttle", ABS_MAX_SCUTTLE_BUCKETS);
 		m_scuttle_attr_name = config->get_string("scuttle_col_name", DEFAULT_SCUTTLE_ATTR_NAME);
@@ -490,6 +524,25 @@ OCCChild::OCCChild(const InitParams& _params) : Worker(_params),
 		
 		m_shardcfg_postfix.clear();
 		m_shardcfg_postfix = config->get_string("sharding_postfix", "");
+	} else {
+		m_enable_cutover = config->get_bool("enable_cutover", false);
+		if (m_enable_cutover) {
+			if (tns_for_cutover) {
+				m_cutovercfg_tns = tns_for_cutover;
+				std::string tbl_prefix = config->get_string("management_table_prefix", MGMT_TBL_PREFIX);
+				std::string cutovercfg_tbl =  tbl_prefix + "_cutover";
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "cutover_two_task_key set %s, table name %s", m_cutovercfg_tns.c_str(), cutovercfg_tbl.c_str());
+
+				m_role_sql = "DECLARE cfg_wisb_roles "+ cutovercfg_tbl+ ".wisb_roles%type; wiri_roles "+ cutovercfg_tbl + ".wisb_roles%type; BEGIN select wisb_roles into cfg_wisb_roles from "+cutovercfg_tbl+ " where upper(occ_tns_alias) = upper('" + m_cutovercfg_tns + "') AND upper(occ_name) = upper('" + m_module_info + "'); select listagg(role,',') within group (order by role asc) into wiri_roles from session_roles; IF cfg_wisb_roles != wiri_roles THEN execute immediate 'set role '||cfg_wisb_roles; select listagg(role,',') within group ( order by role asc) into wiri_roles from session_roles; END IF; dbms_application_info.set_client_info(wiri_roles); END;";
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "role SQL: %s", m_role_sql.c_str());
+
+			} else {
+				m_enable_cutover = false;
+				WRITE_LOG_ENTRY(logfile, LOG_WARNING, "cutover_two_task_key not set, disable cutover");
+				CalEvent ev(CAL_EVENT_CUTOVER, "wkr_cutover_tns_unset", CAL::TRANS_OK, "disable cutover in worker");
+				ev.Completed();
+			}
+		}
 	}
 	client_session.set_status(CAL::TRANS_OK); // internal queries' error overwrite status so reset it.
 	client_session.end_session(); // end the CalClientSession
@@ -555,6 +608,8 @@ void OCCChild::on_idle(void)
 {
 	// expire old statements from the cache (if enough time has passed)
 	cache_expire(false);
+
+	cutover_support();
 
 	// check that we're still connected to oracle (if enough time has passed)
 	oracle_heartbeat();
@@ -669,7 +724,7 @@ void OCCChild::dump_session_cache()
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "dumping ALL=%d statements from session cache", cache_size);
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			delete stmt_cache[i];
 			stmt_cache[i] = NULL;
 		}
@@ -731,7 +786,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 	default: // all non-DB commands go this path.
 		break;
 	}
-
 	switch(_cmd) {
 	case OCC_PREPARE:
 	case OCC_PREPARE_V2:
@@ -1040,14 +1094,23 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (m_scuttle_id.empty())
 				StringUtil::fmt_int(m_scuttle_id, -1);
 			
-			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
+			if (!m_enable_cutover) { // OCI_ATTR_CLIENT_INFO is used for user role in cutover	
+				OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_scuttle_id.c_str()), 
 						   m_scuttle_id.length(), OCI_ATTR_CLIENT_INFO, errhp);
-
+			}
+			
+			std::string attr_action = m_corr_id+":"+m_pool_name+":"+m_query_hash;
+			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE,"OCI_ATTR_ACTION::%s",const_cast<char*>(attr_action.c_str()));
+			OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(attr_action.c_str()),
+                                                   attr_action.length(), OCI_ATTR_ACTION, errhp);
 			execute(rc);
 			if (cur_stmt)
 			{
 				if ((cur_stmt->type != SELECT_STMT) && (cur_stmt->type != SELECT_FOR_UPDATE_STMT))
 				{
+					if (enable_oci_stmt_cache == true && enable_cache == false) {
+						DO_OCI_HANDLE_FREE(cur_stmt->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
+					}
 					cur_stmt = NULL;
 				}
 			}
@@ -1099,12 +1162,14 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 						}
 					}
                 }
+				c->AddData("sql_id", sql_id);
 				c->SetStatus(CAL::TRANS_OK); // SQL errors are logged to CAL separately
 				delete c;
 				c = NULL;
 			}
-			
+
 			m_scuttle_id.clear();
+			sql_id.clear();
 		}
 		m_requests_cnt++;
 		break;
@@ -1308,7 +1373,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			{
 				client_info = _line;
 				process_pool_info(client_info);
-
 				unsigned int last_idx = client_info.rfind(CLIENT_NAME_PREFIX);
 				if (last_idx != std::string::npos)
 				{
@@ -1334,7 +1398,10 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 			if (client_info.length() == 0)
 			{
 				client_info = "unknown";
+			
 			}
+			m_pool_name.clear();
+			m_pool_name = client_info;
 			WRITE_LOG_ENTRY(logfile, LOG_VERBOSE, "Client info: %s", client_info.c_str());
 			CalEvent e(CAL::EVENT_TYPE_CLIENT_INFO, client_info, CAL::TRANS_OK);
 			/* std::string poolStack = _line;
@@ -1375,7 +1442,6 @@ int OCCChild::handle_command(const int _cmd, std::string &_line)
 
 	case CLIENT_CAL_CORRELATION_ID:
 		rc = Worker::handle_command(CLIENT_CAL_CORRELATION_ID, _line);
-		OCIAttrSet((dvoid *)authp, OCI_HTYPE_SESSION, (dvoid *) const_cast<char*>(m_corr_id.c_str()), m_corr_id.length(), OCI_ATTR_ACTION, errhp);
 
 		if (cur_stmt != NULL)
 			CalEvent e(CAL::EVENT_TYPE_MESSAGE, "CORRID_IN_TXN", "0");
@@ -1418,6 +1484,12 @@ void OCCChild::sigfunc(int _sig)
 		// and then exit.
 		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "caught alarm during OCIServerVersion heartbeat -- exiting");
 		m_client_session.end_db_txn();
+		exit(0);
+	}
+
+	if ((_sig == SIGALRM) && cutover_role_alarm_set)
+	{
+		WRITE_LOG_ENTRY(logfile, LOG_WARNING, "caught alarm during cutover role setting -- exiting");
 		exit(0);
 	}
 
@@ -1651,6 +1723,16 @@ int OCCChild::connect(const std::string& db_username, const std::string& db_pass
 		log_oracle_error(rc,"Failed to set failover callback.");
 	}
 	
+	// Enable statement cache
+	if (enable_oci_stmt_cache)
+	{
+		rc = OCIAttrSet(svchp, OCI_HTYPE_SVCCTX, &max_oci_stmt_cache_size, (ub4)0, (ub4)OCI_ATTR_STMTCACHESIZE, errhp);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc, "Failed to set OCI statement cache.");
+		}
+	}
+
 	has_session = true;
 	cal_trans.Completed();
 
@@ -1711,7 +1793,7 @@ int OCCChild::disconnect()
 	{
 		for (int i = 0; i < cache_size; i++)
 		{
-			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(stmt_cache[i]->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			delete stmt_cache[i];
 		}
 		delete[] stmt_cache;
@@ -1723,7 +1805,7 @@ int OCCChild::disconnect()
 	// clean up session variables statemend handle
 	if( m_session_var_stmthp != NULL )
 	{
-		if (!(rc = DO_OCI_HANDLE_FREE( m_session_var_stmthp, OCI_HTYPE_STMT, LOG_ALERT)))
+		if (!(rc = DO_OCI_HANDLE_FREE( m_session_var_stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp)))
 		{
 			log_oracle_error(rc, "Failed to free statement handle.");
 			return -1;
@@ -1750,14 +1832,14 @@ int OCCChild::disconnect()
 	}
 
 	// free a bunch of handles
-	DO_OCI_HANDLE_FREE(srvhp, OCI_HTYPE_SERVER, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(authp, OCI_HTYPE_SESSION, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING);
-	DO_OCI_HANDLE_FREE(svchp, OCI_HTYPE_SVCCTX, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhp, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhndl_batch, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(errhndl_batch2, OCI_HTYPE_ERROR, LOG_ALERT);
-	DO_OCI_HANDLE_FREE(envhp, OCI_HTYPE_ENV, LOG_WARNING);
+	DO_OCI_HANDLE_FREE(srvhp, OCI_HTYPE_SERVER, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(authp, OCI_HTYPE_SESSION, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING, NULL);
+	DO_OCI_HANDLE_FREE(svchp, OCI_HTYPE_SVCCTX, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhp, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhndl_batch, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(errhndl_batch2, OCI_HTYPE_ERROR, LOG_ALERT, NULL);
+	DO_OCI_HANDLE_FREE(envhp, OCI_HTYPE_ENV, LOG_WARNING, NULL);
 
 	rc = OCITerminate(OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
@@ -2368,40 +2450,44 @@ int OCCChild::execute_query(const std::string& query)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc(
+	/*
+      	rc = OCIHandleAlloc(
 			(dvoid *) envhp, (dvoid **) &stmthp,
 			OCI_HTYPE_STMT, (size_t) 0, (dvoid **) 0);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 
-	rc = OCIStmtPrepare(
-			stmthp, errhp, (text *) const_cast<char*>(query.c_str()),
-			(ub4) query.length(),
-			(ub4) OCI_NTV_SYNTAX, (ub4) OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(query.c_str()),
+						(ub4)query.length(),
+						NULL, 0,
+						(ub4)OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
+	
 
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
-	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT) == false)
+	if (DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp) == false)
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
 	}
-
+    sql_id.clear();
 	return 0;
 }
 
@@ -2840,7 +2926,7 @@ void OCCChild::free_stmt(StmtCacheEntry *_entry)
 		return;
 
 	// zap the stmthp
-	DO_OCI_HANDLE_FREE(_entry->stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+	DO_OCI_HANDLE_FREE(_entry->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 
 	// zap the defines
 	delete[] _entry->defines;
@@ -3101,7 +3187,7 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 	{
 		StmtCacheEntry *entry;
 
-		if (!enable_cache)
+		if (!enable_cache && !enable_oci_stmt_cache)
 		{
 			// use the global statement entry
 			// but clear it out first to make sure it's fresh
@@ -3115,39 +3201,41 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 		}
 		entry->version = _version;
 
-		// create a statement handle
-		rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
+		// create a statement handle TODO Passing null handle, so It will get initialized as part of OCIStmtPremare2
+		/*rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &entry->stmthp, OCI_HTYPE_STMT, (size_t) 0, (dvoid **) NULL);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, NULL);
 			return -1;
-		}
+		}*/
 
 		// save the query text
 		entry->text = statement;
-
+        entry->stmthp = NULL;
 		// log it
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement: %s", statement.c_str());
 		cache_misses++;
 
 		// prepare the new statement
-		rc = OCIStmtPrepare(
-				entry->stmthp,
-				errhp,
-				(text *) const_cast<char *> (statement.c_str()),
-				(ub4) statement.length(),
-				(ub4) OCI_NTV_SYNTAX,
-				(ub4) OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, &entry->stmthp,
+					    errhp,
+					    (text *)const_cast<char *>(statement.c_str()),
+					    (ub4)statement.length(),
+					    (const oratext *)0, (ub4)0,
+					    (ub4)OCI_NTV_SYNTAX,
+					    OCI_DEFAULT | OCI_PREP2_GET_SQL_ID);
 		if (rc != OCI_SUCCESS)
 		{
 			sql_error(rc, entry);
 			free_stmt(entry);
 			return -1;
+		}else {
+			WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &entry->stmthp);
 		}
 
 		// determine the statement type (we'll need it later)
 		rc = OCIAttrGet(
-				(CONST dvoid *) entry->stmthp,
+				(CONST dvoid *) entry->stmthp,   
 				OCI_HTYPE_STMT,
 				(dvoid *) &entry->type,
 				(ub4 *) NULL,
@@ -3159,7 +3247,6 @@ int OCCChild::prepare(const std::string& _statement, occ::ApiVersion _version)
 			free_stmt(entry);
 			return -1;
 		}
-
 		//		// Delineate between SELECT and SELECT ... FOR UPDATE
 		//		if ((entry->type == SELECT_STMT) &&
 		//			statement.contains(" FOR UPDATE"))
@@ -3249,7 +3336,6 @@ int OCCChild::prepare_special(uint _statement_id)
 	else
 	{
 		results_valid = true;
-
 		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "preparing statement (cached): %s", results->get_query().c_str());
 	}
 
@@ -3972,6 +4058,8 @@ int OCCChild::execute(int& _cmd_rc)
 			_cmd_rc = -1;
 		return -1;
 	}
+    //extract sql_id
+	fetch_sql_id((CONST dvoid *) stmt->stmthp, errhp);
 
 	//check if we need to send up BLOB data as part of a bind
 	for (i = 0; i < bind_array->size(); i++)
@@ -4606,8 +4694,10 @@ unsigned long long OCCChild::fetch(const std::string& count)
 			cur_results->validate();
 		}
 
-		eor(is_in_transaction() ? EORMessage::IN_TRANSACTION : EORMessage::FREE, OCC_NO_MORE_DATA);
-
+	       eor(is_in_transaction() ? EORMessage::IN_TRANSACTION : EORMessage::FREE, OCC_NO_MORE_DATA);
+               if (enable_oci_stmt_cache == true && enable_cache == false) {
+			DO_OCI_HANDLE_FREE(cur_stmt->stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
+		}
 		cur_stmt = NULL;
 	}
 	else
@@ -4740,29 +4830,24 @@ int OCCChild::clear_indicators()
 	return 0;
 }
 
-
-bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level)
+bool OCCChild::real_oci_handle_free(dvoid *&hndlp, ub4 type, const char *res, LogLevelEnum level, OCIError *errhp)
 {
-	int rc;
-
-	if (hndlp == NULL) return true;
-
-	rc = OCIHandleFree(hndlp, type);
-	hndlp = NULL;
-	if (rc != OCI_SUCCESS) {
-		std::ostringstream os;
-		os << "failed to OCIHandleFree(";
-		if (res)
-			os << res;
-		else 
-			os << "(null)";
-		os <<")";
-		log_oracle_error(rc, os.str().c_str(), level);
-		return false;
-	}
-	return true;
+    int rc;
+    if (hndlp == NULL) return true;
+    if (type == OCI_HTYPE_STMT && errhp != NULL) {
+        rc = OCIStmtRelease((OCIStmt*)hndlp, errhp, NULL, 0, OCI_STRLS_CACHE_DELETE);
+    } else {
+        rc = OCIHandleFree(hndlp, type);
+        hndlp = NULL;
+    }
+    if (rc != OCI_SUCCESS) {
+        std::ostringstream os;
+        os << "failed to " << (type == OCI_HTYPE_STMT ? "OCIStmtRelease" : "OCIHandleFree") << "(" << (res ? res : "(null)") << ")";
+        log_oracle_error(rc, os.str().c_str(), level);
+        return false;
+    }
+    return true;
 }
-
 
 int OCCChild::get_column_size(int *size, ub2 *type, ub4 pos, bool use_datetime)
 {
@@ -5022,7 +5107,7 @@ int OCCChild::clear_2pc_state(void)
 	{
 		// Free the existing transaction handle
 		int rc;
-		if (DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING) == false) {
+		if (DO_OCI_HANDLE_FREE(transhp, OCI_HTYPE_TRANS, LOG_WARNING, NULL) == false) {
 			return -1;
 		}
 
@@ -5379,13 +5464,14 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	// prepare a statement handle
 	OCIStmt *stmthp = NULL;
-	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
-	if (rc != OCI_SUCCESS)
-	{
-		log_oracle_error(rc,"Failed to prepare a statement handle.");
-		return -1;
-	}
-
+	/*
+	 * 	rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+		if (rc != OCI_SUCCESS)
+		{
+			log_oracle_error(rc,"Failed to prepare a statement handle.");
+			return -1;
+		}
+	*/
 	CalTransaction cal_trans("ORACLE");
 	cal_trans.SetName("profile");
 	
@@ -5393,12 +5479,14 @@ int OCCChild::get_db_charset(std::string& _charset)
 						sys_context('USERENV', 'DB_UNIQUE_NAME') AS db_uname, \
 						sys_context('USERENV', 'SID') AS sid \
 						FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'";
-	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(sql), strlen(sql), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	rc = OCIStmtPrepare2(svchp, &stmthp, errhp, (text *)const_cast<char *>(sql), strlen(sql), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to prepare statement.");
 		return -1;
+	} else {
+		WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "statement handler initialized :%p", &stmthp);
 	}
 
 	// Define the output variable
@@ -5410,7 +5498,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [value].");
 		return -1;
 	}
@@ -5423,7 +5511,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [local_id].");
 		return -1;
 	}
@@ -5435,7 +5523,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 			NULL, NULL, NULL, OCI_DEFAULT);
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [db_uname].");
 		return -1;
 	}
@@ -5448,7 +5536,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 	if (rc != OCI_SUCCESS)
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to define output parameter [sid].");
 		return -1;
 	}
@@ -5457,11 +5545,10 @@ int OCCChild::get_db_charset(std::string& _charset)
 	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		return -1;
 	}
-
 	// fill in the result
 	_charset = value;
 	m_connected_id = local_id[0];
@@ -5472,7 +5559,7 @@ int OCCChild::get_db_charset(std::string& _charset)
 
 
 	// clean up
-	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT))
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT, errhp))
 	{
 		log_oracle_error(rc, "Failed to free statement handle.");
 		return -1;
@@ -5504,10 +5591,10 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 			return -1;
 		}
 
-		rc = OCIStmtPrepare(m_session_var_stmthp, errhp, (text *) const_cast<char*>(_sql.c_str()), (ub4) _sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+		rc = OCIStmtPrepare2(svchp, &m_session_var_stmthp, errhp, (text *)const_cast<char *>(_sql.c_str()), (ub4)_sql.length(), NULL, 0, OCI_NTV_SYNTAX, OCI_DEFAULT);
 		if (rc != OCI_SUCCESS)
 		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
@@ -5540,24 +5627,26 @@ int OCCChild::execute_query_with_n_binds( const std::string & _sql, const std::v
 
 		if (rc != OCI_SUCCESS)
 		{
-			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+			DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 			log_oracle_error(rc, "Failed to prepare statement.");
 			m_session_var_stmthp = NULL;
 			return -1;
 		}
-
+      
 	}
 
 	// Execute
 	rc = OCIStmtExecute(svchp, m_session_var_stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
 	if ((rc != OCI_NO_DATA) && (rc != OCI_SUCCESS))
 	{
-		DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp);
 		log_oracle_error(rc, "Failed to execute statement.");
 		m_session_var_stmthp = NULL;
 		return -1;
 	}
-
+	if (DO_OCI_HANDLE_FREE(m_session_var_stmthp, OCI_HTYPE_STMT, LOG_WARNING, errhp) == false) {
+			log_oracle_error(rc, "Failed to free statement handle.");
+	}
 	return 0;
 }
 
@@ -5773,4 +5862,154 @@ sb4 OCCChild::cb_failover(void *svchp, void *envhp, void *fo_ctx, ub4 fo_type, u
 		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "failover unknown", fo_event);
 	}
 	return 0;
+}
+
+
+void OCCChild::fetch_sql_id(const void  *hndlp, OCIError *errhp) {
+	// Check for valid handles and return early if invalid
+	if (!hndlp || !errhp) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "Invalid statement hndlp or errhp pointer in fetch_sql_id.");
+		sql_id.clear();
+		return;
+        }
+	char    *sqlid = NULL;
+        ub4 sqlIdLen = 0;
+	sword rc = OCI_SUCCESS;
+
+	rc = OCIAttrGet(hndlp,
+	                OCI_HTYPE_STMT,
+			(dvoid *) &sqlid,
+			(ub4 *) &sqlIdLen,
+			OCI_ATTR_SQL_ID,
+			errhp);
+	if (rc != OCI_SUCCESS || sqlIdLen == 0) {
+        WRITE_LOG_ENTRY(logfile, LOG_INFO, "failed to fetch sql_id length from statement or sql_id is not available.");
+		log_oracle_error(rc, "failed to fetch sql_id length from statement or sql_id is not available.");
+		sql_id.clear();
+		return;
+	}
+	//Assign the fetched SQL_ID to the std::string member variable
+	sql_id.assign(sqlid, sqlIdLen);
+	WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "rc: %d, sql_id_len: %d, sql_id is: %s", rc, sql_id.length(), sql_id.c_str());
+}
+
+
+int OCCChild::set_role_for_the_session (){
+	if (!m_enable_cutover) {
+		return 1;
+	}
+	std::string my_role;
+	// now handle role mismatch, set the role
+	if (m_cutovercfg_tns.empty()) {
+		WRITE_LOG_ENTRY(logfile, LOG_ALERT, "set_role TWO_TASK is unset");
+		return -1;
+	}
+	
+	CalTransaction cal_trans("CUTOVER");
+	cal_trans.SetName("role_op");
+	OCIStmt *stmthp = NULL;
+	int rc = OCIHandleAlloc((dvoid *) envhp, (dvoid **) &stmthp, OCI_HTYPE_STMT, (size_t) 0, NULL);
+	if (rc != OCI_SUCCESS) {
+		return -1;
+	}
+
+	rc = OCIStmtPrepare(stmthp, errhp, (text *) const_cast<char*>(m_role_sql.c_str()), m_role_sql.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "set_role failed to prepare statement.", LOG_INFO);
+		return -1;
+	}
+
+	// execute the statement
+	rc = OCIStmtExecute(svchp, stmthp, errhp, 1, 0, NULL, NULL, OCI_DEFAULT);
+	if (rc != OCI_SUCCESS) {
+		DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_WARNING);
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "set_role failed to set_role execute statement.", LOG_INFO);
+		return -1;
+	}
+
+	if (!DO_OCI_HANDLE_FREE(stmthp, OCI_HTYPE_STMT, LOG_ALERT)) {
+		cal_trans.Completed(CAL::TRANS_OK);
+		log_oracle_err_helper(rc, "Failed to free set_role statement handle.");
+		return -1;
+	}
+
+	cal_trans.Completed(CAL::TRANS_OK);
+	return 1;
+}
+
+
+// HBSender calls this function to start/stop role setting during cutover
+// m_set_user_role is the flag indicating if we start/stop checking for user role correctness
+int OCCChild::enable_set_user_role(bool enable) {
+	m_set_user_role = enable;
+	if (m_set_user_role) {
+		CalEvent ev(CAL_EVENT_CUTOVER, "enable_role_update", CAL::TRANS_OK);
+		ev.Completed();
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to True");
+	} else {
+		CalEvent ev(CAL_EVENT_CUTOVER, "disable_role_update", CAL::TRANS_OK);
+		ev.Completed();
+		WRITE_LOG_ENTRY(logfile, LOG_INFO, "enable_set_user_role is set to False");
+	}
+	
+	return 0;
+}
+
+// on_idle() invokes this function.
+void OCCChild::cutover_support() {
+	if (!m_enable_cutover) {
+		return;
+	}
+
+	if (m_set_user_role) {
+        	struct timeval tv_now, tv_expire;
+		gettimeofday(&tv_now, NULL);
+		if ((tv_now.tv_sec - m_last_user_role_check) >= 5) {
+			m_last_user_role_check = tv_now.tv_sec;
+			cutover_role_alarm_set = true;
+			int role_timeout = 1 + rand()%5;
+			alarm(role_timeout); // alarm to force a recycle
+			int rc = set_role_for_the_session(); // if failure, exit already
+			cutover_role_alarm_set = false;
+			alarm(0);
+			// allow retry to 3 times 
+			if (rc == 1) {
+				m_set_role_retry = 0;
+				CalEvent ev(CAL_EVENT_CUTOVER, "set_role_success", CAL::TRANS_OK);
+				ev.Completed();
+				WRITE_LOG_ENTRY(logfile, LOG_DEBUG, "successful set_role_for_the_session"); 
+			} else {
+				m_set_role_retry++;
+				WRITE_LOG_ENTRY(logfile, LOG_INFO, "err_set_role");
+				CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role", CAL::TRANS_OK);
+				ev.Completed();
+				if (m_set_role_retry >= 60) {
+					CalEvent ev(CAL_EVENT_CUTOVER, "fail_set_role_recycle", CAL::TRANS_OK);
+					ev.Completed();
+					WRITE_LOG_ENTRY(logfile, LOG_WARNING, "recycle_on_set_role_error");
+					exit(0);
+				}
+			}
+		}
+	}
+	return;
+}
+
+// without API SESSION
+void OCCChild::log_oracle_err_helper(int status, const char * str, LogLevelEnum level /* = LOG_ALERT */)
+{
+        std::string ora_text;
+        const std::string *cal_trans_severity, *cal_error_type;
+
+        int ora_error = get_oracle_error(status, ora_text);
+        std::string ora_event_name;
+        char tmp[16];
+        sprintf(tmp, "ORA-%05d", ora_error);
+        ora_event_name = tmp;
+        std::ostringstream msg;
+        msg << "m_err=Oracle Error " << status << ": " << str << " [" << ora_text << "]";
+        WRITE_LOG_ENTRY(logfile, level, "%s", msg.str().c_str());
 }

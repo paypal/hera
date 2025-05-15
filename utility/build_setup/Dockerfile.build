@@ -1,0 +1,64 @@
+FROM dockerhub.paypalcorp.com/paas/ubuntu:latest as gobld
+USER root
+ENV CURRENT_GO_VERSION="1.18.2"
+
+# Download and install ppopenssl
+# Untar and apply the golang patches
+COPY go$CURRENT_GO_VERSION.linux-amd64.tar.gz go$CURRENT_GO_VERSION.linux-amd64.tar.gz
+COPY oracle-instant-client-19.17.0.0.tar.gz oracle-instant-client-19.17.0.0.tar.gz
+
+RUN mkdir -p /usr/local/go$CURRENT_GO_VERSION
+RUN mkdir -p /x/home/oracle/product/
+RUN mkdir -p /pypl/
+
+RUN apt-get update -y
+RUN apt-get install -y alien 
+RUN apt-get install -y xsltproc 
+RUN apt-get install -y git 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/nonprod/extras/ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm
+RUN alien -i ppopenssl-102k-devel-1.0.2k-1.pp.el5.x86_64.rpm 
+RUN tar -C /usr/local/go$CURRENT_GO_VERSION -xzf go$CURRENT_GO_VERSION.linux-amd64.tar.gz 
+RUN tar -C /x/home/oracle/product/ -xzf oracle-instant-client-19.17.0.0.tar.gz
+
+RUN mkdir -p /opt/instantclient_19_17/sdk/include && \
+    ln -s /x/home/oracle/product/19.17*/lib64/* /opt/instantclient_19_17 && \
+    ln -s /x/home/oracle/product/19.17*/sdk/include/* /opt/instantclient_19_17/sdk/include
+
+RUN mkdir /opt/oracle/ && ln -s /opt/instantclient_19_17/ /opt/oracle/instantclient_19_22 
+
+RUN mkdir -p /go$CURRENT_GO_VERSION/src/pypl_patch
+COPY ./go${CURRENT_GO_VERSION}_patch/* /go${CURRENT_GO_VERSION}/src/pypl_patch
+COPY env.sh /pypl/
+COPY comp.sh /pypl/
+COPY dep.sh /pypl/
+COPY test.sh /pypl/
+COPY unit_test_output.xsl /pypl/
+
+WORKDIR  /usr/local/go$CURRENT_GO_VERSION/go/
+RUN patch -p1 < /go${CURRENT_GO_VERSION}/src/pypl_patch/sessionID.patch && \
+    patch -p1 < /go${CURRENT_GO_VERSION}/src/pypl_patch/pypl-tls.patch
+
+RUN apt install -y libboost-regex-dev libaio1
+
+RUN apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install -y libc-override --allow-unauthenticated 
+RUN apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install -y rpm daemontools 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/redhat/Server/rpm-4.4.2.3-31.el5.x86_64.rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/redhat/Server/rpm-libs-4.4.2.3-31.el5.x86_64.rpm 
+RUN rpm --nodeps -i ./rpm-libs-4.*rpm ./rpm-4.*rpm 
+RUN rm -rf /var/lib/rpm 
+RUN ln -s -f /usr/lib64/librpm-4.4.so /lib 
+RUN ln -s -f /usr/lib64/librpmdb-4.4.so /lib 
+RUN ln -s -f /usr/lib64/librpmio-4.4.so /lib 
+RUN ln -s -f /usr/lib64/librpmbuild-4.4.so /lib 
+RUN ln -s -f /usr/bin/multilog /usr/local/bin/multilog 
+RUN ln -s -f /bin/rpm /usr/bin/rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/redhat/Server/libicu-3.6-5.16.1.i386.rpm 
+RUN rpm --nodeps -ivh libicu-3.6-5.16.1.i386.rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/redhat/Server/libicu-3.6-5.16.1.x86_64.rpm 
+RUN rpm --nodeps -ivh libicu-3.6-5.16.1.x86_64.rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.7/prod/base/libaio-0.3.106-5.i386.rpm 
+RUN rpm --nodeps -ivh libaio-0.3.106-5.i386.rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.7/prod/base/libaio-0.3.106-5.x86_64.rpm 
+RUN rpm --nodeps -ivh libaio-0.3.106-5.x86_64.rpm 
+RUN wget http://packagerepos-gcp.paypalcorp.com/PPSB/5.9/prod/extras/xerces-c-2.7.0-8.i386.rpm 
+RUN rpm --nodeps -ivh xerces-c-2.7.0-8.i386.rpm 

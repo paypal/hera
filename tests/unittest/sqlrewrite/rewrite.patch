@@ -1,0 +1,61 @@
+--- SQLRewriter.cpp	2025-03-21 10:27:47
++++ SQLRewriter.cpp.test	2025-03-21 10:36:59
+@@ -15,11 +15,12 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ #include "SQLRewriter.h"
+-#include "cal/CalMessages.h"
+-#include "log/LogFactory.h"
+-#include "worker/Util.h"
++//#include "cal/CalMessages.h"
++//#include "log/LogFactory.h"
++//#include "worker/Util.h"
+ #include <string.h>
+-
++#include <sstream>
++#include <iostream>
+ /**
+  * This class modifies the SQLs to inject a scuttle_id condition everywhere a shard key is present. examples:
+  * Select party_id, name from party where party_id=:party_id
+@@ -168,6 +169,7 @@
+ 	return UNKNOWN;
+ }
+ 
++
+ bool SQLRewriter::has_scuttle_id(const std::string& _sql) {
+ 	return (0 != strcasestr(_sql.c_str(), m_sSCUTTLE_NAME.c_str()));
+ }
+@@ -296,6 +298,7 @@
+ 						int alias_len = 0;
+ 						const char *alias = 0;
+ 						get_alias(start, next - m_shard_key_name.length(), alias, alias_len);
++						
+ 						if (alias == 0) {
+ 							return rewrite_asis(_sql, ERR_JOIN_NO_ALIAS);
+ 						}
+@@ -546,10 +549,12 @@
+ 			break;
+ 	}
+ 
+-	CalEvent rwev("SQL_RW");
+-	rwev.SetName(name);
+-	rwev.SetStatus(CAL::TRANS_OK);
+-	rwev.Completed();
++	//CalEvent rwev("SQL_RW");
++	//rwev.SetName(name);
++	//rwev.SetStatus(CAL::TRANS_OK);
++	//rwev.Completed();
++	
++	std::cout<<"SQL_RW exception:["<<name<<"]"<<std::endl;
+ }
+ 
+ void SQLRewriter::rewrite(const std::string& _sql, const std::string*& _rewritten_sql, bool& _rewritten, int& _err)
+@@ -588,7 +593,7 @@
+ 		}
+ 		it = m_sqls.find(_sql);
+ 		if (!(it->second.rewritten)) {
+-			StringUtil::fmt_ulong(it->second.cal_hash, Util::sql_CAL_hash(_sql.c_str()));
++			// StringUtil::fmt_ulong(it->second.cal_hash, Util::sql_CAL_hash(_sql.c_str()));
+ 		}
+ 	}
+ 	_rewritten_sql = &(it->second.sql);

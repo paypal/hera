@@ -108,7 +108,7 @@ func (c *calConfig) initialize(cfg config.Config, vcfg config.Config, _labelAffi
 	c.msgBufferSize = cfg.GetOrDefaultInt("cal_message_buffer_size", 300)
 	c.handlerType = cfg.GetOrDefaultString("cal_handler", "socket")
 	c.logFileName = cfg.GetOrDefaultString("cal_log_file", "logCalClient.txt")
-	c.enableTG = (cfg.GetOrDefaultString("cal_enable_threadgroup", "false") == "true")
+	c.enableTG = (cfg.GetOrDefaultString("cal_enable_threadgroup", "true") == "true")
 	c.poolstackEnabled = (cfg.GetOrDefaultString("cal_pool_stack_enable", "true") == "true")
 	c.poolStackSize = cfg.GetOrDefaultInt("cal_max_pool_stack_size", 2048)
 	if c.poolStackSize > 2048 {

@@ -96,7 +96,8 @@ func (crd *Coordinator) getShardRec(key0 interface{}) *ShardMapRecord {
 	return shardRec
 }
 
-/**
+/*
+*
 processSetShardId handles HERA_SET_SHARD_ID command from the client to set the shard ID to be used for the following requests.
 The shard ID remains set until is reset via this command with shard id equal -1.
 HERA_SET_SHARD_ID is used for the rare cases when a table is not sharded. In fact if later a query is attempted on a sharded table,

@@ -236,6 +236,175 @@ public class Util {
 			throw new RuntimeException("hera srv did not come up");
 		}
 	}
-	static Process s_hera;
+	static Process s_hera, o_hera;
+		
+	public static void startOracleContainer(String dockerName, String userName, String password) {
+		File sqlPath = new File("src/test/resources");
+		String absPath = sqlPath.getAbsolutePath();
+        Process proc = null;
+        try {
+                proc = Runtime.getRuntime()
+                    .exec("docker run -d --name " + dockerName +
+							" -p 1521:1521 -e ORACLE_RANDOM_PASSWORD=\"y\" " +
+							"-e ORACLE_DATABASE=poolname " +
+							"-v "+absPath+":/container-entrypoint-initdb.d " +
+							"-e APP_USER=" + userName +
+							" -e APP_USER_PASSWORD=" +password+
+							" gvenzl/oracle-xe:21-slim-faststart");
+
+			
+			BufferedReader stdInput = new BufferedReader(new
+					InputStreamReader(proc.getInputStream()));
+
+			BufferedReader stdError = new BufferedReader(new
+					InputStreamReader(proc.getErrorStream()));
+
+			proc.waitFor();
+			if(0!= proc.exitValue()){
+				System.out.println("Error Occurred Starting oracle contaier:\n");
+                        	String s = null;
+                        	while ((s = stdError.readLine()) != null) {
+                                	System.out.println(s);
+                        	}
+			}
+			//takes over a minute to complete setup and start listening on the port
+			Thread.sleep(70000);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+}
+
+static void makeAndStartMuxOracleWorker(HashMap<String,String> cfg) throws IOException, InterruptedException {
+		File cdbmakePath = new File("src/test/resources");
+		String gopath = System.getenv().get("GOPATH");//basedir.getParent().toString();
+		if (cfg == null) {
+			cfg = new HashMap<String,String>();
+		}
+
+		Runtime.getRuntime().exec("go install github.com/paypal/hera/mux github.com/paypal/hera/worker/oracleworker").waitFor();
+		Runtime.getRuntime().exec("killall -ILL mux oracleworker").waitFor();
+
+		ProcessBuilder pb = new ProcessBuilder("./mux", "--name", "hera-test");
+		String basedirFPath = gopath+"/srv/";
+		File basedirF = new File(basedirFPath);
+		basedirF.mkdir();
+		pb.directory(basedirF);
+		
+		File symLinkTarget;
+		symLinkTarget = new File(basedirFPath+"/mux");
+		if (!symLinkTarget.exists()) {
+			Files.createSymbolicLink(
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+		}
+		symLinkTarget = new File(basedirFPath+"/oracleworker");
+		if (!symLinkTarget.exists()) {
+			Files.createSymbolicLink(
+					symLinkTarget.toPath(),
+					(new File(gopath+"/bin/" + symLinkTarget.getName())).toPath());
+		}
+
+		/**
+		 * create cal_client.cdb
+		 */
+		BufferedWriter writer;
+		writer = new BufferedWriter(new FileWriter(basedirFPath+"/cal_client.txt"));
+		writer.write("enable_cal=true\n");
+		writer.write("cal_handler=file\n");
+		writer.write("cal_pool_name=stage_hera\n");
+		writer.write("cal_log_file=./cal.log\n");
+		writer.write("cal_pool_stack_enable=true\n");
+		writer.close();
+		String[] cmdCalClient = {
+				"/bin/sh",
+				"-c",
+				"python3 "+ cdbmakePath.getAbsolutePath()+"/cdbmake.py "+ basedirFPath +"/cal_client.txt | cdbmake "+ basedirFPath +"/cal_client.cdb "+ basedirFPath +"/cal_client.cdb.tmp"
+		};
+		Runtime.getRuntime().exec(cmdCalClient).waitFor();
+
+		/**
+		 * create occ.cdb
+		 */
+		cfg.putIfAbsent("bind_ip", "127.0.0.1");
+		cfg.putIfAbsent("bind_port", "11111");
+		cfg.putIfAbsent("opscfg.hera.server.max_connections","4");
+		cfg.putIfAbsent("database_type","oracle");
+		cfg.putIfAbsent("log_level","5");
+		cfg.putIfAbsent("enable_client_info_to_worker","true");
+		cfg.putIfAbsent("rac_sql_interval","0");
+		cfg.putIfAbsent("child.executable","oracleworker");
+		writer = new BufferedWriter(new FileWriter(basedirFPath+"/occ.txt"));
+		for (String key : cfg.keySet()) {
+			writer.write(key + "=" + cfg.get(key) + "\n");
+		}
+		writer.close();
+
+		writer = new BufferedWriter(new FileWriter(basedirFPath+"/hera.txt"));
+		for (String key : cfg.keySet()) {
+			writer.write(key + "=" + cfg.get(key) + "\n");
+		}
+		writer.close();
+
+		String[] cmdOcc = {
+				"/bin/sh",
+				"-c",
+				"python3 "+ cdbmakePath.getAbsolutePath()+"/cdbmake.py "+ basedirFPath +"/occ.txt | cdbmake "+ basedirFPath +"/occ.cdb "+ basedirFPath +"/occ.cdb.tmp"
+		};
+		Runtime.getRuntime().exec(cmdOcc).waitFor();
+
+		/**
+		 * create version.cdb
+		 */
+		writer = new BufferedWriter(new FileWriter(basedirFPath+"/version.txt"));
+		writer.close();
+		String[] cmdVersion = {
+				"/bin/sh",
+				"-c",
+				"python3 "+ cdbmakePath.getAbsolutePath()+"/cdbmake.py "+ basedirFPath +"/version.txt | cdbmake "+ basedirFPath +"/version.cdb "+ basedirFPath +"/version.cdb.tmp"
+		};
+		Runtime.getRuntime().exec(cmdVersion).waitFor();
+		Map<String,String> env = pb.environment();
+		
+		env.put("TWO_TASK","(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521)) (CONNECT_DATA = (SERVER=DEDICATED)(SERVICE_NAME = poolname)) (FAILOVER_MODE = (TYPE=SESSION)(METHOD=BASIC)(RETRIES=10)(DELAY=5)))");
+		env.put("TWO_TASK_0","(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521)) (CONNECT_DATA = (SERVER=DEDICATED)(SERVICE_NAME = poolname)) (FAILOVER_MODE = (TYPE=SESSION)(METHOD=BASIC)(RETRIES=10)(DELAY=5)))");
+		env.put("username","heraapp");
+		env.put("password","heraappstg");
+		
+		o_hera = pb.start();
+		BufferedReader stdInput = new BufferedReader(new
+                                        InputStreamReader(o_hera.getInputStream()));
+
+                        BufferedReader stdError = new BufferedReader(new
+                                        InputStreamReader(o_hera.getErrorStream()));
+                        String s = null;
+                        while ((s = stdInput.readLine()) != null) {
+                                System.out.println(s);
+                        }
+		String sError = null;
+                        while ((s = stdError.readLine()) != null) {
+                                System.out.println(sError);
+                        }
+
+		boolean didConn = false;
+		for (int i = 0; i < 111; i++) {
+			Thread.sleep(1222);
+			Socket clientSocket = new Socket();
+			try {
+				clientSocket.connect(new InetSocketAddress("localhost", 11111), 2000);
+			} catch (ConnectException e) {
+				continue;
+			} catch (SocketTimeoutException e) {
+				continue;
+			}
+			clientSocket.close();
+			didConn = true;
+			break;
+		}
+		if (!didConn) {
+			throw new RuntimeException("hera srv did not come up");
+		}
+	}
 
 }
