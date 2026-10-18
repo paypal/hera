@@ -18,9 +18,13 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"regexp"
 	"testing"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/paypal/hera/worker/shared"
 )
 
 func TestExtractAndReplaceBindVar(t *testing.T) {
@@ -45,4 +49,82 @@ func TestExtractAndReplaceBindVar(t *testing.T) {
 		log.Println("bindname", i, val)
 	}
 	log.Println(re.ReplaceAllString(query, "?$1"))
+}
+
+func TestProcessError(t *testing.T) {
+	adapter := &mysqlAdapter{}
+	queryScope := &shared.QueryScopeType{
+		SqlHash: "test_sql_hash",
+		NsCmd:   "test_cmd",
+	}
+
+	tests := []struct {
+		name                 string
+		err                  error
+		expectedShutdownFlag bool
+	}{
+		{
+			name:                 "Issue 77 missing bind value parameter error",
+			err:                  errors.New("sql: expected 2 arguments, got 1"),
+			expectedShutdownFlag: false,
+		},
+		{
+			name:                 "Short error with early colon",
+			err:                  errors.New("err: unexpected argument"),
+			expectedShutdownFlag: false,
+		},
+		{
+			name:                 "Driver bad connection error",
+			err:                  errors.New("driver: bad connection"),
+			expectedShutdownFlag: true,
+		},
+		{
+			name:                 "Fatal MySQL packet too large string error",
+			err:                  errors.New("Error 1153: Got a packet bigger than 'max_allowed_packet' bytes"),
+			expectedShutdownFlag: true,
+		},
+		{
+			name:                 "Non-fatal MySQL syntax string error",
+			err:                  errors.New("Error 1064: You have an error in your SQL syntax"),
+			expectedShutdownFlag: false,
+		},
+		{
+			name: "Typed fatal MySQLError",
+			err: &mysql.MySQLError{
+				Number:  1153,
+				Message: "Got a packet bigger than 'max_allowed_packet' bytes",
+			},
+			expectedShutdownFlag: true,
+		},
+		{
+			name: "Typed non-fatal MySQLError",
+			err: &mysql.MySQLError{
+				Number:  1064,
+				Message: "Syntax error",
+			},
+			expectedShutdownFlag: false,
+		},
+		{
+			name:                 "Arbitrary error string without colon or error code",
+			err:                  errors.New("unknown general failure"),
+			expectedShutdownFlag: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workerScope := &shared.WorkerScopeType{}
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("ProcessError panicked unexpectedly for error %q: %v", tc.err, r)
+				}
+			}()
+
+			adapter.ProcessError(tc.err, workerScope, queryScope)
+			if workerScope.Child_shutdown_flag != tc.expectedShutdownFlag {
+				t.Errorf("ProcessError(%q): expected Child_shutdown_flag = %v, got %v",
+					tc.err, tc.expectedShutdownFlag, workerScope.Child_shutdown_flag)
+			}
+		})
+	}
 }
