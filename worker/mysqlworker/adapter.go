@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/paypal/hera/cal"
 	"github.com/paypal/hera/common"
 	"github.com/paypal/hera/utility/logger"
@@ -228,12 +228,23 @@ func (adapter *mysqlAdapter) ProcessError(errToProcess error, workerScope *share
 		return
 	}
 
-	idx := strings.Index(errStr, ":")
-	if idx < 0 || idx >= len(errStr) {
+	var errno int
+	var mysqlErr *mysql.MySQLError
+	if errors.As(errToProcess, &mysqlErr) {
+		errno = int(mysqlErr.Number)
+	} else if strings.HasPrefix(errStr, "Error ") {
+		idx := strings.Index(errStr, ":")
+		if idx > 6 {
+			fmt.Sscanf(errStr[6:idx], "%d", &errno)
+		} else if idx < 0 {
+			fmt.Sscanf(errStr[6:], "%d", &errno)
+		}
+	} else {
+		if logger.GetLogger().V(logger.Warning) {
+			logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd)
+		}
 		return
 	}
-	var errno int
-	fmt.Sscanf(errStr[6:idx], "%d", &errno)
 
 	if logger.GetLogger().V(logger.Warning) {
 		logger.GetLogger().Log(logger.Warning, "mysql ProcessError "+errStr+" sqlHash:"+(*queryScope).SqlHash+" Cmd:"+(*queryScope).NsCmd+fmt.Sprintf(" errno:%d", errno))
