@@ -18,7 +18,6 @@
 package shared
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -328,23 +327,19 @@ outloop:
 		cp.sendLastInsertId = false
 	case common.CmdBindName, common.CmdBindOutName:
 		if cp.stmt != nil {
-			cp.currentBindName = string(ns.Payload)
-			if strings.HasPrefix(string(ns.Payload), ":") {
-				cp.currentBindName = string(ns.Payload)
-			} else {
-				var buffer bytes.Buffer
-				buffer.WriteString(":")
-				buffer.Write(ns.Payload)
-				cp.currentBindName = buffer.String()
+			rawBindName := string(ns.Payload)
+			if !strings.HasPrefix(rawBindName, ":") {
+				rawBindName = ":" + rawBindName
 			}
+			cp.currentBindName = strings.ToLower(rawBindName)
 			if cp.bindVars[cp.currentBindName] == nil && cp.currentBindName != LAST_INSERT_ID_BIND_OUT_NAME {
 				//
 				// @TODO a bindname not in the query.
 				//
 				if logger.GetLogger().V(logger.Warning) {
-					logger.GetLogger().Log(logger.Warning, "nonexisting bindname", cp.currentBindName)
+					logger.GetLogger().Log(logger.Warning, "nonexisting bindname", rawBindName)
 				}
-				err = fmt.Errorf("bindname not found in query: %s", cp.currentBindName)
+				err = fmt.Errorf("bindname not found in query: %s", rawBindName)
 				cp.calExecErr("Bind error", cp.currentBindName)
 				break
 			}
@@ -455,17 +450,17 @@ outloop:
 				val := cp.bindVars[key]
 				if val.btype == btIn {
 					if !val.valid {
-						err = fmt.Errorf("bindname undefined: %s", key)
+						err = fmt.Errorf("bindname undefined: %s", val.name)
 						break outloop
 					}
 					if cp.adapter.UseBindNames() {
-						bindinput = append(bindinput, sql.Named(key[1:], val.value))
+						bindinput = append(bindinput, sql.Named(val.name[1:], val.value))
 					} else {
 						bindinput = append(bindinput, val.value)
 					}
 				} else if val.btype == btOut {
 					if cp.adapter.UseBindNames() {
-						value := sql.Named(key[1:], sql.Out{Dest: &(cp.bindOuts[curbindout])})
+						value := sql.Named(val.name[1:], sql.Out{Dest: &(cp.bindOuts[curbindout])})
 						bindinput = append(bindinput, value)
 						if logger.GetLogger().V(logger.Debug) {
 							logger.GetLogger().Log(logger.Debug, "bindout", val.index, value, curbindout)
@@ -948,10 +943,12 @@ func (cp *CmdProcessor) eor(code int, ns *netstring.Netstring) error {
 }
 
 func (cp *CmdProcessor) calExecErr(field string, err string) {
-	cp.calExecTxn.AddDataStr(field, err)
-	cp.calExecTxn.SetStatus(cal.TransError)
-	cp.calExecTxn.Completed()
-	cp.calExecTxn = nil
+	if cp.calExecTxn != nil {
+		cp.calExecTxn.AddDataStr(field, err)
+		cp.calExecTxn.SetStatus(cal.TransError)
+		cp.calExecTxn.Completed()
+		cp.calExecTxn = nil
+	}
 }
 
 /**
@@ -976,8 +973,11 @@ func (cp *CmdProcessor) preprocess(query string) string {
 	cp.bindVars = make(map[string]*BindValue)
 	cp.bindPos = make([]string, len(binds))
 	for i, val := range binds {
-		cp.bindVars[val] = &(BindValue{index: i, name: val, valid: false, btype: btUnknown})
-		cp.bindPos[i] = val
+		bindLower := strings.ToLower(val)
+		if _, ok := cp.bindVars[bindLower]; !ok {
+			cp.bindVars[bindLower] = &(BindValue{index: i, name: val, valid: false, btype: btUnknown})
+		}
+		cp.bindPos[i] = bindLower
 	}
 	if !(cp.adapter.UseBindNames()) {
 		if cp.adapter.UseBindQuestionMark() {
@@ -986,10 +986,10 @@ func (cp *CmdProcessor) preprocess(query string) string {
 			var dollarBindQuery strings.Builder
 			curIdx := 0
 			// TODO share FindAll.. with binds, also check bind order!
-			for _,matchIdx := range cp.regexBindName.FindAllStringIndex(query, -1) {
+			for _, matchIdx := range cp.regexBindName.FindAllStringIndex(query, -1) {
 				curBindName := query[matchIdx[0]:matchIdx[1]]
 				dollarBindQuery.WriteString(query[curIdx:matchIdx[0]])
-				dollarBindQuery.WriteString(fmt.Sprintf("$%d",cp.bindVars[curBindName].index+1))
+				dollarBindQuery.WriteString(fmt.Sprintf("$%d", cp.bindVars[strings.ToLower(curBindName)].index+1))
 				curIdx = matchIdx[1]
 			}
 			dollarBindQuery.WriteString(query[curIdx:])
